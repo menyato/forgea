@@ -3,7 +3,7 @@
 ## How it fits together
 
 ```
- your laptop (dev)         GitHub                          one Hetzner server (Germany)
+ your laptop (dev)         GitHub                          one Hostinger VPS (Europe)
  pnpm dev, tests  ──push──▶ tests → build images ──deploy──▶ staging.forgea-lab.com  (branch staging)
                             (GitHub Actions)               forgea-lab.com          (branch production)
 
@@ -27,22 +27,24 @@ Server layout:
 /srv/forgea/staging/     the same files, staging's values
 ```
 
-## Cost (about, per month, excluding VAT)
+## Cost (about, per month)
 
 | | | |
 |---|---|---|
-| Server | Hetzner **CX33** (4 vCPU, 8 GB, 80 GB) | €8.50 |
-| Cloudflare | Free plan | €0 |
-| GitHub | private repository, Actions (2,000 free minutes; a deploy uses ~15), container images (currently free) | €0 |
-| Backups | Google Cloud Storage | a few cents |
+| Server | Hostinger **KVM 2** (2 vCPU, 8 GB, 100 GB NVMe) | ~$9 for the first 24 months (paid upfront), then ~$15 |
+| Cloudflare | Free plan | $0 |
+| GitHub | private repository, Actions (2,000 free minutes; a deploy uses ~15), container images (currently free) | $0 |
+| Backups | Google Cloud Storage (on top of Hostinger's own weekly backups) | a few cents |
 
-Hetzner changed prices three times in 2026: check the order page. Trade-off accepted with one
-server: heavy testing on staging can slow the real shop for a moment, and if the server fails
-both are down until it is restored from backup (about 30 minutes).
+Prices checked 2026-10-28 on review sites; check Hostinger's order page. If the shop grows, or
+uploads of big 3D models make the server slow, upgrade to **KVM 4** (4 vCPU, 16 GB) in the panel:
+nothing in this setup changes. Trade-off accepted with one server: heavy testing on staging can
+slow the real shop for a moment, and if the server fails both are down until it is restored
+from backup (about 30 minutes).
 
 ## First setup (once, about 2 hours)
 
-You need: a Hetzner account, a Cloudflare account (free), this GitHub repository, Git on your
+You need: a Hostinger account, a Cloudflare account (free), this GitHub repository, Git on your
 laptop.
 
 ### 1. An SSH key for you
@@ -56,21 +58,35 @@ cat ~/.ssh/id_ed25519.pub                          # your PUBLIC key: safe to pa
 
 ### 2. The server and its firewall
 
-Hetzner Cloud console → new project "Forgea" → **Add server**:
+1. Hostinger → **VPS** → buy **KVM 2**. When asked:
+   - **Operating system:** plain **Ubuntu 24.04** (the "OS" choice, *not* an "OS with panel" or
+     an application template: Docker comes from our setup script).
+   - **Location:** a European data centre (e.g. France, Netherlands or Lithuania — the closest
+     to Lebanon on Hostinger's current list).
+   - **Root password:** a long random one; you will only use it if SSH keys ever fail (from
+     Hostinger's browser terminal).
+2. hPanel → VPS → **Settings → SSH keys → Add SSH key**: paste your public key from step 1.
+3. Check the key works (no password asked): `ssh root@<server IP>`, then type `exit`.
+4. From the repository folder on your laptop, run the setup once (5–10 minutes):
 
-- Location: Falkenstein or Nuremberg (Germany) · Image: **Ubuntu 24.04** · Type: **CX33**
-- Networking: public IPv4 + IPv6 · Name: `forgea`
-- **Cloud config**: paste `infra/cloud-init.yaml`, with your public key in place of
-  `ssh-ed25519 AAAA...REPLACE...`
+   ```sh
+   ssh root@<server IP> 'sh -s' < infra/setup-server.sh
+   ```
 
-**Firewall** (Hetzner console → Firewalls → Create, apply to the server):
+   It creates the `deploy` user, turns off password and root logins, installs Docker, automatic
+   security updates, fail2ban and the nightly backups. Afterwards **`ssh deploy@<server IP>`**
+   is the only way in.
 
-- Inbound TCP **22** from any address (SSH; keys only, passwords are off)
-- Inbound TCP **443** from Cloudflare's addresses only: every range on
+**Firewall** — hPanel → VPS → **Security → Firewall** → create a configuration, add these
+**accept** rules, then **activate** it for the VPS (Hostinger drops everything not accepted):
+
+- TCP **22** from any address (SSH; keys only, passwords are off)
+- TCP **443** from Cloudflare's addresses only: one rule per range on
   <https://www.cloudflare.com/ips/> (IPv4 and IPv6)
 - Nothing else: the databases and apps have no open ports at all.
 
-After 2–3 minutes: `ssh deploy@<server IP>` should log you in.
+Check it from your laptop: `curl -m 10 -k https://<server IP>` must **time out**. If it answers,
+the firewall is not active, and anyone could reach the server without going through Cloudflare.
 
 ### 3. The domain on Cloudflare
 

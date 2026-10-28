@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nightly backup of one environment (systemd timer forgea-backup@<env>, infra/cloud-init.yaml):
+# Nightly backup of one environment (systemd timer forgea-backup@<env>, infra/setup-server.sh):
 # a database dump and every uploaded file, encrypted by restic and sent to that environment's
 # private bucket. Keeps 7 daily, 4 weekly and 6 monthly snapshots.
 #   ./backup.sh            back up now

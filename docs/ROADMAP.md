@@ -14,7 +14,7 @@
 | 10 | Design system: final logo, palette and fonts | Done — logo (option 0, build plate) and palette (copper) chosen 2026-10-26; fonts League Spartan + Inter kept 2026-10-28. The owner can change colours in Dashboard → Theme |
 | 11 | **Back office: CRM, sales and accounting** (replaces the Odoo bridge — see below) | Done 2026-10-28 — leads pipeline, quotations (customer accepts online), double-entry books with automatic invoices and payments, reports. VAT is set up but off until the owner decides |
 | 12 | Tests and CI | Running since Phase 1: unit, API e2e (real Postgres), browser (Playwright, real Chrome), knip, audit; every deploy runs them first |
-| 13 | Deployment | Written 2026-10-28 (Docker, Hetzner, Cloudflare, GitHub Actions); runs once the servers and the repository exist |
+| 13 | Deployment | Written 2026-10-28 (Docker, Hostinger VPS, Cloudflare, GitHub Actions); runs once the servers and the repository exist |
 
 ## Phase 7 — 3D experience (main selling point)
 
@@ -113,7 +113,7 @@ small business needs), re-implemented in NestJS/Prisma, not copied.
 
 ## Phase 13 — Deployment
 
-Resumed 2026-10-28; design and every step in deploy/README.md. One Hetzner server runs staging and
+Resumed 2026-10-28; design and every step in deploy/README.md. One Hostinger VPS runs staging and
 production side by side with Docker Compose (owner's choice 2026-10-28), Cloudflare in front, the domain forgea-lab.com; GitHub
 Actions tests, builds the images and deploys: `development` (daily work, tests only) → `staging` → `production`, each branch deploying to its environment.
 Replaces the earlier Google Cloud plan (why: docs/SECURITY.md, first section).

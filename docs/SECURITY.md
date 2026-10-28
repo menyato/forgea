@@ -19,7 +19,7 @@ Report a vulnerability privately to the owner; do not open a public issue.
    the `deploy` user alone (mode 600), different for staging and production. They are not in the
    code, the images, the repository or CI.
 5. **The server itself:** SSH keys only (no passwords, no root login), fail2ban, automatic
-   security updates (`infra/cloud-init.yaml`). Hetzner's firewall admits HTTPS from
+   security updates (`infra/setup-server.sh`). The host's firewall (Hostinger) admits HTTPS from
    Cloudflare's addresses only, and SSH; every other port is closed before it reaches the server.
 6. **Staging and production share the server, not their data.** Each has its own database,
    files, passwords and private networks; they meet only at the front door (Caddy's network),
