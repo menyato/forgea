@@ -1,0 +1,85 @@
+enum QuotationStatus {
+  DRAFT
+  /// Sent to the customer (by email, with a link); still editable as a new version.
+  SENT
+  /// Accepted: an order was created (orderId) and goes through the orders pipeline.
+  CONFIRMED
+  CANCELLED
+}
+
+/// A quotation the team writes for a customer (Odoo `sale.order` before confirmation): lines
+/// with quantities, prices and discounts, valid until a date. Confirming it creates a normal
+/// order, so every sale — shop, custom request, quotation — is fulfilled and invoiced the same
+/// way. `status` history is written by a database trigger, like orders.
+model Quotation {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  /// "Q-2026-0001", from a yearly sequence.
+  number      String          @unique
+  status      QuotationStatus @default(DRAFT)
+  customerId  String          @db.Uuid
+  customer    User            @relation("QuotationCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  leadId      String?         @db.Uuid
+  lead        Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  validUntil  DateTime        @db.Date
+  /// Shown to the customer under the lines.
+  note        String?
+
+  // How it will be delivered and paid once confirmed (the order's fields).
+  customerName  String
+  phone         String
+  paymentMethod PaymentMethod
+  delivery      Boolean       @default(false)
+  city          String?
+  addressLine   String?
+
+  /// USD, a snapshot of the lines (after line discounts).
+  total       Decimal  @db.Decimal(12, 2)
+  orderId     String?  @unique @db.Uuid
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdById String   @db.Uuid
+  createdBy   User     @relation("QuotationAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  sentAt      DateTime? @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  lines         QuotationLine[]
+  statusHistory QuotationStatusHistory[]
+
+  @@index([status, id])
+  @@index([customerId])
+  @@map("quotations")
+}
+
+model QuotationLine {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  quotationId     String    @db.Uuid
+  quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  sortOrder       Int       @default(0)
+  /// A catalog product, or null for a free-text line ("Design work, 3 hours").
+  productId       String?   @db.Uuid
+  product         Product?  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  description     String
+  quantity        Int
+  unitPrice       Decimal   @db.Decimal(12, 2)
+  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
+  /// Made to order: counts toward the deposit once confirmed.
+  isCustom        Boolean   @default(false)
+
+  @@index([quotationId])
+  @@map("quotation_lines")
+}
+
+/// Append-only, written only by the database trigger.
+model QuotationStatusHistory {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  quotationId     String          @db.Uuid
+  quotation       Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  status          QuotationStatus
+  changedAt       DateTime        @default(now()) @db.Timestamptz(3)
+  changedByUserId String?         @db.Uuid
+  changedBy       User?           @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
+  note            String?
+
+  @@index([quotationId, changedAt])
+  @@map("quotation_status_history")
+}

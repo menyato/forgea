@@ -1,0 +1,36 @@
+/// Admin-editable pricing constants, read by @forgea/pricing. Exactly one row (id = 1),
+/// created by the migration that introduced it; the API only ever updates it.
+/// Cost fields are server-only; the order fields are sent to the browser for live totals.
+model PricingSettings {
+  id Int @id @default(1)
+
+  // Cost model (UnitCostCalculator) — never exposed publicly.
+  machineRatePerHour      Decimal @db.Decimal(10, 2)
+  purgeWastePercent       Decimal @db.Decimal(5, 2)
+  failureAllowancePercent Decimal @db.Decimal(5, 2)
+  laborCostPerUnit        Decimal @db.Decimal(10, 2)
+  packagingCostPerUnit    Decimal @db.Decimal(10, 2)
+  markupMultiplier        Decimal @db.Decimal(6, 3)
+
+  // Order level (OrderPricer) — customer-facing.
+  rushFeePercent Decimal @db.Decimal(5, 2)
+  deliveryFee    Decimal @db.Decimal(10, 2)
+  depositPercent Decimal @db.Decimal(5, 2)
+
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  updatedByUserId String?  @db.Uuid
+  updatedBy       User?    @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@map("pricing_settings")
+}
+
+/// Per-line bulk discount: a cart line of at least `minQuantity` units gets `percent` off.
+model BulkDiscountTier {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  minQuantity Int      @unique
+  percent     Decimal  @db.Decimal(5, 2)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("bulk_discount_tiers")
+}

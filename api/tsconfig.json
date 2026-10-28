@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolvePackageJsonExports": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    // Scripts run with plain node (type stripping) import .ts files by their real name.
+    "rewriteRelativeImportExtensions": true,
+    "types": [
+      "vitest/globals",
+      "node",
+      "multer"
+    ]
+  },
+  "extends": "../tsconfig.base.json"
+}

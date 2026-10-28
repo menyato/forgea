@@ -1,0 +1,33 @@
+/// Guests are identified by a signed cookie holding the cart id. On login the guest
+/// cart's items merge into the user's cart (one cart per user) and the guest cart is deleted.
+model Cart {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String?  @unique @db.Uuid
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  items CartItem[]
+
+  /// Lets a cleanup job drop abandoned guest carts.
+  @@index([userId, updatedAt])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  cartId    String   @db.Uuid
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String   @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+  /// The customer's choices: [{ groupId, valueId } | { groupId, text }], validated by the API.
+  options   Json     @default("[]")
+  /// The same choices as a canonical string: one line per product configuration.
+  configKey String   @default("")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([cartId, productId, configKey])
+  @@map("cart_items")
+}

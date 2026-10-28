@@ -1,0 +1,57 @@
+enum Role {
+  ADMIN
+  /// Orders, production, custom requests and their quotes.
+  STAFF
+  /// The design team: the catalog (products, 3D models, options) and design previews for
+  /// custom requests. No money settings, team or quotes.
+  DESIGNER
+  CUSTOMER
+}
+
+/// Admins and staff sign in only with Google Workspace (googleId set, passwordHash null).
+/// Customers use Google, email + password (argon2 passwordHash), or both.
+model User {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  /// Stored lowercased by the users service; uniqueness relies on that normalization.
+  email           String    @unique
+  name            String?
+  /// Asked at checkout and remembered for the next order; staff call before delivering.
+  phone           String?
+  googleId        String?   @unique
+  /// argon2id. Only CUSTOMER accounts may have one (CHECK constraint): staff sign in with Google only.
+  passwordHash    String?
+  /// Set when Google confirms the email, or (Phase 9) when the customer clicks the verification link.
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+  role            Role      @default(CUSTOMER)
+  /// Team accounts an admin switched off: they can't sign in and their sessions are ended.
+  disabledAt      DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  cart               Cart?
+  orders             Order[]
+  statusChanges      OrderStatusHistory[]
+  auditEntries       AuditLog[]
+  pricingEdits       PricingSettings[]
+  sessions           Session[]
+  uploads            Upload[]
+  ratesSet           ExchangeRate[]
+  storeSettingsEdits StoreSettings[]
+  themeEdits         SiteTheme[]
+  customRequests     CustomRequest[]              @relation("CustomRequestOwner")
+  quotesSent         CustomRequest[]              @relation("CustomRequestQuotedBy")
+  requestChanges     CustomRequestStatusHistory[]
+  assignedLeads      Lead[]                       @relation("LeadAssignee")
+  customerLeads      Lead[]                       @relation("LeadCustomer")
+  assignedActivities LeadActivity[]               @relation("ActivityAssignee")
+  createdActivities  LeadActivity[]               @relation("ActivityCreator")
+  leadNotes          LeadNote[]
+  quotations         Quotation[]                  @relation("QuotationCustomer")
+  quotationsWritten  Quotation[]                  @relation("QuotationAuthor")
+  quotationChanges   QuotationStatusHistory[]
+  journalEntries     JournalEntry[]               @relation("EntryCustomer")
+  entriesPosted      JournalEntry[]               @relation("EntryPoster")
+  journalLines       JournalLine[]                @relation("LineCustomer")
+
+  @@map("users")
+}

@@ -1,0 +1,28 @@
+# The server's front door, shared by production and staging: Caddy on port 443 (the only
+# published port; the firewall admits Cloudflare only). Lives in /srv/forgea/edge.
+name: forgea-edge
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ['443:443']
+    environment:
+      PRODUCTION_HOST: ${PRODUCTION_HOST:-forgea-lab.com}
+      STAGING_HOST: ${STAGING_HOST:-staging.forgea-lab.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Cloudflare origin certificate (deploy/README.md, step 4).
+      - ./certs:/certs:ro
+      - caddy-data:/data
+    networks: [edge]
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: '5' }
+
+volumes:
+  caddy-data:
+
+networks:
+  edge:
+    name: forgea-edge

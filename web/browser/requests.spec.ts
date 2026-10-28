@@ -1,0 +1,147 @@
+import type { Page } from '@playwright/test';
+import { cube } from '../../api/prisma/example-models';
+import { signInAsAdmin } from './admin-session';
+import { expect, test } from './fixtures';
+
+/** The dashboard's save confirmation (SaveStatus), not other text that says "Saved". */
+const saved = (page: Page) =>
+  page.locator('p[aria-live="polite"]').getByText('Saved', { exact: true });
+
+async function signUp(page: Page, next: string) {
+  await page.goto(`/sign-in?next=${encodeURIComponent(next)}`);
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await page.getByLabel('Name (optional)').fill('Rana Request');
+  await page
+    .getByLabel('Email')
+    .fill(
+      `request-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`,
+    );
+  await page.getByLabel('Password').fill('correct-horse-battery-9');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(new RegExp(next));
+}
+
+test('a customer asks for something custom, the studio quotes it, the customer orders it', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const title = `Shelf bracket ${Date.now().toString(36)}`;
+
+  // 1. The customer attaches a 3D model, sees it in 3D with an instant price range, and sends.
+  await signUp(page, '/custom');
+  await page.getByLabel('3D file or photo (optional)').setInputFiles({
+    name: 'bracket.stl',
+    mimeType: 'model/stl',
+    buffer: cube(40),
+  });
+  await expect(
+    page.getByRole('img', { name: /3D view of your model/ }).locator('canvas'),
+  ).toBeVisible();
+  await expect(page.getByText(/^About \$\d+\.00–\$\d+\.00$/)).toBeVisible();
+  await page.getByLabel('What is it?').fill(title);
+  await page
+    .getByLabel('Describe it')
+    .fill('Two brackets for a 20 mm pine shelf, in matte black.');
+  await page.getByRole('button', { name: 'Send request' }).click();
+  await expect(page.getByText('Request sent.')).toBeVisible();
+  await expect(page.getByText(/· Waiting for a quote./)).toBeVisible();
+  const requestUrl = page.url();
+
+  // 2. The studio sends the quote from the dashboard.
+  const studio = await browser.newContext();
+  await signInAsAdmin(studio, baseURL!);
+  const admin = await studio.newPage();
+  await admin.goto('/admin/requests?status=SUBMITTED');
+  await admin.getByRole('link', { name: new RegExp(title) }).click();
+  await expect(admin.getByRole('heading', { name: title })).toBeVisible();
+  await admin.getByLabel('Price (USD, for everything)').fill('30');
+  await admin
+    .getByLabel('Note for the customer (optional)')
+    .fill('Printed in PETG for strength.');
+  await admin.getByRole('button', { name: 'Send the quote' }).click();
+  await expect(saved(admin)).toBeVisible();
+
+  // 3. The customer sees it and accepts: an order awaiting the 50% deposit.
+  await page.goto(requestUrl);
+  // In the quote and in the timeline.
+  await expect(
+    page.getByText('Printed in PETG for strength.').first(),
+  ).toBeVisible();
+  await page.getByLabel('Phone').fill('70 123 456');
+  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Money transfer to our number').check();
+  await page
+    .getByRole('button', { name: 'Accept and place the order' })
+    .click();
+  await expect(page.getByText('Order placed')).toBeVisible();
+  const orderNumber =
+    (await page.locator('strong.font-mono').first().textContent()) ?? '';
+  expect(orderNumber).toMatch(/^FG-/);
+
+  // 4. The studio marks the deposit received; the history says who did it.
+  await admin.goto(`/admin/orders?q=${orderNumber}`);
+  await admin.getByRole('link', { name: orderNumber }).click();
+  await expect(admin.getByText(/From custom request CR-/)).toBeVisible();
+  await admin
+    .getByLabel('Note for the customer (optional)')
+    .fill('Deposit by Whish');
+  await admin
+    .getByRole('button', { name: 'Deposit received, confirm' })
+    .click();
+  await expect(saved(admin)).toBeVisible();
+  await admin.reload();
+  await expect(admin.getByText('Deposit by Whish')).toBeVisible();
+  await expect(admin.getByText(/received/).first()).toBeVisible();
+  await studio.close();
+});
+
+test('the owner changes the site palette; every page follows; then goes back', async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  // One palette for the whole site: run once, not on both screen sizes at the same time.
+  test.skip(testInfo.project.name !== 'desktop', 'changes shared settings');
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/theme');
+  await page.getByRole('button', { name: 'maroon' }).click();
+  await page.getByRole('button', { name: 'Save and apply' }).click();
+  await expect(saved(page)).toBeVisible();
+
+  await page.goto('/shop');
+  const accent = () =>
+    page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--forgea-color-accent')
+        .trim(),
+    );
+  await page.emulateMedia({ colorScheme: 'light' });
+  expect(await accent()).toBe('#8a1538');
+
+  // An unreadable colour is saved only once fixed, or kept on purpose.
+  await page.goto('/admin/theme');
+  const onAccent = page.getByLabel(/Text on the accent/).first();
+  await onAccent.fill('#8a1538');
+  const blocked = page.getByRole('button', {
+    name: 'Fix the contrast, or keep it, to save',
+  });
+  await expect(blocked).toBeDisabled();
+  await page.getByLabel(/Keep my colours anyway/).check();
+  await expect(
+    page.getByRole('button', { name: 'Save and apply' }),
+  ).toBeEnabled();
+  await page.getByLabel(/Keep my colours anyway/).uncheck();
+  await page.getByRole('button', { name: 'Fix the contrast for me' }).click();
+  await expect(onAccent).not.toHaveValue('#8a1538');
+  await page.getByRole('button', { name: 'Save and apply' }).click();
+  await expect(saved(page)).toBeVisible();
+  await page.goto('/shop');
+  expect(await accent()).toBe('#8a1538');
+  await page.goto('/admin/theme');
+
+  await page.getByRole('button', { name: 'Back to the default' }).click();
+  await expect(saved(page)).toBeVisible();
+  await page.goto('/shop');
+  expect(await accent()).toBe('#c87533');
+});

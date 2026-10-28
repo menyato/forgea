@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+**/generated/**
+**/dist/**
+**/build/**
+**/.react-router/**
+api/prisma/migrations/**

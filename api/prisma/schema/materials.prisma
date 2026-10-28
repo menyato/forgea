@@ -1,0 +1,26 @@
+/// A printable material (PLA, PETG, resin, …). Owns its price per gram and its stock,
+/// because filament stock and cost are per material, not per product.
+model Material {
+  id                     String   @id @default(uuid(7)) @db.Uuid
+  /// Short stable code used in URLs and settings, e.g. "PLA", "PETG-CF".
+  code                   String   @unique
+  name                   String
+  /// Admin-editable; read by @forgea/pricing as pricePerGram(material).
+  pricePerGram           Decimal  @db.Decimal(10, 4)
+  /// g/cm³; with gramsPerHour, suggests grams and hours from a 3D model in the dashboard.
+  densityGPerCm3         Decimal  @default(1.24) @db.Decimal(6, 3)
+  /// The printers' average throughput in this material.
+  gramsPerHour           Decimal  @default(12) @db.Decimal(8, 2)
+  stockGrams             Int      @default(0)
+  lowStockThresholdGrams Int      @default(1000)
+  active                 Boolean  @default(true)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  products     Product[]
+  printJobs    PrintJob[]
+  optionValues   OptionValue[]
+  customRequests CustomRequest[]
+
+  @@map("materials")
+}

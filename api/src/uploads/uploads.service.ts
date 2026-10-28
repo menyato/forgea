@@ -1,0 +1,209 @@
+import { createHash, randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../database/prisma.service.js';
+import type { Upload } from '../generated/prisma/client.js';
+import { parseModelVariantKey } from '@forgea/validation';
+import { UploadStatus, type UploadPurpose } from '../generated/prisma/enums.js';
+import { FileInspector } from './file-inspector.js';
+import { FileStorage } from './file-storage.js';
+import { isModelKey, ModelVariants } from './model-variants.js';
+import { UPLOAD_POLICIES } from './upload-policies.js';
+
+export interface IncomingFile {
+  data: Uint8Array;
+  originalName: string;
+}
+
+/**
+ * Every upload goes: quarantine → inspect → clean (or rejected). Nothing is ever served
+ * from quarantine, and rejected bytes are deleted; the row stays for the audit trail.
+ */
+@Injectable()
+export class UploadsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: FileStorage,
+    private readonly inspector: FileInspector,
+    private readonly variants: ModelVariants,
+  ) {}
+
+  async receive(
+    file: IncomingFile,
+    purpose: UploadPurpose,
+    uploadedById: string | null,
+  ): Promise<Upload> {
+    const objectId = randomUUID();
+    const quarantineKey = `quarantine/${objectId}`;
+    await this.storage.put(quarantineKey, file.data);
+
+    const upload = await this.prisma.upload.create({
+      data: {
+        purpose,
+        storageKey: quarantineKey,
+        originalName: sanitizeName(file.originalName),
+        mimeType: 'application/octet-stream',
+        sizeBytes: file.data.byteLength,
+        sha256: createHash('sha256').update(file.data).digest('hex'),
+        uploadedById,
+      },
+    });
+
+    const result = await this.inspector.inspect(
+      file.data,
+      UPLOAD_POLICIES[purpose],
+    );
+    if (!result.ok) {
+      await this.storage.remove(quarantineKey);
+      return this.prisma.upload.update({
+        where: { id: upload.id },
+        data: {
+          status: UploadStatus.REJECTED,
+          rejectionReason: result.reason,
+          inspectedAt: new Date(),
+        },
+      });
+    }
+
+    const cleanKey = `clean/${objectId}.${result.extension}`;
+    await this.storage.move(quarantineKey, cleanKey);
+    if (isModelKey(cleanKey))
+      await this.variants.tryEnsure(cleanKey, file.data);
+    return this.prisma.upload.update({
+      where: { id: upload.id },
+      data: {
+        status: UploadStatus.CLEAN,
+        storageKey: cleanKey,
+        mimeType: result.mimeType,
+        inspectedAt: new Date(),
+      },
+    });
+  }
+
+  /** Every key must be an accepted (CLEAN) upload made for this purpose. */
+  async requireClean(
+    keys: readonly string[],
+    purpose: UploadPurpose,
+  ): Promise<void> {
+    if (keys.length === 0) return;
+    const found = await this.prisma.upload.count({
+      where: {
+        storageKey: { in: [...keys] },
+        status: UploadStatus.CLEAN,
+        purpose,
+      },
+    });
+    if (found !== new Set(keys).size) {
+      throw new BadRequestException(
+        'A file was not uploaded here; upload it again',
+      );
+    }
+  }
+
+  /** The key must be an accepted upload this person made, for this purpose. */
+  async requireOwn(
+    key: string,
+    purpose: UploadPurpose,
+    userId: string,
+  ): Promise<{ mimeType: string }> {
+    const upload = await this.prisma.upload.findFirst({
+      where: {
+        storageKey: key,
+        status: UploadStatus.CLEAN,
+        purpose,
+        uploadedById: userId,
+      },
+      select: { mimeType: true },
+    });
+    if (!upload) {
+      throw new BadRequestException('Upload the file again, then send it');
+    }
+    return upload;
+  }
+
+  /** An accepted upload with exactly these bytes, so re-importing a file stores it once. */
+  async findCleanBySha256(
+    sha256: string,
+    purpose: UploadPurpose,
+  ): Promise<string | null> {
+    const upload = await this.prisma.upload.findFirst({
+      where: { sha256, purpose, status: UploadStatus.CLEAN },
+      select: { storageKey: true },
+    });
+    return upload?.storageKey ?? null;
+  }
+
+  /** The whole file, e.g. to measure a 3D model on the server. */
+  async read(key: string): Promise<Uint8Array> {
+    const file = await this.storage.open(key);
+    if (!file) throw new NotFoundException('File not found');
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.stream) chunks.push(chunk as Buffer);
+    return Buffer.concat(chunks);
+  }
+
+  /**
+   * An accepted file's bytes. Shoppers get only files shown on an active product, and the
+   * files they uploaded themselves; staff (in the dashboard) get any accepted file. Others get
+   * 404, as if it didn't exist. A model's compressed copy follows its original's rules.
+   */
+  async media(
+    requestedKey: string,
+    viewer: { staff: boolean; userId: string | null },
+  ): Promise<{ stream: Readable; size: number; mimeType: string }> {
+    const copy = parseModelVariantKey(requestedKey);
+    const upload = await this.prisma.upload.findFirst({
+      where: {
+        storageKey: copy ? { startsWith: `${copy.stem}.` } : requestedKey,
+        status: UploadStatus.CLEAN,
+      },
+      select: { storageKey: true, mimeType: true, uploadedById: true },
+    });
+    const key = upload?.storageKey ?? requestedKey;
+    const visible =
+      upload &&
+      (viewer.staff ||
+        (viewer.userId !== null &&
+          (upload.uploadedById === viewer.userId ||
+            // The studio's design for one of their own requests.
+            (await this.prisma.customRequest.count({
+              where: { userId: viewer.userId, designPreviewKey: key },
+            })) > 0)) ||
+        (await this.prisma.product.count({
+          where: {
+            active: true,
+            OR: [{ modelFileKey: key }, { imageKeys: { has: key } }],
+          },
+        })) > 0);
+    if (!upload || !visible) throw new NotFoundException('File not found');
+    if (!copy) {
+      const file = await this.storage.open(key);
+      if (!file) throw new NotFoundException('File not found');
+      return { ...file, mimeType: upload.mimeType };
+    }
+    if (!isModelKey(key)) throw new NotFoundException('File not found');
+    let file = await this.storage.open(requestedKey);
+    if (!file) {
+      await this.variants.ensure(key);
+      file = await this.storage.open(requestedKey);
+    }
+    if (!file) throw new NotFoundException('File not found');
+    return { ...file, mimeType: 'model/gltf-binary' };
+  }
+}
+
+/** For display to staff only: no path parts, no control characters, bounded length. */
+export function sanitizeName(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? '';
+  const clean = base
+    // Control characters are exactly what this removes.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, 200);
+  return clean || 'upload';
+}

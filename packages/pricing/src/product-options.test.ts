@@ -1,0 +1,100 @@
+import { describe, expect, it } from 'vitest';
+import { PricingError } from './errors.js';
+import {
+  configuredUnitPrice,
+  configureUnit,
+  type OptionEffect,
+} from './product-options.js';
+import { UnitCostCalculator } from './unit-cost-calculator.js';
+
+const base = { grams: '100', printHours: '4', pricePerGram: '0.05' };
+const none = { gramsMultiplier: 1, hoursMultiplier: 1, extraPrice: 0 };
+const large: OptionEffect = {
+  label: 'Size: Large',
+  ...none,
+  gramsMultiplier: '1.8',
+  hoursMultiplier: '1.5',
+};
+const silk: OptionEffect = {
+  label: 'Colour: Copper silk',
+  ...none,
+  extraPrice: '2.5',
+};
+const petg: OptionEffect = {
+  label: 'Material: PETG',
+  ...none,
+  pricePerGram: '0.07',
+};
+
+describe('configureUnit', () => {
+  it('leaves the product as it is without options', () => {
+    expect(configureUnit(base, [])).toEqual({
+      input: { grams: '100', printHours: '4', pricePerGram: '0.05' },
+      extraPrice: '0.00',
+    });
+  });
+
+  it('compounds multipliers, sums add-ons and switches the material', () => {
+    const half: OptionEffect = {
+      label: 'Fill: Light',
+      ...none,
+      gramsMultiplier: '0.5',
+    };
+    expect(configureUnit(base, [large, silk, petg, half])).toEqual({
+      input: { grams: '90', printHours: '6', pricePerGram: '0.07' },
+      extraPrice: '2.50',
+    });
+  });
+
+  it('treats a null material as "no change"', () => {
+    expect(
+      configureUnit(base, [{ ...silk, pricePerGram: null }]).input.pricePerGram,
+    ).toBe('0.05');
+  });
+
+  it('refuses two options that both set the material', () => {
+    const pla = { ...petg, label: 'Finish: Matte PLA', pricePerGram: '0.04' };
+    expect(() => configureUnit(base, [petg, pla])).toThrow(
+      'Both "Material: PETG" and "Finish: Matte PLA" set the material',
+    );
+  });
+
+  it.each([
+    [
+      { ...large, gramsMultiplier: 0 },
+      'Size: Large: grams multiplier must be greater than 0',
+    ],
+    [
+      { ...large, hoursMultiplier: '-1' },
+      'Size: Large: hours multiplier must be greater than 0',
+    ],
+    [
+      { ...silk, extraPrice: '-1' },
+      'Colour: Copper silk: extra price must not be negative',
+    ],
+    [
+      { ...petg, pricePerGram: '-0.1' },
+      'Material: PETG: price per gram must not be negative',
+    ],
+  ])('rejects a misconfigured option (%#)', (effect, message) => {
+    expect(() => configureUnit(base, [effect])).toThrow(
+      new PricingError(message),
+    );
+  });
+});
+
+describe('configuredUnitPrice', () => {
+  const calculator = new UnitCostCalculator({
+    machineRatePerHour: 0,
+    purgeWastePercent: 0,
+    failureAllowancePercent: 0,
+    laborCostPerUnit: 0,
+    packagingCostPerUnit: 0,
+    markupMultiplier: 2,
+  });
+
+  it('prices the configured print, then adds the fixed add-ons after markup', () => {
+    // 100 g × 1.8 × $0.05 = $9 → ×2 markup = $18, + $2.50 silk = $20.50
+    expect(configuredUnitPrice(calculator, base, [large, silk])).toBe('20.50');
+  });
+});

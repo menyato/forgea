@@ -1,0 +1,31 @@
+// Finds unused files, exports and dependencies (`pnpm knip`, also run in CI).
+// Every exception below is a file or package that knip cannot see being used.
+{
+  "$schema": "https://unpkg.com/knip@6.41.0/schema.json",
+  "workspaces": {
+    "api": {
+      // Prisma's CLI reads prisma7.config.ts and the schema files; tests are Vitest entries.
+      "entry": [
+        "src/main.ts",
+        "prisma7.config.ts",
+        "prisma/schema/*.prisma",
+        "test/**/*.ts",
+        // Run with plain node by `pnpm dashboard` and the browser tests.
+        "scripts/*.ts"
+      ],
+      "project": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.{ts,prisma}", "scripts/*.ts"],
+      // @prisma/client: imported by the generated client (src/generated, git-ignored).
+      // prisma-client: the generator's `provider` name in schema.prisma, not a package.
+      "ignoreDependencies": ["@prisma/client", "prisma-client"]
+    },
+    "packages/brand": {
+      // Run by the build script as dist/cli/write-css.js.
+      "entry": ["src/cli/write-css.ts"]
+    },
+    "web": {
+      // The Playwright plugin would load the config, which needs TEST_DATABASE_URL.
+      "playwright": false,
+      "entry": ["playwright.config.ts", "browser/**/*.ts"]
+    }
+  }
+}

@@ -1,0 +1,41 @@
+enum UploadStatus {
+  /// Stored under the quarantine prefix; never served.
+  QUARANTINED
+  /// Passed inspection; may be served through short-lived signed URLs.
+  CLEAN
+  /// Failed inspection; kept for audit, never served.
+  REJECTED
+}
+
+enum UploadPurpose {
+  LEAD_REFERENCE
+  PRODUCT_IMAGE
+  PRODUCT_MODEL
+  /// A customer's 3D model or photo attached to a custom request.
+  CUSTOM_REQUEST_FILE
+}
+
+/// Every uploaded file. The type is sniffed from the bytes, never taken from the
+/// filename or the client's Content-Type.
+model Upload {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  purpose         UploadPurpose
+  status          UploadStatus  @default(QUARANTINED)
+  storageKey      String        @unique
+  /// Shown to staff only; never used to build paths.
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  rejectionReason String?
+  /// Null for the public lead form.
+  uploadedById    String?       @db.Uuid
+  uploadedBy      User?         @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  inspectedAt     DateTime?     @db.Timestamptz(3)
+
+  leads Lead[]
+
+  @@index([status, createdAt])
+  @@map("uploads")
+}

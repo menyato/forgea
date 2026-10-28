@@ -1,0 +1,25 @@
+{
+  "name": "forgea",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "generate": "pnpm --filter @forgea/api run prisma:generate",
+    "build": "pnpm generate && pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "typecheck": "pnpm generate && pnpm build:packages && pnpm --recursive run typecheck",
+    "build:packages": "pnpm --filter \"./packages/*\" run build",
+    "lint": "pnpm --recursive run lint",
+    "format": "prettier --write \"api/{src,test}/**/*.ts\" \"web/{app,browser}/**/*.{ts,tsx,css}\" \"packages/*/src/**/*.ts\"",
+    "knip": "knip",
+    "dashboard": "pnpm --filter @forgea/web run dashboard"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "prettier": "^3.4.2",
+    "knip": "6.41.0"
+  }
+}

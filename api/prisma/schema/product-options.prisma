@@ -1,0 +1,77 @@
+enum OptionKind {
+  /// Pick one of the group's values (colour, size, material…).
+  CHOICE
+  /// Type a short text (a name on a keychain…).
+  TEXT
+}
+
+/// A kind of choice customers make, defined in the dashboard: "Colour", "Size", "Name"…
+model OptionGroup {
+  id             String     @id @default(uuid(7)) @db.Uuid
+  name           String     @unique
+  kind           OptionKind @default(CHOICE)
+  /// TEXT only: the longest text accepted.
+  maxLength      Int?
+  /// TEXT only: added to the unit price when text is given (USD).
+  textExtraPrice Decimal    @default(0) @db.Decimal(10, 2)
+  sortOrder      Int        @default(0)
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  values   OptionValue[]
+  products ProductOptionGroup[]
+
+  @@map("option_groups")
+}
+
+/// One choice in a CHOICE group, with its effect on the price (see @forgea/pricing configureUnit).
+model OptionValue {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  groupId         String      @db.Uuid
+  group           OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  label           String
+  /// Colour swatch shown to customers, "#rrggbb".
+  swatchHex       String?
+  gramsMultiplier Decimal     @default(1) @db.Decimal(6, 3)
+  hoursMultiplier Decimal     @default(1) @db.Decimal(6, 3)
+  /// Added to the unit price after markup (USD).
+  extraPrice      Decimal     @default(0) @db.Decimal(10, 2)
+  /// Choosing this value prints in this material (its price per gram applies).
+  materialId      String?     @db.Uuid
+  material        Material?   @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  sortOrder       Int         @default(0)
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+
+  products ProductOptionValue[]
+
+  @@unique([groupId, label])
+  @@map("option_values")
+}
+
+/// Which option groups a product offers, in which order, and whether a choice is required.
+model ProductOptionGroup {
+  productId String      @db.Uuid
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  groupId   String      @db.Uuid
+  group     OptionGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  required  Boolean     @default(true)
+  sortOrder Int         @default(0)
+
+  @@id([productId, groupId])
+  @@map("product_option_groups")
+}
+
+/// Which values of a CHOICE group a product offers; one per group may be the default.
+model ProductOptionValue {
+  productId String      @db.Uuid
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  valueId   String      @db.Uuid
+  value     OptionValue @relation(fields: [valueId], references: [id], onDelete: Restrict)
+  isDefault Boolean     @default(false)
+
+  @@id([productId, valueId])
+  @@map("product_option_values")
+}

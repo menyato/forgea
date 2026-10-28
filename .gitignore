@@ -1,0 +1,43 @@
+node_modules/
+dist/
+build/
+coverage/
+.react-router/
+*.tsbuildinfo
+
+# Prisma client is generated from api/prisma/schema on install/build
+generated/
+
+# Local secrets — production secrets live in Google Secret Manager
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+.uploads/
+.uploads-test/
+# Emails written instead of sent (development and tests).
+.outbox/
+.outbox-test/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Logs and editor/agent settings that belong to one machine
+*.log
+.vscode/
+.idea/
+# Claude Code's own guides and settings (CLAUDE.md, the project conventions, stays)
+.claude/
+
+# Hand-testing notes for the owner (docs/LOCAL_SETUP.md is the lasting version)
+manual-testing/
+
+# Deployment secrets: they live only on the servers (deploy/README.md)
+deploy/**/*.env
+!deploy/env/*.env.example
+*.pem
+forgea-deploy-*
+backup-key.json

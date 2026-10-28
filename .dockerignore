@@ -1,0 +1,25 @@
+# Only source goes into the build. Secrets, local data and anything the build recreates stay out.
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/generated
+**/.react-router
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+
+**/.env
+**/.env.*
+!**/.env.example
+
+**/.uploads*
+**/.outbox*
+
+.git
+.github
+.claude
+manual-testing
+deploy
+docs
+*.md

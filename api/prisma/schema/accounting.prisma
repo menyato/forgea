@@ -1,0 +1,234 @@
+enum AccountType {
+  /// What customers owe (reconciled with payments).
+  RECEIVABLE
+  /// What the studio owes suppliers.
+  PAYABLE
+  CASH
+  /// Bank and money-transfer wallets (Whish, OMT…).
+  BANK
+  CURRENT_ASSET
+  FIXED_ASSET
+  CURRENT_LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+/// The chart of accounts (Odoo `account.account`), editable by the owner.
+model Account {
+  id        String      @id @default(uuid(7)) @db.Uuid
+  /// e.g. "1100"; reports sort by it.
+  code      String      @unique
+  name      String
+  type      AccountType
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+
+  lines         JournalLine[]
+  journals      Journal[]
+  taxes         Tax[]
+  asReceivable    AccountingSettings[] @relation("SettingsReceivable")
+  asProductIncome AccountingSettings[] @relation("SettingsProductIncome")
+  asCustomIncome  AccountingSettings[] @relation("SettingsCustomIncome")
+  asDelivery      AccountingSettings[] @relation("SettingsDelivery")
+  asRush          AccountingSettings[] @relation("SettingsRush")
+  asDeposit       AccountingSettings[] @relation("SettingsDeposit")
+
+  @@map("accounts")
+}
+
+enum JournalType {
+  SALE
+  CASH
+  BANK
+  GENERAL
+}
+
+/// Where entries are recorded (Odoo `account.journal`); its code starts the entry numbers.
+model Journal {
+  id               String      @id @default(uuid(7)) @db.Uuid
+  code             String      @unique
+  name             String
+  type             JournalType
+  /// Sale journals: the default income account; cash and bank: the money account.
+  defaultAccountId String      @db.Uuid
+  defaultAccount   Account     @relation(fields: [defaultAccountId], references: [id], onDelete: Restrict)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(3)
+
+  entries  JournalEntry[]
+  counters EntrySequence[]
+  asSale    AccountingSettings[] @relation("SettingsSaleJournal")
+  asCash    AccountingSettings[] @relation("SettingsCashJournal")
+  asBank    AccountingSettings[] @relation("SettingsBankJournal")
+  asGeneral AccountingSettings[] @relation("SettingsGeneralJournal")
+
+  @@map("journals")
+}
+
+/// A percentage tax (Odoo `account.tax`): shop prices include it; invoices split it out.
+model Tax {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique
+  ratePercent Decimal  @db.Decimal(5, 2)
+  /// Where the collected tax is owed (a liability, e.g. "VAT payable").
+  accountId   String   @db.Uuid
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  lines JournalLine[]
+  settings AccountingSettings[]
+
+  @@map("taxes")
+}
+
+enum EntryType {
+  /// A manual entry (opening balances, expenses, corrections).
+  ENTRY
+  INVOICE
+  CREDIT_NOTE
+  PAYMENT
+}
+
+enum EntryState {
+  DRAFT
+  /// Final: balanced, numbered, never edited or deleted (corrections are reversals).
+  POSTED
+}
+
+/// A journal entry (Odoo `account.move`): invoices, credit notes, payments and manual entries.
+/// The database refuses a posted entry that doesn't balance, and any change to one.
+model JournalEntry {
+  id         String     @id @default(uuid(7)) @db.Uuid
+  /// "INV/2026/00001", given at posting; null while a draft.
+  number     String?    @unique
+  type       EntryType
+  state      EntryState @default(DRAFT)
+  journalId  String     @db.Uuid
+  journal    Journal    @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  /// The accounting date.
+  date       DateTime   @db.Date
+  customerId String?    @db.Uuid
+  customer   User?      @relation("EntryCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  orderId    String?    @db.Uuid
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Deposit or final invoice of an order (null for anything else).
+  invoiceKind InvoiceKind?
+  label      String
+  /// The document's currency and the rate it was made at (units per 1 USD). Amounts on its
+  /// lines are in USD; amountCurrency in this currency.
+  currencyCode String   @default("USD") @db.Char(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  exchangeRate Decimal  @default(1) @db.Decimal(20, 8)
+  /// A credit note points at the invoice it reverses (and a reversal at its entry).
+  reversedEntryId String?       @unique @db.Uuid
+  reversedEntry   JournalEntry? @relation("Reversal", fields: [reversedEntryId], references: [id], onDelete: Restrict)
+  reversal        JournalEntry? @relation("Reversal")
+  postedAt     DateTime? @db.Timestamptz(3)
+  postedById   String?   @db.Uuid
+  postedBy     User?     @relation("EntryPoster", fields: [postedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  lines JournalLine[]
+
+  @@index([journalId, date])
+  @@index([customerId])
+  @@index([orderId])
+  @@map("journal_entries")
+}
+
+enum InvoiceKind {
+  DEPOSIT
+  FINAL
+}
+
+/// One debit or credit (Odoo `account.move.line`), in USD; `amountCurrency` in the document's
+/// currency (signed: + debit, − credit).
+model JournalLine {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  entryId        String       @db.Uuid
+  entry          JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId      String       @db.Uuid
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  customerId     String?      @db.Uuid
+  customer       User?        @relation("LineCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  label          String
+  debit          Decimal      @default(0) @db.Decimal(14, 2)
+  credit         Decimal      @default(0) @db.Decimal(14, 2)
+  amountCurrency Decimal      @default(0) @db.Decimal(20, 4)
+  /// The tax this line collects (tax lines only).
+  taxId          String?      @db.Uuid
+  tax            Tax?         @relation(fields: [taxId], references: [id], onDelete: Restrict)
+  /// Receivable lines: when it is due.
+  dueDate        DateTime?    @db.Date
+
+  asDebit  Reconciliation[] @relation("ReconciledDebit")
+  asCredit Reconciliation[] @relation("ReconciledCredit")
+
+  @@index([entryId])
+  @@index([accountId])
+  @@index([customerId])
+  @@map("journal_lines")
+}
+
+/// Matches part of a debit with part of a credit on a receivable account (Odoo
+/// `account.partial.reconcile`): a payment against an invoice, a credit note against it.
+model Reconciliation {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  debitLineId  String      @db.Uuid
+  debitLine    JournalLine @relation("ReconciledDebit", fields: [debitLineId], references: [id], onDelete: Restrict)
+  creditLineId String      @db.Uuid
+  creditLine   JournalLine @relation("ReconciledCredit", fields: [creditLineId], references: [id], onDelete: Restrict)
+  amount       Decimal     @db.Decimal(14, 2)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([debitLineId])
+  @@index([creditLineId])
+  @@map("reconciliations")
+}
+
+/// Entry numbers per journal, year and series ("" invoices, "R" credit notes), gap-free.
+model EntrySequence {
+  journalId String  @db.Uuid
+  journal   Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  year      Int
+  series    String  @default("")
+  last      Int     @default(0)
+
+  @@id([journalId, year, series])
+  @@map("entry_sequences")
+}
+
+/// Which accounts and journals the automatic entries use, the sales tax, and the lock date.
+/// Exactly one row (id = 1), created by the migration.
+model AccountingSettings {
+  id                     Int       @id @default(1)
+  receivableAccountId    String    @db.Uuid
+  receivableAccount      Account   @relation("SettingsReceivable", fields: [receivableAccountId], references: [id], onDelete: Restrict)
+  productIncomeAccountId String    @db.Uuid
+  productIncomeAccount   Account   @relation("SettingsProductIncome", fields: [productIncomeAccountId], references: [id], onDelete: Restrict)
+  customIncomeAccountId  String    @db.Uuid
+  customIncomeAccount    Account   @relation("SettingsCustomIncome", fields: [customIncomeAccountId], references: [id], onDelete: Restrict)
+  deliveryAccountId      String    @db.Uuid
+  deliveryAccount        Account   @relation("SettingsDelivery", fields: [deliveryAccountId], references: [id], onDelete: Restrict)
+  rushAccountId          String    @db.Uuid
+  rushAccount            Account   @relation("SettingsRush", fields: [rushAccountId], references: [id], onDelete: Restrict)
+  /// Deposits are owed to the customer until the order is invoiced (a liability).
+  depositAccountId       String    @db.Uuid
+  depositAccount         Account   @relation("SettingsDeposit", fields: [depositAccountId], references: [id], onDelete: Restrict)
+  saleJournalId          String    @db.Uuid
+  saleJournal            Journal   @relation("SettingsSaleJournal", fields: [saleJournalId], references: [id], onDelete: Restrict)
+  cashJournalId          String    @db.Uuid
+  cashJournal            Journal   @relation("SettingsCashJournal", fields: [cashJournalId], references: [id], onDelete: Restrict)
+  bankJournalId          String    @db.Uuid
+  bankJournal            Journal   @relation("SettingsBankJournal", fields: [bankJournalId], references: [id], onDelete: Restrict)
+  generalJournalId       String    @db.Uuid
+  generalJournal         Journal   @relation("SettingsGeneralJournal", fields: [generalJournalId], references: [id], onDelete: Restrict)
+  /// The tax included in shop prices; null = no tax (the owner's decision, with their accountant).
+  salesTaxId             String?   @db.Uuid
+  salesTax               Tax?      @relation(fields: [salesTaxId], references: [id], onDelete: Restrict)
+  /// Nothing dated on or before it can be posted.
+  lockDate               DateTime? @db.Date
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("accounting_settings")
+}

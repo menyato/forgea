@@ -1,0 +1,78 @@
+enum CustomRequestStatus {
+  /// Waiting for the studio's quote.
+  SUBMITTED
+  /// A price was sent; the customer accepts or declines it before it expires.
+  QUOTED
+  /// The customer accepted: an order was created (orderId).
+  ACCEPTED
+  /// The customer turned the quote down.
+  DECLINED
+  /// Closed by the studio (can't be made, duplicate…) or by the customer before a quote.
+  CANCELLED
+}
+
+/// "Make me something": a signed-in customer describes an idea, optionally with a 3D model or
+/// a photo; the studio replies with a quote; accepting it creates a normal order awaiting the
+/// deposit. `status` is the latest CustomRequestStatusHistory row, written by a database
+/// trigger on every insert and status change (like orders).
+model CustomRequest {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  /// Public reference, "CR-" + random characters (like order numbers).
+  requestNumber String              @unique
+  userId        String              @db.Uuid
+  user          User                @relation("CustomRequestOwner", fields: [userId], references: [id], onDelete: Restrict)
+  status        CustomRequestStatus @default(SUBMITTED)
+
+  title       String
+  description String
+  quantity    Int     @default(1)
+  /// Preferred material and colour, if the customer has one.
+  materialId  String? @db.Uuid
+  material    Material? @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  colour      String?
+  /// Optional attachment: an accepted upload's object key (STL/GLB model or a photo).
+  fileKey     String?
+  /// The studio's design for the request (a 3D model or image), shown with the quote.
+  designPreviewKey String?
+
+  /// Instant estimate (USD, all units) computed by the API from an attached STL. A snapshot.
+  estimateLow  Decimal? @db.Decimal(12, 2)
+  estimateHigh Decimal? @db.Decimal(12, 2)
+
+  /// The studio's quote (USD, for the whole request), and until when it can be accepted.
+  quotedPrice    Decimal?  @db.Decimal(12, 2)
+  quoteNote      String?
+  quotedAt       DateTime? @db.Timestamptz(3)
+  quoteExpiresAt DateTime? @db.Timestamptz(3)
+  quotedByUserId String?   @db.Uuid
+  quotedBy       User?     @relation("CustomRequestQuotedBy", fields: [quotedByUserId], references: [id], onDelete: Restrict)
+
+  orderId String? @unique @db.Uuid
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  statusHistory CustomRequestStatusHistory[]
+  lead          Lead?
+
+  @@index([userId, id])
+  @@index([status, id])
+  @@map("custom_requests")
+}
+
+/// Append-only, written only by the database trigger.
+model CustomRequestStatusHistory {
+  id              String              @id @default(uuid(7)) @db.Uuid
+  requestId       String              @db.Uuid
+  request         CustomRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status          CustomRequestStatus
+  changedAt       DateTime            @default(now()) @db.Timestamptz(3)
+  changedByUserId String?             @db.Uuid
+  changedBy       User?               @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
+  /// Shown to the customer, e.g. why a request was cancelled.
+  note            String?
+
+  @@index([requestId, changedAt])
+  @@map("custom_request_status_history")
+}

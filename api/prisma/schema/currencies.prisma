@@ -1,0 +1,41 @@
+/// A currency the business accepts. Prices are defined in the base currency (USD);
+/// every other currency is reached through the latest ExchangeRate the admin has set.
+/// Sales, invoices, reports and accounting (Phase 11) all read from here.
+model Currency {
+  /// ISO 4217, e.g. "USD", "LBP".
+  code         String   @id @db.Char(3)
+  name         String
+  /// Decimal places shown and stored: USD 2, LBP 0.
+  decimals     Int
+  /// Smallest amount cash can pay: 0.01 for USD, 5000 for LBP.
+  roundingStep Decimal  @db.Decimal(18, 6)
+  /// Exactly one currency is the base (enforced by a partial unique index).
+  isBase       Boolean  @default(false)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  rates  ExchangeRate[]
+  orders Order[]
+  journalEntries JournalEntry[]
+
+  @@map("currencies")
+}
+
+/// Append-only history of admin-set rates. The rate in force at any moment is the latest row
+/// with effectiveFrom ≤ that moment, so old orders, invoices and reports keep their own rates.
+model ExchangeRate {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  currencyCode  String   @db.Char(3)
+  currency      Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  /// Units of this currency per 1 unit of the base currency (e.g. 89500 LBP per USD).
+  rate          Decimal  @db.Decimal(20, 8)
+  effectiveFrom DateTime @default(now()) @db.Timestamptz(3)
+  /// Null for the rate seeded by the migration.
+  setByUserId   String?  @db.Uuid
+  setBy         User?    @relation(fields: [setByUserId], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([currencyCode, effectiveFrom])
+  @@map("exchange_rates")
+}

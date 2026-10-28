@@ -1,0 +1,111 @@
+name: Deploy
+
+# Push to `staging` → staging.forgea-lab.com; push to `production` → forgea-lab.com.
+# (`development` is for daily work: CI only.)
+# Every deploy first runs the full CI. Roll back: Actions → Deploy → "Run workflow" with an
+# earlier image tag (sha-<first 7 characters of the commit>).
+on:
+  push:
+    branches: [staging, production]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+      tag:
+        description: Image tag to deploy again, e.g. sha-1a2b3c4
+        required: true
+
+permissions:
+  contents: read
+
+# One deploy per environment at a time; a newer push waits rather than cancelling a deploy.
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/forgea
+
+jobs:
+  ci:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    if: github.event_name == 'push'
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Three images from one Dockerfile; the shared build stage is cached between them.
+      - name: Build and push api, web and migrate
+        run: |
+          for target in api web migrate; do
+            docker buildx build . --target "$target" --push \
+              --tag "$IMAGE_PREFIX-$target:${{ steps.tag.outputs.tag }}" \
+              --cache-from type=gha,scope=forgea \
+              --cache-to type=gha,scope=forgea,mode=max
+          done
+
+  deploy:
+    if: always() && (needs.images.result == 'success' || github.event_name == 'workflow_dispatch')
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # Each branch deploys to the environment of the same name; a manual run names its target.
+      TARGET: ${{ github.event.inputs.environment || github.ref_name }}
+      TAG: ${{ github.event.inputs.tag || needs.images.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Connect to the server
+        env:
+          HOST: ${{ secrets.SSH_HOST }}
+          KEY: ${{ secrets.SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          # Both go into commands on the server: only the shapes this workflow makes.
+          echo "$TAG" | grep -Eq '^sha-[0-9a-f]{7}$' || { echo "Not an image tag: $TAG"; exit 1; }
+          case "$TARGET" in production|staging) ;; *) echo "Unknown environment $TARGET"; exit 1 ;; esac
+          [ -n "$HOST" ] || { echo 'The SSH secrets are missing (deploy/README.md, step 6)'; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          # The server's own fingerprint, saved when it was created: no trust on first use.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "SERVER=deploy@$HOST" >> "$GITHUB_ENV"
+
+      - name: Copy the stack definitions
+        run: |
+          scp deploy/edge/compose.yaml deploy/edge/Caddyfile "$SERVER:/srv/forgea/edge/"
+          scp deploy/app/compose.yaml deploy/app/postgres-init.sh deploy/app/deploy.sh \
+            deploy/app/backup.sh "$SERVER:/srv/forgea/$TARGET/"
+
+      # The job's own token, valid only while it runs, lets the server pull the private images.
+      - name: Deploy ${{ env.TAG }} to ${{ env.TARGET }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | ssh "$SERVER" \
+            "docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null \
+             && cd /srv/forgea/$TARGET && chmod +x deploy.sh backup.sh \
+             && ./deploy.sh '$TAG'; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"

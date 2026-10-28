@@ -1,0 +1,40 @@
+model Product {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  /// Public URL segment for the product page.
+  slug         String    @unique
+  name         String
+  description  String
+  categoryId   String?   @db.Uuid
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// Cloud Storage object keys of reference images, in display order.
+  imageKeys    String[]
+  /// Cloud Storage object key of the .glb or .stl model shown in 3D.
+  modelFileKey String?
+  /// Its place on the home page's print bed (1 = the centre, 2–5 the corners), chosen in the
+  /// dashboard; null = not on the bed.
+  plateOrder   Int?         @unique
+
+  // Base pricing inputs fed to @forgea/pricing.
+  grams      Decimal  @db.Decimal(10, 2)
+  printHours Decimal  @db.Decimal(8, 2)
+  materialId String   @db.Uuid
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  /// Made to order for the customer: requires the 50% deposit at checkout.
+  isCustom  Boolean  @default(false)
+  /// "Designed by …" on the product page: a studio or guest designer, by name.
+  designer  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  optionGroups ProductOptionGroup[]
+  optionValues ProductOptionValue[]
+  quotationLines QuotationLine[]
+
+  @@index([active, id])
+  @@index([categoryId])
+  @@map("products")
+}

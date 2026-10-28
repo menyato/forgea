@@ -1,0 +1,82 @@
+# One environment of the shop (production or staging). The server runs this twice, from
+# /srv/forgea/production and /srv/forgea/staging, each with its own .env, database, files and
+# passwords; the shared front door is deploy/edge. Started by deploy.sh (deploy/README.md).
+#
+# Who can reach what:
+#   Caddy (edge) → <env>-web, and → <env>-api for the two Google sign-in paths
+#   web → api over this environment's own "app" network
+#   api, migrate → postgres over "db" (internal: no internet in or out)
+# The other environment's containers are never on "app" or "db".
+name: forgea-${ENV_NAME:?set ENV_NAME in .env}
+
+x-app: &app
+  restart: unless-stopped
+  init: true
+  logging:
+    driver: local
+    options: { max-size: 10m, max-file: '5' }
+
+services:
+  web:
+    <<: *app
+    image: ${IMAGE_PREFIX:?}-web:${TAG:?}
+    env_file: web.env
+    networks:
+      app: {}
+      edge: { aliases: ['${ENV_NAME}-web'] }
+    depends_on:
+      api: { condition: service_healthy }
+
+  api:
+    <<: *app
+    image: ${IMAGE_PREFIX}-api:${TAG}
+    env_file: api.env
+    volumes:
+      - uploads:/data/uploads
+      - outbox:/data/outbox
+    networks:
+      app: { aliases: ['${ENV_NAME}-api'] }
+      # Caddy reaches it here for Google sign-in, and it reaches Google (Gmail, Calendar).
+      edge: { aliases: ['${ENV_NAME}-api'] }
+      db: {}
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    <<: *app
+    image: postgres:16-alpine
+    env_file: db.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the app's own least-privilege role on first start (never the superuser).
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    networks: [db]
+    shm_size: 256m
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # `docker compose run --rm migrate` — applies pending migrations, then exits.
+  migrate:
+    image: ${IMAGE_PREFIX}-migrate:${TAG}
+    env_file: api.env
+    networks: [db]
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [tools]
+
+volumes:
+  pgdata:
+  uploads:
+  outbox:
+
+networks:
+  app:
+  db:
+    internal: true
+  # Created by deploy/edge; shared by both environments and Caddy only.
+  edge:
+    name: forgea-edge
+    external: true

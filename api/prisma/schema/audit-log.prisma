@@ -1,0 +1,19 @@
+/// Append-only record of every sensitive admin/staff action.
+model AuditLog {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  actorUserId String?  @db.Uuid
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  /// Dotted verb, e.g. "order.status.change", "settings.pricing.update".
+  action      String
+  targetType  String
+  targetId    String
+  /// Before/after values or other context; never secrets or password hashes.
+  metadata    Json?
+  timestamp   DateTime @default(now()) @db.Timestamptz(3)
+  ipAddress   String?  @db.Inet
+
+  @@index([timestamp])
+  @@index([actorUserId, timestamp])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}

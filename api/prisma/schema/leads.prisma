@@ -1,0 +1,126 @@
+/// A step of the sales pipeline, editable by the owner (Odoo `crm.stage`). Exactly one
+/// "won" stage is expected; a lead there is won. Lost leads leave the pipeline (closed).
+model LeadStage {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  name               String   @unique
+  sortOrder          Int      @default(0)
+  isWon              Boolean  @default(false)
+  /// The chance a lead in this stage is won, 0–100, filled in when a lead moves here.
+  defaultProbability Int      @default(10)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  leads Lead[]
+
+  @@map("lead_stages")
+}
+
+/// Why a lead was lost ("Too expensive", "Went elsewhere"…), editable by the owner.
+model LostReason {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  leads Lead[]
+
+  @@map("lost_reasons")
+}
+
+enum LeadSource {
+  /// The public custom-design form.
+  FORM
+  /// A signed-in customer's custom request.
+  CUSTOM_REQUEST
+  /// Added by the team (a call, a fair, a referral…).
+  MANUAL
+}
+
+/// A potential sale (Odoo `crm.lead`): open while `closedAt` is null; won in the won stage;
+/// lost when closed with a lost reason. Quotations can be made from it.
+model Lead {
+  id                String     @id @default(uuid(7)) @db.Uuid
+  name              String
+  email             String
+  phone             String?
+  message           String
+  source            LeadSource @default(FORM)
+  /// Optional reference image; quarantined until inspected (see docs/SECURITY.md).
+  referenceUploadId String?    @db.Uuid
+  referenceUpload   Upload?    @relation(fields: [referenceUploadId], references: [id], onDelete: SetNull)
+  budgetRange       String?
+
+  stageId         String      @db.Uuid
+  stage           LeadStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  /// 0–100. 100 in the won stage, 0 once lost.
+  probability     Int         @default(10)
+  /// USD. Prorated revenue (expected × probability) is computed, not stored.
+  expectedRevenue Decimal?    @db.Decimal(12, 2)
+  /// Expected closing date.
+  deadline        DateTime?   @db.Date
+  assignedToId    String?     @db.Uuid
+  assignedTo      User?       @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  /// The customer's account, when they have one.
+  customerId      String?     @db.Uuid
+  customer        User?       @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  customRequestId String?     @unique @db.Uuid
+  customRequest   CustomRequest? @relation(fields: [customRequestId], references: [id], onDelete: SetNull)
+  /// Set when won or lost; null while open.
+  closedAt        DateTime?   @db.Timestamptz(3)
+  lostReasonId    String?     @db.Uuid
+  lostReason      LostReason? @relation(fields: [lostReasonId], references: [id], onDelete: Restrict)
+  stageChangedAt  DateTime    @default(now()) @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  activities LeadActivity[]
+  notes      LeadNote[]
+  quotations Quotation[]
+
+  @@index([stageId, id])
+  @@index([closedAt])
+  @@map("leads")
+}
+
+enum ActivityKind {
+  CALL
+  EMAIL
+  MEETING
+  TODO
+}
+
+/// A follow-up planned on a lead (Odoo `mail.activity`): what, when, who; done or not.
+model LeadActivity {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  leadId       String       @db.Uuid
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  kind         ActivityKind
+  summary      String
+  dueAt        DateTime     @db.Timestamptz(3)
+  assignedToId String?      @db.Uuid
+  assignedTo   User?        @relation("ActivityAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  doneAt       DateTime?    @db.Timestamptz(3)
+  createdById  String       @db.Uuid
+  createdBy    User         @relation("ActivityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([leadId, dueAt])
+  @@index([doneAt, dueAt])
+  @@map("lead_activities")
+}
+
+/// The lead's log (Odoo's chatter): notes by the team and what happened, oldest first.
+model LeadNote {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  leadId    String   @db.Uuid
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String?  @db.Uuid
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([leadId, createdAt])
+  @@map("lead_notes")
+}

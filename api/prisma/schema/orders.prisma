@@ -1,0 +1,115 @@
+enum OrderStatus {
+  PENDING
+  AWAITING_DEPOSIT
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  /// Money transfer to the studio's phone number (e.g. Whish, OMT) — see StoreSettings.
+  TRANSFER
+}
+
+/// Every order belongs to a customer account (browsing and the cart need no account).
+/// `status` is the latest OrderStatusHistory row; a database trigger writes that history
+/// row on every insert and status change.
+model Order {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  /// Public, unguessable reference (random, not sequential).
+  orderNumber   String        @unique
+  userId        String        @db.Uuid
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod
+
+  // Contact and fulfilment. Address fields are required when `delivery` is true (enforced by
+  // the checkout DTO and a CHECK constraint); otherwise the customer picks up from the studio.
+  customerName  String
+  phone         String
+  delivery      Boolean @default(true)
+  rush          Boolean @default(false)
+  city          String?
+  addressLine   String?
+  deliveryNotes String?
+
+  /// Sent by the checkout page once per attempt; a repeated submit returns the same order.
+  idempotencyKey String? @unique @db.Uuid
+
+  // Totals (USD, the base currency) are a snapshot of the pricing engine at checkout.
+  subtotal        Decimal @db.Decimal(12, 2)
+  deliveryFee     Decimal @db.Decimal(12, 2)
+  total           Decimal @db.Decimal(12, 2)
+  /// The labeled line items (rush fee, bulk discount, …) shown to the customer.
+  priceBreakdown  Json
+  /// 50% of custom/quote items; 0 when the order has none.
+  depositRequired Decimal @default(0) @db.Decimal(12, 2)
+  depositPaid     Boolean @default(false)
+
+  /// The currency the customer pays in, and the rate used at checkout (1 for USD).
+  currencyCode      String   @default("USD") @db.Char(3)
+  currency          Currency @relation(fields: [currencyCode], references: [code], onDelete: Restrict)
+  exchangeRate      Decimal  @default(1) @db.Decimal(20, 8)
+  /// total and depositRequired converted at exchangeRate, rounded to the currency's cash step.
+  totalInCurrency   Decimal  @db.Decimal(20, 4)
+  depositInCurrency Decimal  @default(0) @db.Decimal(20, 4)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  printJobs     PrintJob[]
+  /// Set when the order was made by accepting a custom request's quote.
+  customRequest CustomRequest?
+  /// Set when the order was made by confirming a quotation.
+  quotation     Quotation?
+  journalEntries JournalEntry[]
+
+  @@index([userId, id])
+  @@index([status, id])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  orderId   String   @db.Uuid
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// Null for custom/quote items that aren't catalog products.
+  productId String?  @db.Uuid
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Name at time of purchase, so renaming a product doesn't rewrite old orders.
+  name      String
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(12, 2)
+  lineTotal Decimal  @db.Decimal(12, 2)
+  /// Custom/quote-based items require the 50% deposit.
+  isCustom  Boolean  @default(false)
+  /// The options as chosen, by name: [{ group: "Colour", value: "Copper" }]. A snapshot, so
+  /// renaming or removing an option later never rewrites old orders.
+  options   Json     @default("[]")
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+/// Append-only. Powers "My Orders" and the status timeline.
+model OrderStatusHistory {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  orderId         String      @db.Uuid
+  order           Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status          OrderStatus
+  changedAt       DateTime    @default(now()) @db.Timestamptz(3)
+  /// Null for changes made outside the app (e.g. directly in the database).
+  changedByUserId String?     @db.Uuid
+  changedBy       User?       @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
+  /// Optional customer-visible note, e.g. a courier tracking number.
+  note            String?
+
+  @@index([orderId, changedAt])
+  @@map("order_status_history")
+}

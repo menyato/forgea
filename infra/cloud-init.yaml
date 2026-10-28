@@ -1,0 +1,74 @@
+#cloud-config
+# Paste into "Cloud config" when creating the Hetzner server (Ubuntu 24.04), after replacing
+# the SSH key below with your own public key (deploy/README.md, step 2). It:
+# - creates the `deploy` user (SSH key only) that you and GitHub Actions log in as;
+# - turns off password and root logins, adds fail2ban and automatic security updates;
+# - installs Docker from Docker's own repository;
+# - prepares /srv/forgea/{edge,production,staging} and a nightly backup of each environment.
+
+users:
+  - name: deploy
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: 'ALL=(ALL) NOPASSWD:ALL'
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA...REPLACE_WITH_YOUR_PUBLIC_KEY... you@laptop
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - fail2ban
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-forgea.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers deploy
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  # One backup per environment: forgea-backup@production, forgea-backup@staging.
+  - path: /etc/systemd/system/forgea-backup@.service
+    content: |
+      [Unit]
+      Description=Forgea nightly backup (%i)
+      After=docker.service
+      [Service]
+      Type=oneshot
+      User=deploy
+      ExecStart=/srv/forgea/%i/backup.sh
+  - path: /etc/systemd/system/forgea-backup@.timer
+    content: |
+      [Unit]
+      Description=Forgea nightly backup (%i)
+      [Timer]
+      OnCalendar=*-*-* 03:30:00
+      RandomizedDelaySec=15m
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  # Docker Engine and the Compose plugin, from Docker's apt repository.
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker deploy
+  # A 2 GB swap file: headroom when a big 3D model is compressed on upload.
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - install -d -o deploy -g deploy -m 0750 /srv/forgea /srv/forgea/edge /srv/forgea/edge/certs /srv/forgea/production /srv/forgea/staging
+  - systemctl enable --now fail2ban
+  - systemctl daemon-reload
+  - systemctl enable forgea-backup@production.timer forgea-backup@staging.timer
+  - systemctl restart ssh

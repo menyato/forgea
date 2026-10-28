@@ -1,0 +1,61 @@
+# Only Cloudflare connects here (the server firewall admits Cloudflare's addresses only), over
+# HTTPS with Cloudflare's origin certificate ("Full (strict)" in Cloudflare → SSL/TLS).
+{
+	admin off
+	auto_https off
+	servers {
+		# The visitor's real address, for logs; the apps read CF-Connecting-IP themselves.
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# One environment: its storefront, plus the API for Google sign-in only. The API has no address
+# of its own; sign-in must land on the site's host so its cookies are that site's alone
+# (production and staging never share sessions). Everything else goes to the storefront,
+# which calls its API inside the server.
+(environment) {
+	tls /certs/origin.pem /certs/origin-key.pem
+	@google path /auth/google /auth/google/callback
+	handle @google {
+		reverse_proxy {args[0]}-api:3000
+	}
+	handle {
+		reverse_proxy {args[0]}-web:3000
+	}
+	# Matches the API's 100 MB ceiling for uploads (Cloudflare's free plan also stops at 100 MB).
+	request_body {
+		max_size 101MB
+	}
+	header {
+		-Server
+		# HTTPS only, for a year (Cloudflare serves HTTPS on every forgea-lab.com name).
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# No other site may frame the shop (clickjacking); no plugins; forms post only here.
+		# Scripts are left to the app: React Router's hydration uses inline scripts.
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'"
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+https://{$PRODUCTION_HOST}:443 {
+	import environment production
+}
+
+https://{$STAGING_HOST}:443 {
+	import environment staging
+	# Keep search engines off the rehearsal copy.
+	header X-Robots-Tag "noindex, nofollow"
+}
+
+https://www.{$PRODUCTION_HOST}:443 {
+	tls /certs/origin.pem /certs/origin-key.pem
+	redir https://{$PRODUCTION_HOST}{uri} permanent
+}

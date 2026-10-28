@@ -1,0 +1,18 @@
+/// Shop sections ("Home & desk", "Electronics enclosures"…), managed in the dashboard.
+model Category {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  /// Used in shop URLs: /shop?category=<slug>.
+  slug        String   @unique
+  name        String
+  description String?
+  /// Lower first in menus and filters.
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  products Product[]
+
+  @@index([active, sortOrder])
+  @@map("categories")
+}

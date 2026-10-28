@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+/* Both generated from packages/brand/src/tokens.ts — edit the tokens, not these. */
+@import '@forgea/brand/tokens.css';
+@import '@forgea/brand/tailwind-theme.css';
+
+html,
+body {
+  background: var(--forgea-color-background);
+  color: var(--forgea-color-text);
+  font-family: var(--forgea-font-body);
+  color-scheme: light dark;
+}
+
+/* A pinned theme also switches form controls and scrollbars. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/*
+ * The logo being 3D printed (PrintingLogo): revealed bottom-up in visible layers, under the
+ * nozzle's copper line, whose head sweeps across each layer.
+ */
+.forgea-print {
+  --layers: 16;
+  --print-time: 2.4s;
+  position: relative;
+  display: block;
+}
+.forgea-print-model {
+  display: block;
+}
+.forgea-print[data-print='waiting'] .forgea-print-model {
+  clip-path: inset(100% 0 0 0);
+}
+.forgea-print[data-print='printing'] .forgea-print-model {
+  animation: forgea-print-reveal var(--print-time) steps(var(--layers), end)
+    both;
+}
+.forgea-print-nozzle {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--forgea-color-accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.forgea-print-nozzle::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  /* Scales with the logo, so it reads at icon size too. */
+  width: 14%;
+  aspect-ratio: 10 / 9;
+  background: var(--forgea-logo-bar);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation: forgea-print-sweep calc(var(--print-time) / var(--layers)) linear
+    infinite alternate;
+}
+.forgea-print[data-print='printing'] .forgea-print-nozzle {
+  animation: forgea-print-nozzle var(--print-time) steps(var(--layers), end)
+    both;
+}
+/* As a loading indicator: print, hold the finished logo a moment, start again. */
+.forgea-print[data-loop] .forgea-print-model {
+  animation: forgea-print-loop calc(var(--print-time) * 1.5)
+    steps(var(--layers), end) infinite;
+}
+.forgea-print[data-loop] .forgea-print-nozzle {
+  animation: forgea-print-nozzle-loop calc(var(--print-time) * 1.5)
+    steps(var(--layers), end) infinite;
+}
+
+@keyframes forgea-print-reveal {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes forgea-print-nozzle {
+  0% {
+    bottom: 0;
+    opacity: 1;
+  }
+  99% {
+    opacity: 1;
+  }
+  100% {
+    bottom: 100%;
+    opacity: 0;
+  }
+}
+@keyframes forgea-print-loop {
+  0% {
+    clip-path: inset(100% 0 0 0);
+  }
+  66%,
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes forgea-print-nozzle-loop {
+  0% {
+    bottom: 0;
+    opacity: 1;
+  }
+  65% {
+    opacity: 1;
+  }
+  66%,
+  100% {
+    bottom: 100%;
+    opacity: 0;
+  }
+}
+@keyframes forgea-print-sweep {
+  from {
+    left: 0;
+  }
+  to {
+    left: 86%;
+  }
+}
+
+/* The page-loading indicator: appears only if loading takes a moment, so quick pages don't flash it. */
+.forgea-page-loading {
+  animation: forgea-fade-in 0.2s 0.25s both;
+}
+@keyframes forgea-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forgea-print .forgea-print-model {
+    clip-path: none !important;
+    animation: none !important;
+  }
+  .forgea-print-nozzle {
+    display: none;
+  }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="47.6 13.6 272.8 272.8" role="img" aria-labelledby="forgea-mark-title">
+  <title id="forgea-mark-title">Forgea</title>
+  <style>
+    .fg-plate{fill:var(--forgea-logo-plate,#dfe1e2)}
+    .fg-accent{fill:var(--forgea-logo-accent,#c87533)}
+    .fg-bar{fill:var(--forgea-logo-bar,#43474b)}
+    .fg-ink{fill:var(--forgea-logo-ink,#17191b)}
+    .fg-on-accent{fill:var(--forgea-logo-on-accent,#17191b)}
+  </style>
+  <rect class="fg-plate" x="132" y="75.2" width="151.8" height="151.8"/>
+  <rect class="fg-accent" x="201.6" y="167.6" width="92.4" height="92.4"/>
+  <rect class="fg-bar" x="58.16" y="216.44" width="251.68" height="21.12"/>
+  <path class="fg-ink" d="M74 260L74 40L206 40L206 90.50L132 90.50L132 124.50L200.17 124.50L200.17 175L132 175L132 260L74 260Z"/>
+</svg>

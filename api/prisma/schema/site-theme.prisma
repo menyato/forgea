@@ -1,0 +1,15 @@
+/// The palette the owner picked in the dashboard (Phase 8 theme control). At most one row
+/// (id = 1); no row means the default palette from packages/brand/src/tokens.ts.
+model SiteTheme {
+  id              Int      @id @default(1)
+  /// The palette's raw colours (packages/brand `Palette`, every value #rrggbb). The API
+  /// refuses a palette that fails the same contrast checks as the built-in palettes.
+  palette         Json
+  /// The built-in palette it started from (e.g. "copper"), for the editor.
+  basedOn         String
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  updatedByUserId String?  @db.Uuid
+  updatedBy       User?    @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@map("site_theme")
+}

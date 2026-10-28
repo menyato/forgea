@@ -1,0 +1,28 @@
+// Forgea database schema.
+// Models are split one file per NestJS feature module (users.prisma ↔ src/users, …),
+// so a schema question and a code question point at the same feature name.
+//
+// Conventions
+// - IDs are UUIDv7: time-ordered, so `ORDER BY id` is creation order and cursor
+//   pagination can use the id alone.
+// - Money is Decimal in the base currency (USD); never Float. Orders also record the
+//   currency the customer pays in and the exchange rate used (see currencies.prisma).
+// - Files are stored as Cloud Storage object keys, never URLs: the bucket is private
+//   and URLs are short-lived signed URLs minted per request.
+// - Tables are snake_case plurals via @@map.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+// Second output so enums have one source of truth: @forgea/types re-exports only
+// this copy's dependency-free enums.ts for /web. Nothing imports its client.ts.
+generator sharedEnums {
+  provider = "prisma-client"
+  output   = "../../../packages/types/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
