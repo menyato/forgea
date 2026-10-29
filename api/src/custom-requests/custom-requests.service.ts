@@ -14,7 +14,7 @@ import {
   type StaffCustomRequest,
 } from '@forgea/types';
 import type {
-  CheckoutDto,
+  AcceptQuoteDto,
   CreateCustomRequestDto,
   CursorPageQuery,
   CustomRequestListQuery,
@@ -106,6 +106,14 @@ export class CustomRequestsService {
       description: created.description,
       customer: { id: userId, ...created.user },
     });
+    this.notifications.alertStudio(
+      `New custom request ${created.requestNumber}: ${created.title}`,
+      [
+        `${created.user.name ?? created.user.email} asked for "${created.title}" (${created.quantity} piece${created.quantity === 1 ? '' : 's'}).`,
+        file ? 'A file is attached.' : 'No file attached.',
+      ],
+      `/admin/requests/${created.id}`,
+    );
     return toView(created);
   }
 
@@ -162,7 +170,7 @@ export class CustomRequestsService {
   async accept(
     userId: string,
     number: string,
-    dto: CheckoutDto,
+    dto: AcceptQuoteDto,
   ): Promise<CheckoutResult> {
     const r = await this.findMine(userId, number);
     if (isRequestExpired(r.status, r.quoteExpiresAt)) {
@@ -177,6 +185,12 @@ export class CustomRequestsService {
       r.status === CustomRequestStatus.ACCEPTED;
     if (!answerable || !r.quotedPrice) {
       throw new ConflictException('This request has no quote to accept');
+    }
+    // The price the customer saw must still be the quote (the studio may have re-quoted).
+    if (!r.quotedPrice.equals(dto.quotedPrice)) {
+      throw new ConflictException(
+        'The studio updated this quote. Check the new price, then accept again.',
+      );
     }
     return this.checkout.acceptQuote(dto, userId, {
       id: r.id,

@@ -11,7 +11,9 @@
         "prisma/schema/*.prisma",
         "test/**/*.ts",
         // Run with plain node by `pnpm dashboard` and the browser tests.
-        "scripts/*.ts"
+        "scripts/*.ts",
+        // Started by ModelOptimizer as a worker thread (new Worker(url)), never imported.
+        "src/uploads/model-worker.ts"
       ],
       "project": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.{ts,prisma}", "scripts/*.ts"],
       // @prisma/client: imported by the generated client (src/generated, git-ignored).

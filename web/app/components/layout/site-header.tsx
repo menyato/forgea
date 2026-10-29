@@ -76,6 +76,11 @@ function Links({ user, whatsappPhone, cartCount }: HeaderProps) {
           My requests
         </NavLink>
       )}
+      {user && (
+        <NavLink to="/account" className={navLink}>
+          My account
+        </NavLink>
+      )}
       {whatsappPhone && (
         <WhatsAppLink
           phone={whatsappPhone}

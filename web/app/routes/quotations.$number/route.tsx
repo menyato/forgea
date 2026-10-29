@@ -1,3 +1,4 @@
+import type { OrderSettings } from '@forgea/pricing';
 import {
   type CheckoutResult,
   type CurrencyQuote,
@@ -37,17 +38,24 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   if (!api.hasSession) throw redirect(signInFor(url));
-  const [q, currencies] = await Promise.all([
+  const [q, currencies, settings] = await Promise.all([
     api.get<QuotationDetail>(
       `/quotations/mine/${encodeURIComponent(params.number)}`,
     ),
     api.get<CurrencyQuote[]>('/currencies'),
+    api.get<OrderSettings>('/pricing/order-settings'),
   ]);
   if (q.status === 401) throw redirect(signInFor(url));
   if (!q.ok) throw new Response(q.message, { status: q.status });
+  // The fee the order adds when it is delivered: shown, so the customer accepts exactly
+  // what they will be charged.
+  const deliveryFee =
+    q.data.delivery && settings.ok ? String(settings.data.deliveryFee) : null;
   return {
     quotation: q.data,
     currencies: currencies.ok ? currencies.data : [],
+    deliveryFee,
+    toPay: (Number(q.data.total) + Number(deliveryFee ?? 0)).toFixed(2),
   };
 }
 
@@ -67,7 +75,7 @@ export default function QuotationPage({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
-  const { quotation: q, currencies } = loaderData;
+  const { quotation: q, currencies, deliveryFee, toPay } = loaderData;
   const store = useRouteLoaderData<typeof rootLoader>('root')?.store ?? null;
   const accepting = useNavigation().state === 'submitting';
   if (actionData?.result) {
@@ -134,12 +142,26 @@ export default function QuotationPage({
             ))}
           </tbody>
           <tfoot>
+            {deliveryFee !== null && Number(deliveryFee) > 0 && (
+              <tr className="border-t border-border">
+                <td className="pt-3" colSpan={4}>
+                  Delivery
+                </td>
+                <td className="pt-3 text-right">
+                  <Money amount={deliveryFee} />
+                </td>
+              </tr>
+            )}
             <tr className="border-t border-border font-semibold">
               <td className="pt-3" colSpan={4}>
-                Total (delivery added at the order if delivered)
+                To pay
               </td>
               <td className="pt-3 text-right">
-                <Money amount={q.total} />
+                <Money
+                  amount={(Number(q.total) + Number(deliveryFee ?? 0)).toFixed(
+                    2,
+                  )}
+                />
               </td>
             </tr>
           </tfoot>

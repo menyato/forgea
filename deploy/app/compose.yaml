@@ -1,17 +1,23 @@
 # One environment of the shop (production or staging). The server runs this twice, from
 # /srv/forgea/production and /srv/forgea/staging, each with its own .env, database, files and
-# passwords; the shared front door is deploy/edge. Started by deploy.sh (deploy/README.md).
+# passwords; the shared front door is deploy/edge. Deployed by forgea-deploy (deploy/server).
 #
 # Who can reach what:
-#   Caddy (edge) → <env>-web, and → <env>-api for the two Google sign-in paths
+#   Caddy → <env>-web, and → <env>-api for the two Google sign-in paths, over "edge"
+#     (forgea-edge-<env>: Caddy and this environment only — never the other environment)
 #   web → api over this environment's own "app" network
 #   api, migrate → postgres over "db" (internal: no internet in or out)
-# The other environment's containers are never on "app" or "db".
 name: forgea-${ENV_NAME:?set ENV_NAME in .env}
 
+# The apps' containers: no new privileges, no Linux capabilities, a read-only filesystem
+# except their volumes and /tmp.
 x-app: &app
   restart: unless-stopped
   init: true
+  security_opt: ['no-new-privileges:true']
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: [/tmp]
   logging:
     driver: local
     options: { max-size: 10m, max-file: '5' }
@@ -35,16 +41,17 @@ services:
       - uploads:/data/uploads
       - outbox:/data/outbox
     networks:
+      # "app" also reaches the internet (Google sign-in, Gmail, Calendar).
       app: { aliases: ['${ENV_NAME}-api'] }
-      # Caddy reaches it here for Google sign-in, and it reaches Google (Gmail, Calendar).
       edge: { aliases: ['${ENV_NAME}-api'] }
       db: {}
     depends_on:
       postgres: { condition: service_healthy }
 
   postgres:
-    <<: *app
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    restart: unless-stopped
+    security_opt: ['no-new-privileges:true']
     env_file: db.env
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -53,15 +60,22 @@ services:
     networks: [db]
     shm_size: 256m
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      # Over TCP: the temporary server of the first start listens on the socket only.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U postgres']
       interval: 10s
       timeout: 5s
       retries: 10
+    logging:
+      driver: local
+      options: { max-size: 10m, max-file: '5' }
 
-  # `docker compose run --rm migrate` — applies pending migrations, then exits.
+  # Applies pending migrations, then exits (forgea-deploy runs it). It gets only the database
+  # address, none of the app's other secrets.
   migrate:
     image: ${IMAGE_PREFIX}-migrate:${TAG}
-    env_file: api.env
+    env_file: migrate.env
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
     networks: [db]
     depends_on:
       postgres: { condition: service_healthy }
@@ -76,7 +90,7 @@ networks:
   app:
   db:
     internal: true
-  # Created by deploy/edge; shared by both environments and Caddy only.
+  # Created by deploy/edge: Caddy and this environment only.
   edge:
-    name: forgea-edge
+    name: forgea-edge-${ENV_NAME}
     external: true

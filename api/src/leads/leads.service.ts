@@ -21,6 +21,7 @@ import type {
 } from '@forgea/validation';
 import { toPage } from '../common/pagination/keyset.js';
 import { UploadPurpose, UploadStatus } from '../generated/prisma/enums.js';
+import { Notifications } from '../mail/notifications.service.js';
 import {
   type IncomingFile,
   UploadsService,
@@ -41,6 +42,7 @@ export class LeadsService {
   constructor(
     private readonly leads: LeadsRepository,
     private readonly uploads: UploadsService,
+    private readonly notifications: Notifications,
   ) {}
 
   /** A public custom-design inquiry. A rejected reference image rejects the whole submission. */
@@ -62,7 +64,19 @@ export class LeadsService {
       }
       referenceUploadId = upload.id;
     }
-    return this.leads.createFromForm(dto, referenceUploadId);
+    const lead = await this.leads.createFromForm(dto, referenceUploadId);
+    // A fixed subject, and the visitor's words marked as theirs: anyone can fill this form, so
+    // nothing they type may read as if the studio's own system wrote it.
+    this.notifications.alertStudio(
+      'New idea from the website form',
+      [
+        `From a visitor (not checked): name "${dto.name}", email ${dto.email}${dto.phone ? `, phone ${dto.phone}` : ''}.`,
+        'Their message, as they wrote it:',
+        `“${dto.message}”`,
+      ],
+      `/admin/leads/${lead.id}`,
+    );
+    return lead;
   }
 
   /** A customer's custom request also opens a lead, so it shows in the pipeline. */

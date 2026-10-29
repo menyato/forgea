@@ -1,16 +1,23 @@
+import { createHmac } from 'node:crypto';
 import { ConflictException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { type OrderLineInput, orderLinesFromCart } from '@forgea/pricing';
 import type { CheckoutResult } from '@forgea/types';
 import type { CheckoutDto } from '@forgea/validation';
 import { CartService } from '../cart/cart.service.js';
+import type { EnvironmentVariables } from '../config/environment.js';
 import { CurrenciesService } from '../currencies/currencies.service.js';
 import type { Order } from '../generated/prisma/client.js';
-import { OrderStatus } from '../generated/prisma/enums.js';
+import {
+  OrderStatus,
+  type QuotationStatus,
+} from '../generated/prisma/enums.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import { UsersRepository } from '../users/users.repository.js';
 import {
+  type NewOrder,
   type OrderLineSource,
   OrdersRepository,
   QuoteNoLongerOpenError,
@@ -61,7 +68,26 @@ export class CheckoutService {
     private readonly users: UsersRepository,
     private readonly notifications: Notifications,
     private readonly store: StoreSettingsService,
-  ) {}
+    config: ConfigService<EnvironmentVariables, true>,
+  ) {
+    this.keySecret = config.get('COOKIE_SECRET', { infer: true });
+  }
+
+  /** Signs the idempotency keys derived from a quotation (see `derivedKey`). */
+  private readonly keySecret: string;
+
+  /**
+   * A UUID-shaped idempotency key for an order made from something else (a quotation): the
+   * same each time for that thing, and keyed with a server secret, so no key a customer sends
+   * at checkout can ever match it.
+   */
+  private derivedKey(kind: string, id: string): string {
+    const h = createHmac('sha256', this.keySecret)
+      .update(`order-for:${kind}:${id}`)
+      .digest('hex');
+    const variant = ((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16);
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  }
 
   /** `guestCartId`: a cart filled before signing in; it is merged into the account first. */
   async checkout(
@@ -115,7 +141,10 @@ export class CheckoutService {
           },
         ],
         rush: false,
-        source: { customRequestId: request.id },
+        source: {
+          customRequestId: request.id,
+          quotedPrice: request.quotedPrice,
+        },
       });
     } catch (error) {
       if (error instanceof QuoteNoLongerOpenError) {
@@ -127,15 +156,16 @@ export class CheckoutService {
 
   /**
    * Confirming a quotation (by staff, or the customer accepting it online): its lines at
-   * their discounted prices, delivered and paid as it says. The quotation's id is the
-   * idempotency key, so confirming twice returns the same order.
+   * their discounted prices, delivered and paid as it says. Its idempotency key is derived from
+   * the quotation, so confirming twice returns the same order.
    */
   async placeQuotation(
     q: QuotationToOrder,
     actorId: string,
+    openStatuses: QuotationStatus[],
   ): Promise<CheckoutResult> {
     const dto: CheckoutDto = {
-      idempotencyKey: q.id,
+      idempotencyKey: this.derivedKey('quotation', q.id),
       name: q.customerName,
       phone: q.phone,
       paymentMethod: q.paymentMethod,
@@ -164,7 +194,7 @@ export class CheckoutService {
         })),
         rush: false,
         bulkDiscounts: false,
-        source: { quotationId: q.id },
+        source: { quotationId: q.id, openStatuses },
         actorId,
       });
     } catch (error) {
@@ -197,7 +227,7 @@ export class CheckoutService {
       lines: OrderLineInput[];
       sources: readonly OrderLineSource[];
       rush: boolean;
-      source?: { customRequestId: string } | { quotationId: string };
+      source?: NewOrder['source'];
       /** Quotations carry their own negotiated discounts: no automatic bulk discount. */
       bulkDiscounts?: boolean;
       actorId?: string;
@@ -242,6 +272,14 @@ export class CheckoutService {
       depositRequired: order.depositRequired.toFixed(2),
       transferPhone: (await this.store.get()).transferPhone,
     });
+    this.notifications.alertStudio(
+      `New order ${order.orderNumber} (${order.total.toFixed(2)})`,
+      [
+        `${dto.name} (${user.email}, ${dto.phone}) placed order ${order.orderNumber}.`,
+        `Payment: ${order.paymentMethod === 'TRANSFER' ? 'money transfer' : 'cash on delivery'}; ${dto.delivery ? `delivery to ${dto.city ?? ''}` : 'pickup'}.`,
+      ],
+      `/admin/orders/${order.id}`,
+    );
     return toResult(order);
   }
 }

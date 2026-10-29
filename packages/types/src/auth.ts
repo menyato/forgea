@@ -8,4 +8,7 @@ export interface Profile {
   /** Remembered from the last checkout. */
   phone: string | null;
   role: Role;
+  emailVerified: boolean;
+  /** False for a Google-only account (it can set one with "forgot your password"). */
+  hasPassword: boolean;
 }

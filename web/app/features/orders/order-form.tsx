@@ -33,6 +33,7 @@ export function OrderForm({
   message,
   allowRush = true,
   submitLabel,
+  hidden = {},
 }: {
   lines: readonly CartLineLike[];
   settings: OrderSettings;
@@ -44,6 +45,8 @@ export function OrderForm({
   message: string | undefined;
   allowRush?: boolean;
   submitLabel: string;
+  /** Extra values sent with the form (e.g. the quote price the customer accepts). */
+  hidden?: Record<string, string>;
 }) {
   const root = useRouteLoaderData<typeof rootLoader>('root');
   const user = root?.user ?? null;
@@ -75,6 +78,9 @@ export function OrderForm({
       noValidate
     >
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {Object.entries(hidden).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <div className="grid content-start gap-8">
         <FormAlert message={message} />
 

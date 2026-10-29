@@ -38,6 +38,9 @@ export function SiteFooter({ store }: { store: StoreSettings | null }) {
               WhatsApp {store.whatsappPhone}
             </WhatsAppLink>
           )}
+          <Link to="/contact" className="hover:text-text hover:underline">
+            Tell us your idea
+          </Link>
           <p>
             Payment:{' '}
             {Object.values(PAYMENT_METHOD_LABELS).join(', or ').toLowerCase()}

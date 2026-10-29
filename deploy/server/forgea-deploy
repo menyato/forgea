@@ -1,0 +1,46 @@
+#!/bin/sh
+# /usr/local/sbin/forgea-deploy (root-owned, installed by deploy/sync-config.sh). Runs as the
+# `deploy` user, started either by GitHub through forgea-deploy-gate or by hand to roll back:
+#   forgea-deploy <production|staging> <sha-1a2b3c4>
+# From GitHub the registry token comes on stdin. By hand (a rollback), log in once first with a
+# GitHub token that can read packages: docker login ghcr.io -u <your GitHub name>
+# Pulls that version's images, applies database migrations, then replaces that environment's
+# containers. If migrations fail, nothing is replaced and the running version keeps serving.
+# The other environment and the shared front door are never touched.
+set -eu
+
+ENV_NAME="${1:-}"
+TAG="${2:-}"
+case "$ENV_NAME" in production | staging) ;; *) echo "Unknown environment" >&2; exit 2 ;; esac
+case "$TAG" in
+  sha-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+  *) echo "Not an image tag" >&2; exit 2 ;;
+esac
+cd "/srv/forgea/$ENV_NAME"
+
+# The folder and its settings must agree, or staging could start on production's data.
+grep -qx "ENV_NAME=$ENV_NAME" .env || { echo ".env does not say ENV_NAME=$ENV_NAME" >&2; exit 3; }
+grep -q "^API_URL=http://$ENV_NAME-api:" web.env || { echo "web.env must use $ENV_NAME-api" >&2; exit 3; }
+
+export TAG
+# From GitHub: a registry login just for this run (its token lives only as long as the job).
+if [ ! -t 0 ]; then
+  token="$(cat)"
+  if [ -n "$token" ]; then
+    DOCKER_CONFIG="$(mktemp -d)"
+    export DOCKER_CONFIG
+    trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+    printf '%s' "$token" | docker login ghcr.io -u github --password-stdin >/dev/null
+  fi
+fi
+
+docker compose --profile tools pull --quiet
+docker compose run --rm migrate
+docker compose up --detach --remove-orphans --wait
+
+# Recorded only once the new version is up, so a restart never picks a half-deployed one.
+sed -i "s/^TAG=.*/TAG=$TAG/" .env
+
+# Images unused for a week go; the previous release usually stays for a quick rollback.
+docker image prune --all --force --filter "until=168h" >/dev/null
+echo "Deployed $TAG to $ENV_NAME"

@@ -115,7 +115,7 @@ describe('Notifications', () => {
         sent.push(e);
       },
     } as Mailer;
-    const notifications = new Notifications(mailer, templates);
+    const notifications = new Notifications(mailer, templates, config);
     notifications.send('verifyEmail', { to: 'a@example.com', token: 't' });
     fail = true;
     expect(() =>
@@ -123,5 +123,47 @@ describe('Notifications', () => {
     ).not.toThrow();
     await notifications.settled();
     expect(sent.map((e) => e.to)).toEqual(['a@example.com']);
+  });
+
+  it('alerts the studio about new work, at its own address, with a dashboard link', async () => {
+    const sent: Email[] = [];
+    const mailer = { send: async (e: Email) => void sent.push(e) } as Mailer;
+    const studio = new ConfigService<EnvironmentVariables, true>({
+      PUBLIC_WEB_URL: 'https://forgea-lab.com',
+      MAIL_SENDER: 'hello@forgea-lab.com',
+    });
+    const notifications = new Notifications(mailer, templates, studio);
+    notifications.alertStudio(
+      'New order FG-1',
+      ['Rana placed it.'],
+      '/admin/orders/o-1',
+    );
+    await notifications.settled();
+    expect(sent[0]).toMatchObject({
+      to: 'hello@forgea-lab.com',
+      subject: 'New order FG-1',
+    });
+    expect(sent[0]!.text).toContain('https://forgea-lab.com/admin/orders/o-1');
+
+    // No studio address configured: no alert.
+    const silent = new Notifications(mailer, templates, config);
+    silent.alertStudio('x', [], '/admin');
+    await silent.settled();
+    expect(sent).toHaveLength(1);
+  });
+
+  it('caps an email per key and hour', async () => {
+    const sent: Email[] = [];
+    const mailer = { send: async (e: Email) => void sent.push(e) } as Mailer;
+    const notifications = new Notifications(mailer, templates, config);
+    const results = [1, 2, 3, 4].map(() =>
+      notifications.sendAtMost('password-reset:u1', 3, 'verifyEmail', {
+        to: 'a@example.com',
+        token: 't',
+      }),
+    );
+    await notifications.settled();
+    expect(results).toEqual([true, true, true, false]);
+    expect(sent).toHaveLength(3);
   });
 });

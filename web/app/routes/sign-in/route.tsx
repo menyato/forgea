@@ -89,6 +89,12 @@ export default function SignIn({
         <Button type="submit" disabled={submitting}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </Button>
+        <Link
+          to="/forgot-password"
+          className="justify-self-start text-sm underline underline-offset-4"
+        >
+          Forgot your password?
+        </Link>
       </Form>
       <p className="text-sm text-text-muted">
         New here?{' '}

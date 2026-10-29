@@ -38,10 +38,9 @@ export class MediaController {
     // Keys are random and never reused, so a file's bytes never change.
     res.setHeader(
       'Cache-Control',
-      // Shared caches may keep only product files: nobody else's request is ever cached.
-      staff || user
-        ? 'private, max-age=3600'
-        : 'public, max-age=31536000, immutable',
+      // Shared caches may keep only product files: nobody else's request is ever cached. A
+      // day, not forever: once a product is hidden, its files stop being served within a day.
+      staff || user ? 'private, max-age=3600' : 'public, max-age=86400',
     );
     return new StreamableFile(media.stream, {
       type: media.mimeType,

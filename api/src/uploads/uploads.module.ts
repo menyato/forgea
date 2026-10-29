@@ -17,7 +17,7 @@ import { MediaController } from './media.controller.js';
     ModelVariants,
     { provide: FileStorage, useClass: LocalDiskStorage },
   ],
-  exports: [UploadsService],
+  exports: [UploadsService, ModelOptimizer],
   controllers: [UploadsController, MediaController],
 })
 export class UploadsModule {}

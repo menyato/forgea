@@ -37,6 +37,11 @@ const withLines = {
 type EntryRow = Prisma.JournalEntryGetPayload<{ include: typeof withLines }>;
 
 const D = (v: Amount) => new Prisma.Decimal(v);
+
+/** A lock held until the transaction ends, on one order or invoice (by name). */
+async function lock(tx: Prisma.TransactionClient, name: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`;
+}
 const today = () => new Date(new Date().toISOString().slice(0, 10));
 
 /**
@@ -144,7 +149,6 @@ export class Invoicing {
     if (D(order.depositRequired).lte(0)) {
       throw new BadRequestException('This order has no deposit');
     }
-    await this.refuseIfInvoiced(orderId, InvoiceKind.DEPOSIT);
     const { base, tax } = splitTaxIncluded(order.depositRequired, rate);
     const lines: NewLine[] = [
       {
@@ -170,20 +174,26 @@ export class Invoicing {
           ]
         : []),
     ];
-    const { id } = await this.ledger.post(
-      {
-        type: EntryType.INVOICE,
-        invoiceKind: InvoiceKind.DEPOSIT,
-        journalId: settings.saleJournalId,
-        date: today(),
-        label: `Deposit invoice for ${order.orderNumber}`,
-        customerId: order.userId,
-        orderId,
-        currencyCode: order.currencyCode,
-        exchangeRate: order.exchangeRate,
-        lines,
-      },
-      actorId,
+    const { id } = await this.underOrderLock(
+      orderId,
+      InvoiceKind.DEPOSIT,
+      (tx) =>
+        this.ledger.post(
+          {
+            type: EntryType.INVOICE,
+            invoiceKind: InvoiceKind.DEPOSIT,
+            journalId: settings.saleJournalId,
+            date: today(),
+            label: `Deposit invoice for ${order.orderNumber}`,
+            customerId: order.userId,
+            orderId,
+            currencyCode: order.currencyCode,
+            exchangeRate: order.exchangeRate,
+            lines,
+          },
+          actorId,
+          tx,
+        ),
     );
     return this.invoice(id);
   }
@@ -194,7 +204,6 @@ export class Invoicing {
     actorId: string,
   ): Promise<InvoiceListItem> {
     const { order, settings, rate } = await this.context(orderId);
-    await this.refuseIfInvoiced(orderId, InvoiceKind.FINAL);
     const credits: NewLine[] = [];
     let taxTotal = D(0);
     const add = (accountId: string, label: string, gross: Amount) => {
@@ -263,20 +272,23 @@ export class Invoicing {
         dueDate: today(),
       });
     }
-    const { id } = await this.ledger.post(
-      {
-        type: EntryType.INVOICE,
-        invoiceKind: InvoiceKind.FINAL,
-        journalId: settings.saleJournalId,
-        date: today(),
-        label: `Invoice for ${order.orderNumber}`,
-        customerId: order.userId,
-        orderId,
-        currencyCode: order.currencyCode,
-        exchangeRate: order.exchangeRate,
-        lines: [...debits, ...credits],
-      },
-      actorId,
+    const { id } = await this.underOrderLock(orderId, InvoiceKind.FINAL, (tx) =>
+      this.ledger.post(
+        {
+          type: EntryType.INVOICE,
+          invoiceKind: InvoiceKind.FINAL,
+          journalId: settings.saleJournalId,
+          date: today(),
+          label: `Invoice for ${order.orderNumber}`,
+          customerId: order.userId,
+          orderId,
+          currencyCode: order.currencyCode,
+          exchangeRate: order.exchangeRate,
+          lines: [...debits, ...credits],
+        },
+        actorId,
+        tx,
+      ),
     );
     return this.invoice(id);
   }
@@ -286,17 +298,8 @@ export class Invoicing {
     dto: RecordPaymentDto,
     actorId: string,
   ): Promise<InvoiceListItem> {
-    const invoice = await this.prisma.journalEntry.findUnique({
-      where: { id: dto.invoiceId },
-      include: withLines,
-    });
-    if (!invoice || invoice.type !== EntryType.INVOICE)
-      throw new NotFoundException('Invoice not found');
-    const open = toInvoiceItem(invoice);
-    if (D(dto.amount).gt(open.residual)) {
-      throw new BadRequestException(
-        `Only ${open.residual} is still owed on ${invoice.number}`,
-      );
+    if (new Date(dto.date) > today()) {
+      throw new BadRequestException('A payment cannot be dated in the future');
     }
     const settings = await this.prisma.accountingSettings.findUniqueOrThrow({
       where: { id: 1 },
@@ -307,6 +310,21 @@ export class Invoicing {
       where: { id: journalId },
     });
     await this.prisma.$transaction(async (tx) => {
+      // One payment per invoice at a time: two clicks (or the automatic cash payment and a
+      // manual one) can never both match the same amount.
+      await lock(tx, `invoice:${dto.invoiceId}`);
+      const invoice = await tx.journalEntry.findUnique({
+        where: { id: dto.invoiceId },
+        include: withLines,
+      });
+      if (!invoice || invoice.type !== EntryType.INVOICE)
+        throw new NotFoundException('Invoice not found');
+      const open = toInvoiceItem(invoice);
+      if (D(dto.amount).gt(open.residual)) {
+        throw new BadRequestException(
+          `Only ${open.residual} is still owed on ${invoice.number}`,
+        );
+      }
       const payment = await this.ledger.post(
         {
           type: EntryType.PAYMENT,
@@ -336,7 +354,7 @@ export class Invoicing {
       );
       await this.match(invoice, payment.id, settings.receivableAccountId, tx);
     });
-    return this.invoice(invoice.id);
+    return this.invoice(dto.invoiceId);
   }
 
   /** Reverses an invoice: the same lines the other way round, matched against it. */
@@ -413,11 +431,36 @@ export class Invoicing {
     }
   }
 
+  /**
+   * Checks the order has no invoice of this kind yet and posts one, holding the order's lock
+   * for the whole transaction: two requests at once (a double click, or the automatic invoice
+   * and the button) can never both post.
+   */
+  private underOrderLock<T>(
+    orderId: string,
+    kind: InvoiceKind,
+    post: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      await lock(tx, `order:${orderId}`);
+      // Checked again with the order's row locked: a cancellation a moment ago wins over the
+      // invoice, and one arriving now waits until the invoice is posted.
+      const [order] = await tx.$queryRaw<{ status: OrderStatus }[]>`
+        SELECT status FROM orders WHERE id = ${orderId}::uuid FOR UPDATE`;
+      if (order?.status === OrderStatus.CANCELLED) {
+        throw new ConflictException('A cancelled order is not invoiced');
+      }
+      await this.refuseIfInvoiced(orderId, kind, tx);
+      return post(tx);
+    });
+  }
+
   private async refuseIfInvoiced(
     orderId: string,
     kind: InvoiceKind,
+    tx: Prisma.TransactionClient,
   ): Promise<void> {
-    const existing = await this.prisma.journalEntry.findFirst({
+    const existing = await tx.journalEntry.findFirst({
       where: {
         orderId,
         type: EntryType.INVOICE,
@@ -439,6 +482,9 @@ export class Invoicing {
       include: { items: true },
     });
     if (!order) throw new NotFoundException('Order not found');
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new ConflictException('A cancelled order is not invoiced');
+    }
     const settings = await this.prisma.accountingSettings.findUniqueOrThrow({
       where: { id: 1 },
       include: { salesTax: true },

@@ -4,10 +4,9 @@
 #   docker build --target web .       the storefront and dashboard (React Router SSR)
 #   docker build --target migrate .   applies Prisma migrations, then exits (run before each release)
 # Each runtime image holds only its app's compiled code and production dependencies.
+# The Node image is written out in both FROM lines (not as an ARG) so Dependabot can update it.
 
-ARG NODE_IMAGE=node:24.19.0-bookworm-slim
-
-FROM ${NODE_IMAGE} AS base
+FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
 RUN npm install --global pnpm@12.15.0 && npm cache clean --force
 WORKDIR /repo
@@ -32,7 +31,7 @@ WORKDIR /repo/api
 USER node
 CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
 
-FROM ${NODE_IMAGE} AS runtime
+FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS runtime
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 EXPOSE 3000

@@ -21,14 +21,29 @@ Report a vulnerability privately to the owner; do not open a public issue.
 5. **The server itself:** SSH keys only (no passwords, no root login), fail2ban, automatic
    security updates (`infra/setup-server.sh`). The host's firewall (Hostinger) admits HTTPS from
    Cloudflare's addresses only, and SSH; every other port is closed before it reaches the server.
-6. **Staging and production share the server, not their data.** Each has its own database,
-   files, passwords and private networks; they meet only at the front door (Caddy's network),
-   where a staging container could reach production's API only as any visitor could (it has
-   none of production's secrets). Staging should sit behind Cloudflare Access (deploy/README.md).
+   Beyond the firewall, Caddy accepts only connections that present **our own** client
+   certificate (Authenticated Origin Pulls with a CA we made, `deploy/origin-pull-cert.sh`), so
+   traffic sent through somebody else's Cloudflare account is refused too. The certificates on
+   the server belong to root alone.
+6. **Staging and production share the server, nothing else.** Each has its own database,
+   files, passwords and private networks, and its own network to the front door (Caddy is the
+   only container on both): no staging container can reach any production container. Staging
+   should sit behind Cloudflare Access (deploy/README.md).
+7. **GitHub can deploy, nothing more.** It logs in as the `ci` user, which has no shell, no
+   Docker and no sudo of its own; each of its two keys is pinned by `authorized_keys` to
+   `forgea-deploy-gate <environment>`, which accepts only an image tag. The front door, the stack
+   definitions and the deploy scripts change only through `deploy/sync-config.sh`, run by the
+   owner. A leaked staging key can redeploy staging, never touch production.
+8. **Containers** run with no Linux capabilities, no privilege escalation and (the apps) a
+   read-only filesystem; images are pinned to exact digests and updated by Dependabot pull
+   requests. Docker, Ubuntu and security fixes install themselves, with a restart at 04:30 when
+   one needs it.
 
 So the realistic paths to the data are through the API itself, which is why the rest of this
-document matters, or through the SSH keys of the owner or of GitHub Actions (stored as GitHub
-secrets), which can deploy and therefore control the server.
+document matters, or through the owner's own SSH key or GitHub account (two-factor
+authentication required). On GitHub's free plan any workflow can read every repository secret,
+so someone able to push to the repository could use the production deploy key — to deploy an
+image, not to log in; GitHub Pro (deploy/README.md, step 7) closes that.
 
 **Why a server and not Google Cloud's managed services** (the earlier plan: Cloud SQL with a
 private IP, Cloud Storage, Secret Manager, Cloud Run): decided 2026-10-28 for cost against
@@ -55,12 +70,15 @@ Locally the database runs on `localhost` with credentials in the gitignored `api
   admin has set up is refused, never turned into a customer. The very first admin comes from
   `BOOTSTRAP_ADMIN_EMAIL`, and only while no admin exists.
 - **Google sign-in** uses OpenID Connect via `openid-client` (a certified implementation) inside
-  Passport: authorization-code flow with PKCE, state and nonce, and verified ID-token signatures.
+  Passport: authorization-code flow with PKCE (bound to a signed, short-lived browser cookie, which
+  also stops sign-in forgery; Google supports PKCE, so the library sends no separate state or
+  nonce), and verified ID-token signatures.
 - **Passwords** are hashed with argon2id (19 MiB, 2 iterations, OWASP minimum). Unknown emails
   are checked against a dummy hash so the response time doesn't reveal whether an account exists.
 - **Account pre-hijacking is blocked:** if someone registers a victim's email with a password
   before the victim ever signs in with Google, that password is removed (and audit-logged) when
-  Google proves the real owner.
+  Google proves the real owner, and every session started with it ends in the same
+  transaction: whoever registered first is signed out for good.
 - **Roles** (checked by the API on every call; the dashboard only hides what a role can't use):
   admins reach everything; **staff** run orders, production, custom-request quotes, leads,
   quotations, invoices and payments;
@@ -74,8 +92,15 @@ Locally the database runs on `localhost` with credentials in the gitignored `api
   **Switching someone off** ends all their sessions at once, refuses their next Google sign-in,
   and closes the dashboard for them immediately (`/auth/me` refuses them); any other API call
   stops when their last access token expires (≤ 15 minutes). Every change is audit-logged.
+- **Forgotten passwords:** `/forgot-password` emails a link (the answer never says whether the
+  address has an account). The link is signed for that account only, works for 30 minutes and
+  only while the password is unchanged, so it works once; using it confirms the address and
+  signs out every session. Changing the password on `/account` needs the current one and signs
+  out every other device. Staff never have passwords, so they get no reset links.
 - **Email verification** (Phase 9): a new account gets a signed, single-purpose link
-  (`/verify-email`); the address is marked confirmed when it is opened.
+  (`/verify-email`); the address is confirmed when the person presses the button on that page.
+  Opening the link alone confirms nothing, since mail scanners and link previews open every
+  link in a message.
 - **Known gap:** registering an already-used email still says so. Rate limiting bounds how fast
   anyone can probe; answering "check your email" in both cases is the next step.
 
@@ -162,7 +187,11 @@ the cookies the API sets. API addresses and tokens never reach browser code.
 | Checkout | 5/min, 20/hour | A person places a few orders at most |
 
 Rate-limit counters are kept in the API's memory; each server runs one API, so they are exact
-(they reset when it restarts, e.g. on a deploy).
+(they reset when it restarts, e.g. on a deploy). An IPv6 client counts per /64, the block an
+internet provider gives one customer, so rotating through its billions of addresses gains
+nothing. On top of the per-address limits, an account allows 10 wrong passwords an hour **from
+each sender** (so a stranger's guesses never lock its owner out) and 200 an hour from everyone
+together (only a large guessing campaign reaches that).
 
 **Client IPs** come from Cloudflare's `CF-Connecting-IP` header only when `TRUST_CLOUDFLARE` is
 on. It is on for the servers, whose firewall admits only Cloudflare, so nobody else can set
@@ -203,8 +232,24 @@ cookie domain), so staging and production never see each other's sessions.
 9. **Catalog import** (admins, or the server-side script) checks every entry with the dashboard's
    own rules and sends every file in it through this same quarantine and inspection.
 
-**Not yet done (Phase 7):** malware scanning and re-encoding images to strip embedded data. The
-inspector is designed to take them as additional steps before a file is marked clean.
+10. **3D files can't slow or crash the server.** A GLB is checked before anything opens it: it
+    must hold all its data itself (no links, which would make a staff member's browser call
+    other sites) and declare sizes plausible for its length (a 420-byte file can't claim
+    gigabytes). STL triangles with no area are dropped, and models over 3 million triangles are
+    refused. The compressed copies are made in a separate worker thread, one model at a time,
+    with a 90-second limit and its own memory: ending it frees everything, and the API keeps
+    answering meanwhile. A model that fails is not retried for a day.
+11. **Customers can't fill the disk or the memory:** Caddy allows large bodies only on the pages
+    that upload (custom order, dashboard; 11 MB on the idea form, 1 MB elsewhere); the website
+    reads a large body only from a really signed-in customer, at most 3 at once; the API also
+    reads at most 3 large uploads at once (the rest are told to retry before their body is read), each customer may send 500 MB of request files a
+    day, and files never attached to a request are deleted after a day. Files are written under
+    a temporary name and moved into place, so a half-written file is never served.
+12. Public product files are cached for a day, so a hidden product's files stop being served
+    from caches within a day.
+
+**Not yet done:** malware scanning and re-encoding images to strip embedded data. The inspector
+is designed to take them as additional steps before a file is marked clean.
 
 ## Local dashboard preview (development only)
 
@@ -218,8 +263,10 @@ still sign in only with Google Workspace.
 ## Audit log
 
 Every sensitive admin/staff action writes an append-only `AuditLog` row: who, what, which
-record, when, and the client IP. Routes opt in with `@Audit({ action, targetType })`, and the
-entry is written before the response is sent, so a failed audit write fails the change. Staff
+record, when, the client IP and what was asked (the request, passwords and secrets hidden).
+Routes opt in with `@Audit({ action, targetType })`, and the row is written **before** the change
+runs: if it can't be written, nothing changes, so no change is ever unlogged. A second row
+follows when there is more to say: the id of something just created, or that it failed. Staff
 and admin sign-ins, the first-admin bootstrap and the pre-hijack password removal are logged.
 There is no update or delete path for audit entries in the code.
 
@@ -230,6 +277,14 @@ be changed or deleted (a trigger refuses it), every posted entry must balance (a
 constraint trigger checks debits = credits at commit), and nothing can be posted on or before
 the lock date, which only moves forward. Corrections are new entries or credit notes. Invoices,
 payments and manual entries record who posted them.
+
+Money is never counted twice: invoicing an order and recording a payment take a lock on that
+order or invoice and re-check what is owed inside it, so a double click (or the automatic
+invoice racing the button) posts once. The database refuses a payment matched for more than an
+invoice line owes, any change to a matching, a journal line moved out of its entry, and deleting
+any status-history row. Cancelled orders are never invoiced; payments can't be dated in the
+future. A customer can accept only a quotation that was sent to them, and the order is made at
+the price they saw (a re-quote at the same moment makes the acceptance fail).
 
 ## Google service account
 

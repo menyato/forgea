@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { fileTypeFromBuffer } from 'file-type';
+import { glbProblem } from './glb-check.js';
 import type { UploadPolicy } from './upload-policies.js';
 
 export type Inspection =
@@ -28,6 +29,8 @@ export class FileInspector {
     if (!mimeType || !extension) {
       return { ok: false, reason: 'This file type is not accepted' };
     }
+    const problem = mimeType === 'model/gltf-binary' ? glbProblem(data) : null;
+    if (problem) return { ok: false, reason: problem };
     return { ok: true, mimeType, extension };
   }
 }

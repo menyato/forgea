@@ -29,6 +29,7 @@ import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
 import { Role, UploadPurpose } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UPLOAD_POLICIES } from '../uploads/upload-policies.js';
+import { UploadSlots } from '../uploads/upload-slots.interceptor.js';
 import { LeadsService } from './leads.service.js';
 
 /** The public custom-design form, and the team's sales pipeline (staff and admins). */
@@ -47,6 +48,7 @@ export class LeadsController {
   @Throttle(THROTTLE.lead)
   @Post()
   @UseInterceptors(
+    UploadSlots,
     FileInterceptor('referenceImage', {
       // Rejected while streaming, before the whole body is buffered.
       limits: {

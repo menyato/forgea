@@ -1,6 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
+import { UsersRepository } from '../src/users/users.repository.js';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -146,6 +147,30 @@ describe('Auth (e2e)', () => {
       .set(CSRF)
       .set('Cookie', cookieHeader(jar))
       .expect(401);
+  });
+
+  it('signs out whoever registered an address first, once Google proves its real owner', async () => {
+    // Someone registers the victim's address with a password, and keeps the session.
+    const victim = uniqueEmail('victim');
+    await http()
+      .post('/auth/register')
+      .set(CSRF)
+      .send({ email: victim, password: PASSWORD })
+      .expect(201);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: victim },
+    });
+    // Later the real owner signs in with Google (the account is linked).
+    await app.get(UsersRepository).linkGoogle(user, `google-${user.id}`);
+    expect(
+      await prisma.session.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } }))
+        .passwordHash,
+    ).toBeNull();
   });
 
   it('GET /auth/me requires a session', async () => {

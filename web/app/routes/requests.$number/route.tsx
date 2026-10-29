@@ -85,7 +85,10 @@ export async function action({
   if (!parsed.ok) {
     return data({ errors: parsed.errors, message: undefined }, { status: 400 });
   }
-  const r = await api.post<CheckoutResult>(`${base}/accept`, parsed.value);
+  const r = await api.post<CheckoutResult>(`${base}/accept`, {
+    ...parsed.value,
+    quotedPrice: form.get('quotedPrice'),
+  });
   if (r.status === 401) throw redirect(signInFor(url));
   if (!r.ok)
     return data({ errors: {}, message: r.message }, { status: r.status });
@@ -263,6 +266,7 @@ export default function RequestPage({
             }
             message={undefined}
             allowRush={false}
+            hidden={{ quotedPrice: r.quote!.price }}
             submitLabel="Accept and place the order"
           />
         </section>

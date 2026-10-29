@@ -15,6 +15,8 @@ import type {
   UsersRepository,
 } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
+import { PasswordResetTokens } from '../authorization/password-reset-tokens.js';
+import { LoginAttempts } from './login-attempts.js';
 import type { GoogleClaims } from './google-oidc.js';
 import { PasswordHasher } from './password-hasher.js';
 import type { SessionService } from './session.service.js';
@@ -116,6 +118,8 @@ describe('AuthService', () => {
       auditLog,
       new EmailVerificationTokens(jwt),
       notifications,
+      new LoginAttempts(),
+      new PasswordResetTokens(jwt),
       config,
     );
   });

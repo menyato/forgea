@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
@@ -9,7 +11,10 @@ import {
   signedInAs,
   signedInCustomer,
 } from './commerce-helpers.js';
+import { UnusedFilesCleaner } from '../src/custom-requests/unused-files-cleaner.js';
 import { createApp } from './create-app.js';
+import { CustomRequestsService } from '../src/custom-requests/custom-requests.service.js';
+import type { AcceptQuoteDto } from '@forgea/validation';
 
 const checkoutForm = () => ({
   idempotencyKey: randomUUID(),
@@ -130,7 +135,8 @@ describe('Custom requests (e2e)', () => {
     });
 
     // Accepting makes the order: one made-to-order line, so the deposit applies.
-    const form = checkoutForm();
+    // The form sends the price the customer saw.
+    const form = { ...checkoutForm(), quotedPrice: '30.00' };
     const order = await me
       .post(`/custom-requests/mine/${number}/accept`, form)
       .expect(201);
@@ -144,7 +150,10 @@ describe('Custom requests (e2e)', () => {
       .post(`/custom-requests/mine/${number}/accept`, form)
       .expect(201, order.body);
     await me
-      .post(`/custom-requests/mine/${number}/accept`, checkoutForm())
+      .post(`/custom-requests/mine/${number}/accept`, {
+        ...checkoutForm(),
+        quotedPrice: '30.00',
+      })
       .expect(409);
 
     const done = await me.get(`/custom-requests/mine/${number}`).expect(200);
@@ -204,21 +213,31 @@ describe('Custom requests (e2e)', () => {
         .expired,
     ).toBe(true);
     const refused = await me
-      .post(
-        `/custom-requests/mine/${body.requestNumber}/accept`,
-        checkoutForm(),
-      )
+      .post(`/custom-requests/mine/${body.requestNumber}/accept`, {
+        ...checkoutForm(),
+        quotedPrice: '12.00',
+      })
       .expect(409);
     expect(refused.body.message).toMatch(/expired/);
 
     await as(staff.cookie)
       .post(`/custom-requests/${row.id}/quote`, { price: '11' })
       .expect(200);
+    // Accepting the price shown before the re-quote is refused; the new one goes through.
+    // (Straight to the service: the checkout rate limit is spent by this file's other calls.)
+    await expect(
+      app
+        .get(CustomRequestsService)
+        .accept(customer.user.id, body.requestNumber, {
+          ...checkoutForm(),
+          quotedPrice: '12.00',
+        } as AcceptQuoteDto),
+    ).rejects.toThrow(/updated this quote/);
     await me
-      .post(
-        `/custom-requests/mine/${body.requestNumber}/accept`,
-        checkoutForm(),
-      )
+      .post(`/custom-requests/mine/${body.requestNumber}/accept`, {
+        ...checkoutForm(),
+        quotedPrice: '11.00',
+      })
       .expect(201);
   });
 
@@ -334,6 +353,36 @@ describe('Custom requests (e2e)', () => {
       .post('/custom-requests/estimate', { fileKey: photo.body.key })
       .expect(200);
     expect(estimate.body).toEqual({ estimate: null });
+  });
+
+  it('deletes files nobody attached to a request within a day; keeps the rest', async () => {
+    const customer = await signedInCustomer(app);
+    const me = as(customer.cookie);
+    const kept = await me.upload(cubeStl(20), 'kept.stl').expect(201);
+    const dropped = await me.upload(cubeStl(30), 'dropped.stl').expect(201);
+    await me
+      .post('/custom-requests', {
+        title: 'Spacer',
+        description: 'A small spacer for a shelf.',
+        quantity: 1,
+        fileKey: kept.body.key,
+      })
+      .expect(201);
+
+    const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    await app.get(UnusedFilesCleaner).run(tomorrow);
+
+    const status = async (key: string) =>
+      (await prisma.upload.findUniqueOrThrow({ where: { storageKey: key } }))
+        .status;
+    expect(await status(kept.body.key)).toBe('CLEAN');
+    expect(await status(dropped.body.key)).toBe('REJECTED');
+    expect(existsSync(join(resolve('.uploads-test'), dropped.body.key))).toBe(
+      false,
+    );
+    expect(existsSync(join(resolve('.uploads-test'), kept.body.key))).toBe(
+      true,
+    );
   });
 
   it('lists the materials a customer can ask for', async () => {

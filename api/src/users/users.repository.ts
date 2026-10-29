@@ -45,19 +45,55 @@ export class UsersRepository {
   }
 
   /**
-   * Links a Google account. When the existing account's email was never verified, its
-   * password is removed: someone may have registered the address before its real owner
-   * (account pre-hijacking), and Google has now proven who owns it.
+   * Links a Google account. When the existing account's email was never verified, someone may
+   * have registered the address before its real owner (account pre-hijacking), and Google has
+   * now proven who owns it: the password is removed and every session started with it ends,
+   * in the same transaction, so whoever registered it is signed out for good.
    */
-  linkGoogle(user: User, googleId: string): Promise<User> {
+  async linkGoogle(user: User, googleId: string): Promise<User> {
     const unverified = user.emailVerifiedAt === null;
-    return this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        googleId,
-        emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
-        ...(unverified && user.passwordHash ? { passwordHash: null } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (unverified) {
+        await tx.session.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      return tx.user.update({
+        where: { id: user.id },
+        data: {
+          googleId,
+          emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+          ...(unverified && user.passwordHash ? { passwordHash: null } : {}),
+        },
+      });
+    });
+  }
+
+  /**
+   * A new password, set from a reset link or the account page; every session ends, so a
+   * stolen one stops working too. `proven`: the address was proven (the reset link was emailed
+   * there), so it is confirmed. Knowing the old password proves nothing about the address:
+   * whoever registered it before its real owner knows that password too.
+   */
+  setPassword(
+    id: string,
+    passwordHash: string,
+    proven: boolean,
+  ): Promise<User> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      const user = await tx.user.findUniqueOrThrow({ where: { id } });
+      return tx.user.update({
+        where: { id },
+        data: {
+          passwordHash,
+          emailVerifiedAt: user.emailVerifiedAt ?? (proven ? new Date() : null),
+        },
+      });
     });
   }
 

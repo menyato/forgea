@@ -5,6 +5,9 @@ import { StoreSettingsService } from '../store-settings/store-settings.service.j
 import { UploadsService } from '../uploads/uploads.service.js';
 
 const MB = 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Files one customer may send in 24 hours (every request together). */
+const DAILY_ALLOWANCE_MB = 500;
 
 /**
  * Files on a request: the customer's attachment (checked against the owner's size limit, a
@@ -18,6 +21,20 @@ export class CustomerFilesService {
     private readonly settings: StoreSettingsService,
   ) {}
 
+  /** Each customer's uploads in progress, in order (one API per environment). */
+  private readonly queues = new Map<string, Promise<unknown>>();
+
+  private oneAtATime<T>(userId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.queues.get(userId) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(work);
+    const settled = next.catch(() => undefined);
+    this.queues.set(userId, settled);
+    void settled.then(() => {
+      if (this.queues.get(userId) === settled) this.queues.delete(userId);
+    });
+    return next;
+  }
+
   async receive(
     file: Express.Multer.File | undefined,
     userId: string,
@@ -27,6 +44,25 @@ export class CustomerFilesService {
     if (file.size > requests.customUploadMaxMb * MB) {
       throw new BadRequestException(
         `Files can be up to ${requests.customUploadMaxMb} MB. For bigger ones, send us a link on WhatsApp.`,
+      );
+    }
+    // A daily allowance per customer, so nobody can fill the server's disk. One upload per
+    // customer at a time, so files sent together can't all pass the check before any is counted.
+    return this.oneAtATime(userId, () => this.withinAllowance(file, userId));
+  }
+
+  private async withinAllowance(
+    file: Express.Multer.File,
+    userId: string,
+  ): Promise<UploadedFile> {
+    const today = await this.uploads.bytesUploadedSince(
+      userId,
+      UploadPurpose.CUSTOM_REQUEST_FILE,
+      new Date(Date.now() - DAY_MS),
+    );
+    if (today + file.size > DAILY_ALLOWANCE_MB * MB) {
+      throw new BadRequestException(
+        `You have sent ${DAILY_ALLOWANCE_MB} MB of files today. Try again tomorrow, or send us a link on WhatsApp.`,
       );
     }
     return this.store(file, userId);

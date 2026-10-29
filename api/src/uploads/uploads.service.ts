@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Upload } from '../generated/prisma/client.js';
-import { parseModelVariantKey } from '@forgea/validation';
+import { modelVariantKey, parseModelVariantKey } from '@forgea/validation';
 import { UploadStatus, type UploadPurpose } from '../generated/prisma/enums.js';
 import { FileInspector } from './file-inspector.js';
 import { FileStorage } from './file-storage.js';
@@ -71,8 +71,8 @@ export class UploadsService {
 
     const cleanKey = `clean/${objectId}.${result.extension}`;
     await this.storage.move(quarantineKey, cleanKey);
-    if (isModelKey(cleanKey))
-      await this.variants.tryEnsure(cleanKey, file.data);
+    // The compressed copies are made in the background: the upload never waits for them.
+    if (isModelKey(cleanKey)) this.variants.startInBackground(cleanKey);
     return this.prisma.upload.update({
       where: { id: upload.id },
       data: {
@@ -101,6 +101,39 @@ export class UploadsService {
       throw new BadRequestException(
         'A file was not uploaded here; upload it again',
       );
+    }
+  }
+
+  /** Bytes this person uploaded for this purpose since a moment (their daily allowance). */
+  async bytesUploadedSince(
+    userId: string,
+    purpose: UploadPurpose,
+    since: Date,
+  ): Promise<number> {
+    const total = await this.prisma.upload.aggregate({
+      _sum: { sizeBytes: true },
+      where: { uploadedById: userId, purpose, createdAt: { gte: since } },
+    });
+    return total._sum.sizeBytes ?? 0;
+  }
+
+  /**
+   * Deletes an accepted file's bytes, and its compressed copies. The row stays, marked with
+   * why, for the audit trail; the key can never be served or attached again.
+   */
+  async discard(
+    upload: { id: string; storageKey: string },
+    reason: string,
+  ): Promise<void> {
+    await this.prisma.upload.update({
+      where: { id: upload.id },
+      data: { status: UploadStatus.REJECTED, rejectionReason: reason },
+    });
+    await this.storage.remove(upload.storageKey);
+    if (isModelKey(upload.storageKey)) {
+      for (const variant of ['view', 'lite'] as const) {
+        await this.storage.remove(modelVariantKey(upload.storageKey, variant));
+      }
     }
   }
 
@@ -188,7 +221,8 @@ export class UploadsService {
     if (!isModelKey(key)) throw new NotFoundException('File not found');
     let file = await this.storage.open(requestedKey);
     if (!file) {
-      await this.variants.ensure(key);
+      // A copy that can't be made (refused file, busy queue) is simply not there: 404.
+      await this.variants.ensure(key).catch(() => undefined);
       file = await this.storage.open(requestedKey);
     }
     if (!file) throw new NotFoundException('File not found');

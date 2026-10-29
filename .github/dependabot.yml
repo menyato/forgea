@@ -1,0 +1,18 @@
+# Images and actions are pinned to exact fingerprints (nothing changes under us), so Dependabot
+# opens a pull request each week when a newer version — usually a security fix — is out.
+# Review it, let CI pass, merge into development. npm packages are left to `pnpm audit` in CI;
+# the restic image in deploy/app/backup.sh is updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: development
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /
+    target-branch: development
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directories: [/deploy/app, /deploy/edge]
+    target-branch: development
+    schedule: { interval: weekly }

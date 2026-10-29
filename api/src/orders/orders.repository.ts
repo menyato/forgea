@@ -71,9 +71,12 @@ export interface NewOrder {
   currency: { code: string; rate: string; total: string; deposit: string };
   /**
    * Where the order comes from, closed in the same transaction: a custom request's quote
-   * (QUOTED → ACCEPTED) or a quotation (DRAFT/SENT → CONFIRMED).
+   * (QUOTED → ACCEPTED) or a quotation (from one of its openStatuses → CONFIRMED: staff may
+   * confirm a draft, a customer only a quotation that was sent to them).
    */
-  source?: { customRequestId: string } | { quotationId: string };
+  source?:
+    | { customRequestId: string; quotedPrice: string }
+    | { quotationId: string; openStatuses: QuotationStatus[] };
 }
 
 /** The quote being accepted expired or was answered meanwhile; nothing was created. */
@@ -152,6 +155,8 @@ export class OrdersRepository {
                 id: o.source.customRequestId,
                 status: CustomRequestStatus.QUOTED,
                 quoteExpiresAt: { gt: new Date() },
+                // The price the customer saw: a re-quote meanwhile makes this fail.
+                quotedPrice: o.source.quotedPrice,
               },
               data: {
                 status: CustomRequestStatus.ACCEPTED,
@@ -164,7 +169,7 @@ export class OrdersRepository {
             const { count } = await tx.quotation.updateMany({
               where: {
                 id: o.source.quotationId,
-                status: { in: [QuotationStatus.DRAFT, QuotationStatus.SENT] },
+                status: { in: o.source.openStatuses },
                 validUntil: { gte: startOfToday() },
               },
               data: { status: QuotationStatus.CONFIRMED, orderId: order.id },
@@ -177,7 +182,8 @@ export class OrdersRepository {
         if (!isUniqueViolation(error)) throw error;
         // Two submits with the same key raced: return the one that won.
         const raced = await this.findByIdempotencyKey(o.dto.idempotencyKey);
-        if (raced) return raced;
+        if (raced?.userId === o.userId) return raced;
+        if (raced) throw error;
         // Otherwise the random order number collided; try a fresh one.
         if (attempt >= ORDER_NUMBER_ATTEMPTS) throw error;
       }

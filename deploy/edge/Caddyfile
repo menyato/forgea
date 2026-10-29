@@ -1,5 +1,7 @@
 # Only Cloudflare connects here (the server firewall admits Cloudflare's addresses only), over
-# HTTPS with Cloudflare's origin certificate ("Full (strict)" in Cloudflare → SSL/TLS).
+# HTTPS with Cloudflare's origin certificate ("Full (strict)" in Cloudflare → SSL/TLS), and
+# Cloudflare must prove it is OUR Cloudflare zone (Authenticated Origin Pulls): requests through
+# any other Cloudflare customer's account are refused.
 {
 	admin off
 	auto_https off
@@ -10,12 +12,22 @@
 	}
 }
 
+# Cloudflare's origin certificate, and Cloudflare's client certificate required.
+(origin-tls) {
+	tls /certs/origin.pem /certs/origin-key.pem {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /certs/origin-pull-ca.pem
+		}
+	}
+}
+
 # One environment: its storefront, plus the API for Google sign-in only. The API has no address
 # of its own; sign-in must land on the site's host so its cookies are that site's alone
 # (production and staging never share sessions). Everything else goes to the storefront,
 # which calls its API inside the server.
 (environment) {
-	tls /certs/origin.pem /certs/origin-key.pem
+	import origin-tls
 	@google path /auth/google /auth/google/callback
 	handle @google {
 		reverse_proxy {args[0]}-api:3000
@@ -23,9 +35,20 @@
 	handle {
 		reverse_proxy {args[0]}-web:3000
 	}
-	# Matches the API's 100 MB ceiling for uploads (Cloudflare's free plan also stops at 100 MB).
-	request_body {
+	# Request sizes per page: big files only where they are uploaded (the API's 100 MB ceiling;
+	# Cloudflare's free plan also stops at 100 MB), a picture on the idea form, 1 MB elsewhere.
+	# (Forms sent from the page post to "<page>.data", e.g. /custom.data.)
+	@uploads path /custom /custom.data /custom/* /admin /admin.data /admin/*
+	@contact path /contact /contact.data
+	@other not path /custom /custom.data /custom/* /admin /admin.data /admin/* /contact /contact.data
+	request_body @uploads {
 		max_size 101MB
+	}
+	request_body @contact {
+		max_size 11MB
+	}
+	request_body @other {
+		max_size 1MB
 	}
 	header {
 		-Server
@@ -33,9 +56,10 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
-		# No other site may frame the shop (clickjacking); no plugins; forms post only here.
+		# No other site may frame the shop (clickjacking); no plugins; forms post only here; the
+		# page fetches and shows images only from this site (a 3D file can't call out).
 		# Scripts are left to the app: React Router's hydration uses inline scripts.
-		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'"
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'; connect-src 'self'; img-src 'self' data: blob:"
 		X-Frame-Options DENY
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 	}
@@ -56,6 +80,6 @@ https://{$STAGING_HOST}:443 {
 }
 
 https://www.{$PRODUCTION_HOST}:443 {
-	tls /certs/origin.pem /certs/origin-key.pem
+	import origin-tls
 	redir https://{$PRODUCTION_HOST}{uri} permanent
 }

@@ -7,6 +7,7 @@ import { PricingModule } from '../pricing/pricing.module.js';
 import { StoreSettingsModule } from '../store-settings/store-settings.module.js';
 import { UploadsModule } from '../uploads/uploads.module.js';
 import { CustomerFilesService } from './customer-files.service.js';
+import { UnusedFilesCleaner } from './unused-files-cleaner.js';
 import { CustomRequestsController } from './custom-requests.controller.js';
 import { CustomRequestsRepository } from './custom-requests.repository.js';
 import { CustomRequestsService } from './custom-requests.service.js';
@@ -29,6 +30,7 @@ import { RequestEstimator } from './request-estimator.js';
     CustomRequestsRepository,
     RequestEstimator,
     CustomerFilesService,
+    UnusedFilesCleaner,
   ],
 })
 export class CustomRequestsModule {}

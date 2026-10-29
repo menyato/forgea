@@ -76,32 +76,63 @@ export function estimatePrint(input: PrintEstimateInput): {
  * Used by the API to measure a customer's upload itself, never trusting browser numbers.
  */
 export function stlPositions(data: Uint8Array): Float32Array {
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  if (data.byteLength >= 84) {
-    const count = view.getUint32(80, true);
-    if (count > 0 && data.byteLength === 84 + count * 50) {
-      const out = new Float32Array(count * 9);
-      for (let t = 0; t < count; t++) {
-        // Each record: normal (3 floats), three vertices (9 floats), attribute (2 bytes).
-        for (let k = 0; k < 9; k++) {
-          out[t * 9 + k] = view.getFloat32(84 + t * 50 + 12 + k * 4, true);
-        }
+  const count = binaryStlCount(data);
+  if (count !== null) {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const out = new Float32Array(count * 9);
+    for (let t = 0; t < count; t++) {
+      // Each record: normal (3 floats), three vertices (9 floats), attribute (2 bytes).
+      for (let k = 0; k < 9; k++) {
+        out[t * 9 + k] = view.getFloat32(84 + t * 50 + 12 + k * 4, true);
       }
-      return out;
+    }
+    return out;
+  }
+  // ASCII: straight into one array sized from a first count, no intermediate lists (a 50 MB
+  // file would otherwise take over a gigabyte of memory).
+  const text = new TextDecoder().decode(data);
+  const out = new Float32Array(asciiVertexCount(text) * 3);
+  const vertex = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g;
+  let n = 0;
+  for (let m = vertex.exec(text); m; m = vertex.exec(text)) {
+    for (let k = 1; k <= 3; k++) {
+      const v = Number(m[k]);
+      if (!Number.isFinite(v))
+        throw new PricingError('This is not a readable STL file');
+      out[n++] = v;
     }
   }
-  const text = new TextDecoder().decode(data);
-  const vertices = [
-    ...text.matchAll(/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g),
-  ].flatMap((m) => [Number(m[1]), Number(m[2]), Number(m[3])]);
-  if (
-    vertices.length === 0 ||
-    vertices.length % 9 !== 0 ||
-    vertices.some((v) => !Number.isFinite(v))
-  ) {
+  if (n === 0 || n !== out.length || n % 9 !== 0) {
     throw new PricingError('This is not a readable STL file');
   }
-  return Float32Array.from(vertices);
+  return out;
+}
+
+/** How many triangles an STL file holds, without reading them (to refuse huge files first). */
+export function stlTriangleCount(data: Uint8Array): number {
+  return (
+    binaryStlCount(data) ??
+    Math.floor(asciiVertexCount(new TextDecoder().decode(data)) / 3)
+  );
+}
+
+/** The triangle count of a binary STL whose length matches its header; null otherwise. */
+function binaryStlCount(data: Uint8Array): number | null {
+  if (data.byteLength < 84) return null;
+  const count = new DataView(data.buffer, data.byteOffset).getUint32(80, true);
+  return count > 0 && data.byteLength === 84 + count * 50 ? count : null;
+}
+
+function asciiVertexCount(text: string): number {
+  let count = 0;
+  for (
+    let at = text.indexOf('vertex');
+    at !== -1;
+    at = text.indexOf('vertex', at + 6)
+  ) {
+    count++;
+  }
+  return count;
 }
 
 /**

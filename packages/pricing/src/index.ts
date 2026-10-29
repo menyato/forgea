@@ -35,5 +35,6 @@ export {
   meshVolume,
   priceRange,
   stlPositions,
+  stlTriangleCount,
   type PrintEstimateInput,
 } from './model-estimate.js';

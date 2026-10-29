@@ -62,6 +62,8 @@ describe('Currencies (e2e)', () => {
     expect(history).toBeGreaterThanOrEqual(2);
     const audit = await prisma.auditLog.findFirstOrThrow({
       where: { action: 'currency.rate.set', actorUserId: user.id },
+      // The latest row: the code as the API normalized it ('lbp' was asked).
+      orderBy: { timestamp: 'desc' },
     });
     expect(audit).toMatchObject({ targetType: 'Currency', targetId: 'LBP' });
 

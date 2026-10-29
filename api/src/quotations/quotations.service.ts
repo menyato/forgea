@@ -22,25 +22,23 @@ import {
   QuotationsRepository,
 } from './quotations.repository.js';
 
-/** quantity × unit price, less the line's discount, to the cent. */
-const lineTotal = (l: {
-  quantity: number;
-  unitPrice: string;
-  discountPercent: string;
-}) =>
-  new Prisma.Decimal(l.unitPrice)
-    .times(l.quantity)
-    .times(new Prisma.Decimal(100).minus(l.discountPercent))
-    .div(100)
-    .toDecimalPlaces(2);
-
-/** The discounted unit price an order line gets (the order re-prices per unit). */
+/** The discounted unit price, to the cent: what the order line gets once confirmed. */
 const discountedUnit = (l: { unitPrice: string; discountPercent: string }) =>
   new Prisma.Decimal(l.unitPrice)
     .times(new Prisma.Decimal(100).minus(l.discountPercent))
     .div(100)
     .toDecimalPlaces(2)
     .toFixed(2);
+
+/**
+ * The line's total exactly as the order will compute it (the rounded unit price × quantity),
+ * so the quotation the customer accepts and the order they are charged always agree.
+ */
+const lineTotal = (l: {
+  quantity: number;
+  unitPrice: string;
+  discountPercent: string;
+}) => new Prisma.Decimal(discountedUnit(l)).times(l.quantity);
 
 const todayUtc = () => new Date(new Date().toISOString().slice(0, 10));
 
@@ -112,14 +110,22 @@ export class QuotationsService {
 
   /** Staff confirm it (e.g. the customer said yes on the phone). */
   async confirm(id: string, actorId: string): Promise<CheckoutResult> {
-    return this.place(await this.require(id), actorId);
+    return this.place(await this.require(id), actorId, [
+      QuotationStatus.DRAFT,
+      QuotationStatus.SENT,
+    ]);
   }
 
-  /** The customer accepts it online. */
+  /**
+   * The customer accepts it online. Only once it was sent to them: a draft (prices still being
+   * worked out) is as invisible here as it is on their quotation page.
+   */
   async accept(customerId: string, number: string): Promise<CheckoutResult> {
     const q = await this.quotations.findMine(customerId, number);
-    if (!q) throw new NotFoundException('Quotation not found');
-    return this.place(q, customerId);
+    if (!q || q.status === QuotationStatus.DRAFT) {
+      throw new NotFoundException('Quotation not found');
+    }
+    return this.place(q, customerId, [QuotationStatus.SENT]);
   }
 
   async mine(customerId: string, number: string): Promise<QuotationDetail> {
@@ -150,7 +156,11 @@ export class QuotationsService {
     return this.detail(id);
   }
 
-  private place(q: QuotationRow, actorId: string): Promise<CheckoutResult> {
+  private place(
+    q: QuotationRow,
+    actorId: string,
+    openStatuses: QuotationStatus[],
+  ): Promise<CheckoutResult> {
     if (q.status === QuotationStatus.CANCELLED) {
       throw new ConflictException('This quotation was cancelled');
     }
@@ -183,6 +193,7 @@ export class QuotationsService {
         })),
       },
       actorId,
+      openStatuses,
     );
   }
 

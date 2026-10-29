@@ -22,8 +22,8 @@
 Server layout:
 
 ```
-/srv/forgea/edge/        Caddy: compose.yaml, Caddyfile, certs/
-/srv/forgea/production/  compose.yaml, deploy.sh, backup.sh, .env, api.env, web.env, db.env, backup.env, backup-key.json
+/srv/forgea/edge/        Caddy: compose.yaml, Caddyfile, certs/ (only changed by deploy/sync-config.sh)
+/srv/forgea/production/  compose.yaml, backup.sh, .env, api.env, web.env, migrate.env, db.env, backup.env, backup-key.json
 /srv/forgea/staging/     the same files, staging's values
 ```
 
@@ -109,17 +109,40 @@ registration; Cloudflare answers for it.
 5. Recommended: Cloudflare → Zero Trust (free for up to 50 people) → Access → protect
    `staging.forgea-lab.com` with your Google Workspace login, so only the team sees staging.
 
-### 4. The certificate between Cloudflare and the server
+### 4. The certificates between Cloudflare and the server
 
-Cloudflare → SSL/TLS → Origin Server → **Create certificate** → hostnames `forgea-lab.com` and
-`*.forgea-lab.com`, 15 years. Save the two texts as `origin.pem` and `origin-key.pem`, then:
+Two certificates make the link private both ways: Cloudflare's **origin certificate** proves the
+server to Cloudflare, and **your own client certificate** proves to the server that a request
+comes through *your* Cloudflare zone. (Cloudflare's shared one only proves "some Cloudflare
+account", which anyone can open.)
 
-```sh
-scp origin.pem origin-key.pem deploy@<server IP>:/srv/forgea/edge/certs/
-ssh deploy@<server IP> chmod 600 /srv/forgea/edge/certs/origin-key.pem
-```
+1. Cloudflare → SSL/TLS → Origin Server → **Create certificate** → hostnames `forgea-lab.com` and
+   `*.forgea-lab.com`, 15 years. Save the two texts as `origin.pem` and `origin-key.pem`.
+2. In an empty folder outside the repository (Git Bash): `sh <repo>/deploy/origin-pull-cert.sh`.
+   It makes `origin-pull-ca.pem` (for the server), `cloudflare-upload.json` (for Cloudflare) and
+   `origin-pull-ca.key` (keep it in your password manager, then delete it here).
+3. Give Cloudflare your client certificate and switch the check on. You need the zone ID
+   (Cloudflare → forgea-lab.com → Overview, right column) and an API token with
+   "Zone → SSL and Certificates → Edit" for this zone (My Profile → API Tokens):
 
-Delete the two files from your laptop afterwards.
+   ```sh
+   ZONE=<zone ID>; TOKEN=<API token>
+   curl -sX POST "https://api.cloudflare.com/client/v4/zones/$ZONE/origin_tls_client_auth" \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     --data @cloudflare-upload.json
+   ```
+
+   Then Cloudflare → SSL/TLS → Origin Server → **Authenticated Origin Pulls: on**.
+4. Copy the server's three files in. They belong to root, so nobody else on the server can read
+   them:
+
+   ```sh
+   scp origin.pem origin-key.pem origin-pull-ca.pem deploy@<server IP>:/tmp/
+   ssh deploy@<server IP> 'cd /tmp && sudo install -o root -g root -m 600 origin.pem origin-key.pem origin-pull-ca.pem /srv/forgea/edge/certs/ && rm origin.pem origin-key.pem origin-pull-ca.pem'
+   ```
+
+Delete everything from your laptop afterwards, except `origin-pull-ca.key` in your password
+manager.
 
 ### 5. Each environment's settings and passwords
 
@@ -128,33 +151,79 @@ Do this twice, once for `production` and once for `staging`, in a folder **outsi
 ```sh
 cp <repo>/deploy/env/compose.env.example .env      # staging: ENV_NAME=staging
 cp <repo>/deploy/env/api.env.example api.env       # comments say what differs on staging
-cp <repo>/deploy/env/web.env.example web.env
+cp <repo>/deploy/env/web.env.example web.env       # staging: API_URL=http://staging-api:3000
+cp <repo>/deploy/env/migrate.env.example migrate.env
 cp <repo>/deploy/env/db.env.example db.env
 cp <repo>/deploy/env/backup.env.example backup.env
 # fill them in — NEW random secrets for each environment — then:
-scp .env api.env web.env db.env backup.env deploy@<server IP>:/srv/forgea/production/
-ssh deploy@<server IP> chmod 600 /srv/forgea/production/.env /srv/forgea/production/*.env
+scp .env api.env web.env migrate.env db.env backup.env deploy@<server IP>:/srv/forgea/production/
+ssh deploy@<server IP> 'chmod 600 /srv/forgea/production/.env /srv/forgea/production/*.env'
 ```
 
+The deploy and backup scripts refuse to run if a folder's settings name the other environment,
+so a copy-paste slip can't put staging on production's data.
+
+**Google sign-in — one OAuth client per environment** (Google Cloud console → APIs & Services →
+Credentials → Create credentials → OAuth client ID → Web application):
+
+- `Forgea production`: redirect URI `https://forgea-lab.com/auth/google/callback`
+- `Forgea staging`: redirect URI `https://staging.forgea-lab.com/auth/google/callback`
+
+Each environment's `api.env` gets its own client ID and secret, so staging never holds
+production's.
+
 **Backups:** Google Cloud console → Cloud Storage → two buckets, `forgea-backups-production` and
-`forgea-backups-staging` (region europe-west3, Standard, **public access prevention on**). IAM →
-a service account per bucket with the role **Storage Object Admin on that bucket only** →
-Keys → JSON → copy each to its environment as `/srv/forgea/<env>/backup-key.json`
+`forgea-backups-staging`:
+
+- region europe-west3, Standard class, **public access prevention on**;
+- **Protection → Soft delete: 30 days**. Anything deleted (by mistake, or by someone who broke
+  into the server with its key) can be recovered for 30 days.
+
+IAM → one service account per bucket with the role **Storage Object Admin on that bucket only**
+→ Keys → JSON → copy each to its environment as `/srv/forgea/<env>/backup-key.json`
 (`chmod 600`), then delete them from your laptop. Keep each restic password in a password
 manager too: without it the backups can't be read.
 
-**Google sign-in:** Google Cloud console → APIs & Services → Credentials → the OAuth client →
-add both redirect URIs: `https://forgea-lab.com/auth/google/callback` and
-`https://staging.forgea-lab.com/auth/google/callback`.
+Optional but recommended: a free check on <https://healthchecks.io> per environment (daily,
+1 hour grace); put its ping URL in `backup.env` as `HEALTHCHECK_URL`. It emails you if a night's
+backup didn't happen.
 
-### 6. Let GitHub deploy
+### 6. Put the stack on the server
 
-A key used only by GitHub:
+From the repository folder on your laptop (Git Bash), with your own key:
 
 ```sh
-ssh-keygen -t ed25519 -N "" -f forgea-deploy -C github-deploy
-ssh-copy-id -i forgea-deploy.pub deploy@<server IP>
-ssh-keyscan -t ed25519 <server IP>        # the server's fingerprint line
+sh deploy/sync-config.sh <server IP>
+```
+
+It copies the front door, the stack definitions and the deploy scripts to the server. Run it
+again whenever something in `deploy/` changes: GitHub never changes these files itself.
+
+### 7. Let GitHub deploy — with keys that can only deploy
+
+GitHub logs in as the `ci` user, which can't open a shell or use Docker: each key can only ask
+for "deploy version X" to **one** environment. Create one key per environment:
+
+```sh
+ssh-keygen -t ed25519 -N "" -f forgea-deploy-staging -C github-staging
+ssh-keygen -t ed25519 -N "" -f forgea-deploy-production -C github-production
+ssh-keyscan -t ed25519 <server IP>        # the server's fingerprint line; compare it with what
+                                          # Hostinger's browser terminal prints for:
+                                          # ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+On the server, add both public keys to the `ci` user, each pinned to its environment:
+
+```sh
+ssh deploy@<server IP>
+sudo nano /home/ci/.ssh/authorized_keys
+```
+
+with exactly these two lines (paste each `.pub` file's content after the options):
+
+```
+restrict,command="/usr/local/sbin/forgea-deploy-gate staging" ssh-ed25519 AAAA…  github-staging
+restrict,command="/usr/local/sbin/forgea-deploy-gate production" ssh-ed25519 AAAA…  github-production
 ```
 
 GitHub → the repository → Settings → Secrets and variables → Actions → **New repository secret**:
@@ -162,12 +231,24 @@ GitHub → the repository → Settings → Secrets and variables → Actions →
 | Secret | Value |
 |---|---|
 | `SSH_HOST` | the server's IP |
-| `SSH_KEY` | the whole content of `forgea-deploy` (the private file, not `.pub`) |
 | `SSH_KNOWN_HOSTS` | the `ssh-keyscan` line |
+| `STAGING_DEPLOY_KEY` | the whole content of `forgea-deploy-staging` (the private file) |
+| `PRODUCTION_DEPLOY_KEY` | the whole content of `forgea-deploy-production` |
 
-Then delete `forgea-deploy` from your laptop.
+Then delete the private key files from your laptop. Also, in GitHub:
 
-### 7. First deploy
+- your account → Settings → Password and authentication → **two-factor authentication on**:
+  whoever controls your GitHub account controls what the shop runs;
+- the repository → Settings → Actions → General → Workflow permissions → **Read repository
+  contents** (the default for new repositories; the deploy asks for what it needs).
+
+> Limit, honestly: on GitHub's free plan, every workflow of the repository can read every
+> repository secret, so someone able to push a workflow could use the production key — though
+> only to deploy an image to production, never to log in. Only you can push today. If you ever
+> add collaborators, GitHub **Pro** (about $4/month) lets you lock `PRODUCTION_DEPLOY_KEY` to the
+> `production` branch (Settings → Environments).
+
+### 8. First deploy
 
 ```sh
 git push origin staging        # Actions tab: CI, then images, then deploy (~15 minutes)
@@ -183,8 +264,8 @@ cd /srv/forgea/staging && docker compose run --rm -v ./forgea-catalog.json:/tmp/
   api node scripts/import-catalog.ts /tmp/catalog.json
 ```
 
-When staging looks right: merge `staging` into `production` and push → the real shop. Import the catalog
-there the same way (in `/srv/forgea/production`).
+When staging looks right: merge `staging` into `production` and push → the real shop. Import the
+catalog there the same way (in `/srv/forgea/production`).
 
 ## Every day
 
@@ -194,23 +275,32 @@ there the same way (in `/srv/forgea/production`).
 | Try a change | Merge `development` into `staging`, push; check staging.forgea-lab.com |
 | Release it | Merge `staging` into `production`, push |
 | Undo a release | GitHub → Actions → Deploy → Run workflow → environment + the previous tag (`sha-…`, in the earlier run) |
+| Undo from the server itself | Once: `docker login ghcr.io -u <GitHub name>` with a GitHub token allowed to read packages; then `forgea-deploy production sha-…` |
+| Change something in `deploy/` | Merge it as usual, then `sh deploy/sync-config.sh <server IP>` |
+| Update Docker images (Dependabot's weekly pull requests) | Review, let CI pass, merge into `development` |
 | See logs | `ssh deploy@<IP>`, `cd /srv/forgea/production`, `docker compose logs -f api` (or `web`) |
 | Front door logs | `cd /srv/forgea/edge && docker compose logs -f caddy` |
 | Back up now | `/srv/forgea/production/backup.sh` (runs by itself every night, both environments) |
 
 ## Restore from a backup
 
+Each night makes two snapshots: the database (`forgea.dump`) and the uploaded files.
+
 ```sh
 ssh deploy@<IP> && cd /srv/forgea/production
-./backup.sh snapshots                                   # pick one, or use "latest"
-docker run --rm --env-file backup.env -e GOOGLE_APPLICATION_CREDENTIALS=/key.json \
-  -v "$PWD/backup-key.json:/key.json:ro" -v "$PWD/restore:/restore" \
-  restic/restic:0.18.0 restore latest --target /restore
+./backup.sh snapshots                         # note the IDs of the night you want
+restic_run() {
+  docker run --rm -i --env-file backup.env -e GOOGLE_APPLICATION_CREDENTIALS=/key.json \
+    -v "$PWD/backup-key.json:/key.json:ro" -v "$PWD/restore:/restore" \
+    restic/restic:0.18.0 "$@"
+}
 docker compose stop web api
-docker compose exec -T postgres pg_restore --username postgres --clean --if-exists \
-  --dbname forgea < restore/backups/forgea.dump
+restic_run dump <database snapshot ID> /forgea.dump |
+  docker compose exec -T postgres pg_restore --username postgres --clean --if-exists --dbname forgea
+restic_run restore <files snapshot ID> --target /restore
 docker run --rm -v forgea-production_uploads:/data/uploads -v "$PWD/restore/data/uploads:/from:ro" \
   alpine:3.22 cp -a /from/. /data/uploads/
+rm -rf restore                                # no plain copy of the files stays behind
 docker compose start api web
 ```
 

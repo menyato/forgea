@@ -19,6 +19,8 @@ import { UsersRepository } from '../users/users.repository.js';
 import type { GoogleClaims } from './google-oidc.js';
 import { PasswordHasher } from './password-hasher.js';
 import type { RequestContext } from './request-context.js';
+import { PasswordResetTokens } from '../authorization/password-reset-tokens.js';
+import { LoginAttempts } from './login-attempts.js';
 import { SessionService } from './session.service.js';
 
 /** What the controller turns into cookies (and, for Google, a redirect). */
@@ -47,6 +49,8 @@ export class AuthService {
     private readonly audit: AuditLogService,
     private readonly verification: EmailVerificationTokens,
     private readonly notifications: Notifications,
+    private readonly attempts: LoginAttempts,
+    private readonly resetTokens: PasswordResetTokens,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.workspaceDomain = config.get('WORKSPACE_DOMAIN', { infer: true });
@@ -89,12 +93,17 @@ export class AuthService {
     dto: LoginDto,
     ctx: RequestContext,
   ): Promise<IssuedSession> {
+    this.attempts.check(dto.email, ctx.ip);
     const user = await this.users.findByEmail(dto.email);
     const ok =
       user?.passwordHash && user.role === Role.CUSTOMER
         ? await this.passwords.verify(user.passwordHash, dto.password)
         : await this.passwords.verifyNothing(dto.password);
-    if (!ok || !user) throw new UnauthorizedException(INVALID_LOGIN);
+    if (!ok || !user) {
+      this.attempts.failed(dto.email, ctx.ip);
+      throw new UnauthorizedException(INVALID_LOGIN);
+    }
+    this.attempts.succeeded(dto.email, ctx.ip);
     return this.issue(user, ctx);
   }
 
@@ -156,6 +165,82 @@ export class AuthService {
       to: user.email,
       token: await this.verification.issue(user.id, user.email),
     });
+  }
+
+  /**
+   * "Forgot your password?": emails a reset link to a customer account. The answer is the same
+   * whether or not the address has an account, so nobody can probe which emails are customers.
+   * Staff never have a password (they sign in with Google), so they get nothing.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.users.findByEmail(email);
+    if (!user || user.role !== Role.CUSTOMER || user.disabledAt) return;
+    // At most 3 links an hour per address: nobody can flood someone's inbox with them.
+    this.notifications.sendAtMost(
+      `password-reset:${user.id}`,
+      3,
+      'passwordReset',
+      {
+        to: user.email,
+        token: await this.resetTokens.issue(user.id, user.passwordHash),
+      },
+    );
+  }
+
+  /** Sets the password from a reset link; every session of the account ends. */
+  async resetPassword(token: string, password: string): Promise<void> {
+    const userId = await this.resetTokens.verify(token, async (id) => {
+      const user = await this.users.findById(id);
+      return user && user.role === Role.CUSTOMER && !user.disabledAt
+        ? user.passwordHash
+        : undefined;
+    });
+    if (!userId) {
+      throw new BadRequestException(
+        'This link has expired or was already used. Ask for a new one.',
+      );
+    }
+    await this.users.setPassword(
+      userId,
+      await this.passwords.hash(password),
+      true,
+    );
+  }
+
+  /**
+   * A signed-in customer changes their password (the current one proves it is them). Every
+   * session ends, then this browser gets a fresh one so it stays signed in.
+   */
+  async changePassword(
+    userId: string,
+    current: string,
+    next: string,
+    ctx: RequestContext,
+  ): Promise<IssuedSession> {
+    const user = await this.users.findById(userId);
+    if (!user || user.role !== Role.CUSTOMER) throw new UnauthorizedException();
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'This account signs in with Google. To add a password, use "Forgot your password?".',
+      );
+    }
+    if (!(await this.passwords.verify(user.passwordHash, current))) {
+      throw new BadRequestException('Your current password is not right');
+    }
+    const updated = await this.users.setPassword(
+      user.id,
+      await this.passwords.hash(next),
+      false,
+    );
+    return this.issue(updated, ctx);
+  }
+
+  /** The account page: name and phone (used for orders and delivery calls). */
+  async updateProfile(
+    userId: string,
+    contact: { name: string; phone: string },
+  ): Promise<Profile> {
+    return toProfile(await this.users.updateContact(userId, contact));
   }
 
   logout(refreshToken: string): Promise<void> {
@@ -308,5 +393,7 @@ function toProfile(user: User): Profile {
     name: user.name,
     phone: user.phone,
     role: user.role,
+    emailVerified: user.emailVerifiedAt !== null,
+    hasPassword: user.passwordHash !== null,
   };
 }

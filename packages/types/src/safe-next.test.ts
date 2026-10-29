@@ -13,6 +13,16 @@ describe('safeNext', () => {
     'https://evil.example',
     '//evil.example',
     '/\\evil.example',
+    // Browsers drop tabs and newlines, turning these into //evil.example.
+    '/\t/evil.example',
+    '/\n/evil.example',
+    '/\r\n/evil.example',
+    '/\t\\evil.example',
+    '/x\\..\\..\\evil',
+    // Dot segments that normalise to //evil.example.
+    '/..//evil.example',
+    '/.//evil.example',
+    '/%2e%2e//evil.example',
     'javascript:alert(1)',
     '',
     null,

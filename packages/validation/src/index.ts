@@ -3,7 +3,15 @@
 import 'reflect-metadata';
 export * from './constants.js';
 export { normalizeEmail, NormalizeEmail, Trim } from './email.js';
-export { LoginDto, RegisterDto, VerifyEmailDto } from './auth.dto.js';
+export {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  UpdateProfileDto,
+  VerifyEmailDto,
+} from './auth.dto.js';
 export { CreateLeadDto } from './leads.dto.js';
 export { SetExchangeRateDto } from './currency.dto.js';
 export {
@@ -14,6 +22,7 @@ export {
   ProductListQuery,
 } from './pagination.dto.js';
 export {
+  AcceptQuoteDto,
   AddCartItemDto,
   CheckoutDto,
   UpdateCartItemDto,

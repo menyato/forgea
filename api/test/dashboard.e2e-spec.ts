@@ -327,14 +327,20 @@ describe('Dashboard (e2e)', () => {
 
       await as(admin.cookie).delete('/site-theme').expect(200, { theme: null });
       expect((await http().get('/site-theme')).body).toEqual({ theme: null });
+      // Every attempt is logged before it runs (6: the 3 refused palettes and the 3 changes),
+      // and each refused one also gets a 'failed' row.
+      const logged = {
+        actorUserId: admin.user.id,
+        action: { in: ['site-theme.update', 'site-theme.reset'] },
+      };
+      expect(await prisma.auditLog.count({ where: logged })).toBe(9);
       expect(
         await prisma.auditLog.count({
           where: {
-            actorUserId: admin.user.id,
-            action: { in: ['site-theme.update', 'site-theme.reset'] },
+            ...logged,
+            metadata: { path: ['outcome'], equals: 'failed' },
           },
         }),
-        // The palette kept on purpose, the readable one, the reset.
       ).toBe(3);
     });
   });

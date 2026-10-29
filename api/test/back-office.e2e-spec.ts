@@ -184,9 +184,13 @@ describe('Back office (e2e)', () => {
     });
     const id = created.body.id as string;
 
-    // A draft isn't visible to the customer until it is sent.
+    // A draft isn't visible to the customer until it is sent, nor can they accept it (its
+    // prices may still be placeholders).
     await as(customer.cookie)
       .get(`/quotations/mine/${created.body.number}`)
+      .expect(404);
+    await as(customer.cookie)
+      .post(`/quotations/mine/${created.body.number}/accept`)
       .expect(404);
     await s.post(`/quotations/${id}/send`).expect(200);
     const seen = await as(customer.cookie)
@@ -348,6 +352,89 @@ describe('Back office (e2e)', () => {
       await s.get(`/accounting/orders/${order.id}/invoices`)
     ).body.find((i: { id: string }) => i.id === final.id);
     expect(settled.residual).toBe('0.00');
+  });
+
+  it('a double click never invoices or collects twice; the database refuses over-matching', async () => {
+    const staff = await signedInAs(app, Role.STAFF);
+    const customer = await signedInCustomer(app);
+    const product = await createProduct(app);
+    await as(customer.cookie)
+      .post('/cart/items', { productId: product.id, quantity: 1 })
+      .expect(201);
+    const placed = await as(customer.cookie)
+      .post('/orders/checkout', {
+        idempotencyKey: randomUUID(),
+        name: 'Rana Khoury',
+        phone: '70 123 456',
+        paymentMethod: 'TRANSFER',
+        delivery: false,
+      })
+      .expect(201);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: placed.body.orderNumber },
+    });
+    const s = as(staff.cookie);
+    await s
+      .patch(`/orders/${order.id}/status`, { status: 'CONFIRMED' })
+      .expect(200);
+
+    // Two "Invoice the order" clicks at once: one invoice.
+    const clicks = await Promise.all([
+      s.post(`/accounting/orders/${order.id}/final-invoice`),
+      s.post(`/accounting/orders/${order.id}/final-invoice`),
+    ]);
+    expect(clicks.map((r) => r.status).sort((a, b) => a - b)).toEqual([
+      201, 409,
+    ]);
+    const invoice = clicks.find((r) => r.status === 201)!.body;
+
+    // Two payments of the whole amount at once: one is recorded, the other refused.
+    const today = new Date().toISOString().slice(0, 10);
+    const pay = () =>
+      s.post('/accounting/payments', {
+        invoiceId: invoice.id,
+        amount: invoice.residual,
+        method: 'BANK',
+        date: today,
+      });
+    const payments = await Promise.all([pay(), pay()]);
+    expect(payments.map((r) => r.status).sort((a, b) => a - b)).toEqual([
+      201, 400,
+    ]);
+    const after = (
+      await s.get(`/accounting/orders/${order.id}/invoices`)
+    ).body.find((i: { id: string }) => i.id === invoice.id);
+    expect(after).toMatchObject({ residual: '0.00', paymentState: 'paid' });
+
+    // No payment dated in the future.
+    const tomorrow = new Date(Date.now() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await s
+      .post('/accounting/payments', {
+        invoiceId: invoice.id,
+        amount: '1.00',
+        method: 'CASH',
+        date: tomorrow,
+      })
+      .expect(400);
+
+    // Even straight in the database, a line can't be matched beyond its amount.
+    const match = await prisma.reconciliation.findFirstOrThrow({
+      where: { debitLine: { entryId: invoice.id } },
+    });
+    await expect(
+      prisma.reconciliation.create({
+        data: {
+          debitLineId: match.debitLineId,
+          creditLineId: match.creditLineId,
+          amount: '0.01',
+        },
+      }),
+    ).rejects.toThrow(/match more than/);
+    await expect(
+      prisma.reconciliation.delete({ where: { id: match.id } }),
+    ).rejects.toThrow(/cannot be changed or removed/);
   });
 
   it('the books balance, posted entries are final, and the lock date holds', async () => {

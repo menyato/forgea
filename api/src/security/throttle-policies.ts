@@ -1,3 +1,4 @@
+import { isIPv4, isIPv6 } from 'node:net';
 import { Injectable } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
@@ -57,6 +58,33 @@ export const THROTTLE = {
 export class ClientIpThrottlerGuard extends ThrottlerGuard {
   protected override getTracker(req: Record<string, unknown>): Promise<string> {
     const ip = req['clientIp'];
-    return Promise.resolve(typeof ip === 'string' ? ip : 'unknown');
+    return Promise.resolve(
+      typeof ip === 'string' ? throttleKey(ip) : 'unknown',
+    );
   }
+}
+
+/**
+ * The bucket a client's limits count in. An IPv6 user (or attacker) gets a whole /64 from
+ * their provider — billions of addresses — so IPv6 addresses count per /64; IPv4 per address.
+ */
+export function throttleKey(ip: string): string {
+  if (isIPv4(ip)) return ip;
+  if (!isIPv6(ip)) return ip;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  if (mapped) return mapped[1]!;
+  const [head = '', tail = ''] = ip.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = ip.includes('::')
+    ? [
+        ...left,
+        ...Array<string>(8 - left.length - right.length).fill('0'),
+        ...right,
+      ]
+    : left;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
 }

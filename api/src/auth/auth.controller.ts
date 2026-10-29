@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpException,
+  Patch,
   Post,
   Req,
   Res,
@@ -12,7 +13,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
-import { LoginDto, RegisterDto, VerifyEmailDto } from '@forgea/validation';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  UpdateProfileDto,
+  VerifyEmailDto,
+} from '@forgea/validation';
 import type { Request, Response } from 'express';
 import { AuthCookies } from '../authorization/auth-cookies.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
@@ -68,6 +77,54 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.auth.resendVerification(user.id);
+  }
+
+  /** "Forgot your password?": always 204, whether or not the address has an account. */
+  @Public()
+  @Throttle(THROTTLE.auth)
+  @HttpCode(204)
+  @Post('password/forgot')
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    await this.auth.requestPasswordReset(dto.email);
+  }
+
+  /** The new password, with the token from the emailed link. */
+  @Public()
+  @Throttle(THROTTLE.auth)
+  @HttpCode(204)
+  @Post('password/reset')
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<void> {
+    await this.auth.resetPassword(dto.token, dto.password);
+  }
+
+  /** A signed-in customer's new password; this browser stays signed in, all others end. */
+  @Throttle(THROTTLE.auth)
+  @HttpCode(200)
+  @Post('password/change')
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Profile> {
+    return this.signIn(
+      res,
+      await this.auth.changePassword(
+        user.id,
+        dto.currentPassword,
+        dto.newPassword,
+        requestContext(req),
+      ),
+    );
+  }
+
+  /** The account page: name and phone. */
+  @Patch('me')
+  updateProfile(
+    @Body() dto: UpdateProfileDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Profile> {
+    return this.auth.updateProfile(user.id, dto);
   }
 
   @Public()

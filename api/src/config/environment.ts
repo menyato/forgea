@@ -158,6 +158,11 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   GOOGLE_CALENDAR_ID?: string;
+
+  /** Where the studio's alerts go (new orders, requests, leads); defaults to MAIL_SENDER. */
+  @IsOptional()
+  @Matches(/^[^@\s]+@[^@\s]+$/)
+  STUDIO_NOTIFY_EMAIL?: string;
 }
 
 /** Rules that only make sense together, or only in production. */

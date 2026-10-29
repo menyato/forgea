@@ -28,6 +28,7 @@ import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { text } from '~/features/admin/staff.server';
 import { type FieldErrors, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
+import { readUploadForm } from '~/lib/upload-guard.server';
 import type { loader as rootLoader } from '~/root';
 import type { Route } from './+types/route';
 import { RequestFile } from './request-file';
@@ -66,7 +67,7 @@ export type EstimateResult =
 export async function action({ request, url, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   if (!api.hasSession) throw redirect(signInFor(url));
-  const form = await request.formData();
+  const form = await readUploadForm(request, api);
   const intent = form.get('intent');
 
   if (intent === 'upload') {
@@ -248,12 +249,17 @@ export default function CustomOrder({
             We need a way to send you the quote and follow your order. It takes
             a minute.
           </p>
-          <Link
-            to={signInUrl}
-            className={buttonClass('primary', 'justify-self-start px-6 py-3')}
-          >
-            Sign in or create an account
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              to={signInUrl}
+              className={buttonClass('primary', 'px-6 py-3')}
+            >
+              Sign in or create an account
+            </Link>
+            <Link to="/contact" className="underline underline-offset-4">
+              Just tell us your idea, no account needed
+            </Link>
+          </div>
         </section>
       )}
     </main>

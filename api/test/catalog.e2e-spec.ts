@@ -191,14 +191,15 @@ describe('Catalog (e2e)', () => {
       .get(`/media/${ids.modelKey}`)
       .expect(200)
       .expect('Content-Type', 'model/stl');
-    // Its compressed copies were made with it, and follow the same rules.
+    // Its compressed copies are made in the background (asking waits for them), and follow
+    // the same rules.
     const lite = ids.modelKey.replace(/\.stl$/, '.lite.glb');
-    expect(existsSync(join(resolve('.uploads-test'), lite))).toBe(true);
     await http().get(`/media/${lite}`).expect(404);
     await as(admin)
       .get(`/media/${lite}`)
       .expect(200)
       .expect('Content-Type', 'model/gltf-binary');
+    expect(existsSync(join(resolve('.uploads-test'), lite))).toBe(true);
     await as(admin)
       .get(`/media/${ids.modelKey.replace(/\.stl$/, '.huge.glb')}`)
       .expect(404);
@@ -301,7 +302,7 @@ describe('Catalog (e2e)', () => {
       .responseType('blob')
       .expect(200)
       .expect('Content-Type', 'model/gltf-binary')
-      .expect('Cache-Control', 'public, max-age=31536000, immutable');
+      .expect('Cache-Control', 'public, max-age=86400');
     expect((copy.body as Buffer).subarray(0, 4).toString()).toBe('glTF');
 
     const list = await http().get(`/products?category=desk-${tag}`).expect(200);

@@ -22,7 +22,7 @@ import type {
   UploadedFile as UploadedFileView,
 } from '@forgea/types';
 import {
-  CheckoutDto,
+  AcceptQuoteDto,
   CloseCustomRequestDto,
   CreateCustomRequestDto,
   CursorPageQuery,
@@ -37,6 +37,7 @@ import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
 import { Role, UploadPurpose } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UPLOAD_POLICIES } from '../uploads/upload-policies.js';
+import { UploadSlots } from '../uploads/upload-slots.interceptor.js';
 import { CustomerFilesService } from './customer-files.service.js';
 import { CustomRequestsService } from './custom-requests.service.js';
 import { ParsePatternPipe } from './parse-pattern.pipe.js';
@@ -69,6 +70,7 @@ export class CustomRequestsController {
   @Throttle(THROTTLE.upload)
   @Post('files')
   @UseInterceptors(
+    UploadSlots,
     FileInterceptor('file', {
       // The hard ceiling while streaming; the owner's lower limit is checked next.
       limits: {
@@ -125,7 +127,7 @@ export class CustomRequestsController {
   @Post('mine/:number/accept')
   accept(
     @RequestNumber() number: string,
-    @Body() dto: CheckoutDto,
+    @Body() dto: AcceptQuoteDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<CheckoutResult> {
     return this.requests.accept(user.id, number, dto);

@@ -1,178 +1,130 @@
-import { Document, NodeIO } from '@gltf-transform/core';
-import {
-  EXTMeshoptCompression,
-  KHRMeshQuantization,
-} from '@gltf-transform/extensions';
-import { stlPositions } from '@forgea/pricing';
+import { Worker } from 'node:worker_threads';
 import type { ModelVariant } from '@forgea/validation';
 import { Injectable } from '@nestjs/common';
-import {
-  MeshoptDecoder,
-  MeshoptEncoder,
-  MeshoptSimplifier,
-} from 'meshoptimizer';
 
-/** Triangles kept in the `lite` copy: plenty for a shop card or the home page bed. */
-export const LITE_TRIANGLES = 30_000;
-/** How far `lite` may drift from the original, as a share of the model's size. */
-const LITE_MAX_ERROR = 0.005;
+/** A model that takes longer than this is refused (a real 100 MB model needs ~20 s). */
+const TIME_LIMIT_MS = 90_000;
+/** One model at a time: a burst of uploads queues instead of starving the server's CPU. */
+const MAX_PARALLEL = 1;
+/** Jobs allowed to wait; beyond it new ones are turned away (and made later, on request). */
+const MAX_WAITING = 20;
 
 /**
- * Makes the compressed copies of an uploaded model that browsers download (the upload itself
- * stays untouched, for printing). Output is GLB with meshopt compression, which three.js
- * decodes with the decoder it ships, so no extra download.
- *
- * STL (millimetres, Z-up, one flat triangle list) becomes an indexed, welded mesh in metres,
- * Y-up, positions stored as 16-bit numbers (0.0015% of the model's size: far finer than any
- * printer), no normals (flat-shaded, as STL facets are). GLB files are re-encoded as they
- * are; both copies are the same. Pure WebAssembly: no native modules.
+ * The file was refused: bad, hostile, too big, too slow (over the time limit) or too hungry
+ * (out of the worker's memory). Final: not worth trying again. Only a full queue is not.
+ */
+export class ModelRefusedError extends Error {}
+
+type Result =
+  | {
+      ok: true;
+      view?: Uint8Array;
+      lite?: Uint8Array;
+      volumeMm3?: number | null;
+    }
+  | { ok: false; message: string };
+
+/** Reads a file's bytes; called only when its job's turn comes, so waiting jobs hold none. */
+type Load = () => Promise<Uint8Array>;
+
+/**
+ * Runs the work on uploaded 3D files (model-processing.ts) in a worker thread with a time and
+ * memory limit, one at a time. However slow or hostile a file is, the API keeps answering
+ * requests, and ending the worker gives back all the memory it used (WebAssembly included).
  */
 @Injectable()
 export class ModelOptimizer {
-  private io: Promise<NodeIO> | null = null;
+  /** How long one job may take; tests shorten it. */
+  timeLimitMs = TIME_LIMIT_MS;
+  private running = 0;
+  private readonly waiting: (() => void)[] = [];
 
+  /** The compressed copies of a model. */
   async variants(
-    data: Uint8Array,
+    load: Load,
     extension: string,
   ): Promise<Record<ModelVariant, Uint8Array>> {
-    const io = await this.nodeIo();
-    if (extension === 'stl') {
-      const mesh = weldedStl(data);
-      return {
-        view: await io.writeBinary(meshDocument(mesh)),
-        lite: await io.writeBinary(meshDocument(simplified(mesh))),
-      };
+    const result = await this.run(load, (data) => ({
+      task: 'variants',
+      data,
+      extension,
+    }));
+    return { view: result.view!, lite: result.lite! };
+  }
+
+  /** An STL's volume in mm³, or null when it can't be measured. */
+  async volume(load: Load): Promise<number | null> {
+    const result = await this.run(load, (data) => ({ task: 'volume', data }));
+    return result.volumeMm3 ?? null;
+  }
+
+  private async run(
+    load: Load,
+    job: (data: Uint8Array) => object,
+  ): Promise<Extract<Result, { ok: true }>> {
+    if (this.waiting.length >= MAX_WAITING) {
+      throw new Error('Busy with other 3D files; try again later');
     }
-    if (extension === 'glb') {
-      const document = await io.readBinary(data);
-      document
-        .createExtension(EXTMeshoptCompression)
-        .setRequired(true)
-        .setEncoderOptions({
-          method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
-        });
-      const view = await io.writeBinary(document);
-      return { view, lite: view };
+    await this.turn();
+    try {
+      const result = await runWorker(job(await load()), this.timeLimitMs);
+      if (result.ok) return result;
+      throw new ModelRefusedError(result.message);
+    } finally {
+      this.release();
     }
-    throw new Error(`Not a 3D model: .${extension}`);
   }
 
-  private nodeIo(): Promise<NodeIO> {
-    this.io ??= Promise.all([
-      MeshoptEncoder.ready,
-      MeshoptDecoder.ready,
-      MeshoptSimplifier.ready,
-    ]).then(() =>
-      new NodeIO()
-        .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
-        .registerDependencies({
-          'meshopt.encoder': MeshoptEncoder,
-          'meshopt.decoder': MeshoptDecoder,
-        }),
-    );
-    return this.io;
+  /** Waits for a free slot; a finished job hands its slot straight to the next in line. */
+  private async turn(): Promise<void> {
+    if (this.running >= MAX_PARALLEL) {
+      await new Promise<void>((resolve) => this.waiting.push(resolve));
+      return;
+    }
+    this.running++;
+  }
+
+  private release(): void {
+    const next = this.waiting.shift();
+    if (next) next();
+    else this.running--;
   }
 }
 
-interface IndexedMesh {
-  /** x, y, z per vertex, metres, Y-up. */
-  positions: Float32Array;
-  indices: Uint32Array;
-}
-
-/** STL triangles as an indexed mesh: identical corners merged into one vertex. */
-function weldedStl(data: Uint8Array): IndexedMesh {
-  const raw = stlPositions(data);
-  const positions = new Float32Array(raw.length);
-  for (let i = 0; i < raw.length; i += 3) {
-    // Z-up millimetres → Y-up metres (a quarter turn about X, as the viewer does).
-    positions[i] = raw[i]! / 1000;
-    positions[i + 1] = raw[i + 2]! / 1000;
-    positions[i + 2] = -raw[i + 1]! / 1000;
-  }
-  // Each corner points at the first vertex with the same position; the unused copies are
-  // dropped by `compact`.
-  const indices = MeshoptSimplifier.generatePositionRemap(positions, 3);
-  return compact({ positions, indices });
-}
-
-/** Fewer triangles, same outline. A model already small enough is left as it is. */
-function simplified(mesh: IndexedMesh): IndexedMesh {
-  if (mesh.indices.length / 3 <= LITE_TRIANGLES) return mesh;
-  const [indices] = MeshoptSimplifier.simplify(
-    mesh.indices,
-    mesh.positions,
-    3,
-    LITE_TRIANGLES * 3,
-    LITE_MAX_ERROR,
+function runWorker(workerData: object, timeLimitMs: number): Promise<Result> {
+  // The compiled API runs the compiled worker; the tests run from the sources, where the
+  // worker is TypeScript, loaded through tsx.
+  const fromSource = import.meta.url.endsWith('.ts');
+  const worker = new Worker(
+    new URL(`./model-worker.${fromSource ? 'ts' : 'js'}`, import.meta.url),
+    {
+      workerData,
+      execArgv: fromSource ? ['--import', 'tsx'] : [],
+      resourceLimits: { maxOldGenerationSizeMb: 1024 },
+    },
   );
-  return compact({ positions: mesh.positions, indices });
-}
-
-/** Keeps only the vertices in use, in the order that compresses and renders best. */
-function compact(mesh: IndexedMesh): IndexedMesh {
-  const indices = mesh.indices.slice();
-  const [remap, unique] = MeshoptEncoder.reorderMesh(indices, true, true);
-  const positions = new Float32Array(unique * 3);
-  for (let i = 0; i < remap.length; i++) {
-    const to = remap[i]!;
-    if (to === 0xffffffff) continue;
-    positions.set(mesh.positions.subarray(i * 3, i * 3 + 3), to * 3);
-  }
-  return { positions, indices };
-}
-
-/** One mesh, positions as 16-bit fractions of its bounding box (the node scales them back). */
-function meshDocument({ positions, indices }: IndexedMesh): Document {
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < positions.length; i++) {
-    const axis = i % 3;
-    min[axis] = Math.min(min[axis]!, positions[i]!);
-    max[axis] = Math.max(max[axis]!, positions[i]!);
-  }
-  const extent = max.map((m, axis) => Math.max(m - min[axis]!, 1e-9));
-  const quantized = new Uint16Array(positions.length);
-  for (let i = 0; i < positions.length; i++) {
-    const axis = i % 3;
-    quantized[i] = Math.round(
-      ((positions[i]! - min[axis]!) / extent[axis]!) * 65535,
+  return new Promise<Result>((resolve) => {
+    const timer = setTimeout(() => {
+      void worker.terminate();
+      resolve({
+        ok: false,
+        message: 'The model took too long to process',
+      });
+    }, timeLimitMs);
+    const done = (result: Result) => {
+      clearTimeout(timer);
+      void worker.terminate();
+      resolve(result);
+    };
+    worker.once('message', done);
+    worker.once('error', (error) =>
+      done({ ok: false, message: error.message }),
     );
-  }
-
-  const document = new Document();
-  const buffer = document.createBuffer();
-  const position = document
-    .createAccessor()
-    .setType('VEC3')
-    .setArray(quantized)
-    .setNormalized(true)
-    .setBuffer(buffer);
-  const index = document
-    .createAccessor()
-    .setType('SCALAR')
-    .setArray(
-      positions.length / 3 <= 65535
-        ? Uint16Array.from(indices)
-        : Uint32Array.from(indices),
-    )
-    .setBuffer(buffer);
-  const primitive = document
-    .createPrimitive()
-    .setAttribute('POSITION', position)
-    .setIndices(index);
-  const node = document
-    .createNode('model')
-    .setMesh(document.createMesh('model').addPrimitive(primitive))
-    .setTranslation(min as [number, number, number])
-    .setScale(extent as [number, number, number]);
-  document.createScene().addChild(node);
-  document.createExtension(KHRMeshQuantization).setRequired(true);
-  document
-    .createExtension(EXTMeshoptCompression)
-    .setRequired(true)
-    .setEncoderOptions({
-      method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
-    });
-  return document;
+    worker.once('exit', (code) =>
+      done({
+        ok: false,
+        message: `The model could not be processed (${code})`,
+      }),
+    );
+  });
 }

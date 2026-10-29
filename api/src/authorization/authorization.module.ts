@@ -5,6 +5,7 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import { AccessTokenService } from './access-token.service.js';
 import { AuthCookies } from './auth-cookies.js';
 import { EmailVerificationTokens } from './email-verification-tokens.js';
+import { PasswordResetTokens } from './password-reset-tokens.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { RolesGuard } from './roles.guard.js';
 
@@ -22,6 +23,7 @@ import { RolesGuard } from './roles.guard.js';
   providers: [
     AccessTokenService,
     EmailVerificationTokens,
+    PasswordResetTokens,
     AuthCookies,
     JwtAuthGuard,
     RolesGuard,
@@ -29,6 +31,7 @@ import { RolesGuard } from './roles.guard.js';
   exports: [
     AccessTokenService,
     EmailVerificationTokens,
+    PasswordResetTokens,
     AuthCookies,
     JwtAuthGuard,
     RolesGuard,

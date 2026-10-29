@@ -40,6 +40,20 @@ export class MailTemplates {
     this.site = config.get('PUBLIC_WEB_URL', { infer: true });
   }
 
+  /** To the studio: something new needs the team (an order, a request, a lead). */
+  studioAlert(o: {
+    to: string;
+    subject: string;
+    lines: string[];
+    /** Dashboard path, e.g. /admin/orders/…; a button opens it. */
+    path: string;
+  }): Email {
+    return this.email(o.to, o.subject, {
+      paragraphs: o.lines,
+      action: { label: 'Open in the dashboard', url: `${this.site}${o.path}` },
+    });
+  }
+
   orderPlaced(o: {
     to: string;
     name: string;
@@ -158,6 +172,19 @@ export class MailTemplates {
       action: {
         label: 'Confirm my address',
         url: `${this.site}/verify-email?token=${encodeURIComponent(v.token)}`,
+      },
+    });
+  }
+
+  passwordReset(v: { to: string; token: string }): Email {
+    return this.email(v.to, 'Choose a new password', {
+      paragraphs: [
+        'Someone (we hope you) asked to choose a new password for your Forgea account.',
+        'The link works once, for 30 minutes. If it was not you, ignore this email: your password stays as it is.',
+      ],
+      action: {
+        label: 'Choose a new password',
+        url: `${this.site}/reset-password?token=${encodeURIComponent(v.token)}`,
       },
     });
   }

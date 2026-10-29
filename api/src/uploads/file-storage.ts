@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import { dirname, join, resolve, sep } from 'node:path';
 import { Injectable } from '@nestjs/common';
@@ -42,10 +43,20 @@ export class LocalDiskStorage extends FileStorage {
     this.root = resolve(config.get('UPLOAD_DIR', { infer: true }));
   }
 
+  /**
+   * Written under a temporary name, then linked into place: a reader never sees half a file,
+   * a crash leaves no truncated one, and an existing key is never overwritten.
+   */
   async put(key: string, data: Uint8Array): Promise<void> {
     const path = this.pathOf(key);
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, data, { flag: 'wx' });
+    const partial = `${path}.${randomUUID()}.partial`;
+    await writeFile(partial, data, { flag: 'wx' });
+    try {
+      await link(partial, path);
+    } finally {
+      await rm(partial, { force: true });
+    }
   }
 
   async move(from: string, to: string): Promise<void> {

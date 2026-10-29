@@ -56,6 +56,14 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - Browsers load models as the API's compressed copies (`modelVariantKey(key, 'view' | 'lite')` from `@forgea/validation/constants`, made by `ModelVariants`): `lite` for cards and the home bed, `view` on product pages; the original file only where the dashboard measures it. Never send an original STL to a page that just shows it.
 - `pnpm dashboard` opens the dashboard signed in as the local admin (dev only; see docs/SECURITY.md).
 
+## Security conventions (review of 2026-10-28; details in docs/SECURITY.md)
+
+- Uploaded 3D files are never parsed on the API's main thread: compressed copies come from `ModelOptimizer` (a worker with a time limit); new GLB checks go in `glb-check.ts` (it runs before anything reads the file).
+- Public upload routes put `UploadSlots` before their `FileInterceptor`.
+- Anything that posts money for an order or invoice holds a lock on it (`pg_advisory_xact_lock`) and re-checks inside the transaction; the database refuses over-matching.
+- Redirect targets only through `safeNext`; email links that change state need a button (POST), never a GET.
+- The server's stack (`deploy/`) changes only through `deploy/sync-config.sh`; GitHub's keys can only run `forgea-deploy-gate`.
+
 ## Back office conventions
 
 - Design: docs/BACK_OFFICE.md (Odoo 20 `crm`/`sale`/`account` as the functional reference, nothing copied).

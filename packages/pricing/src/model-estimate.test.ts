@@ -5,6 +5,7 @@ import {
   meshVolume,
   priceRange,
   stlPositions,
+  stlTriangleCount,
 } from './model-estimate.js';
 
 /** A 10 mm cube as 12 outward-facing triangles. */
@@ -112,6 +113,25 @@ describe('stlPositions', () => {
     expect(() =>
       stlPositions(new TextEncoder().encode('vertex 1 2 x')),
     ).toThrow(PricingError);
+    // Not whole triangles, or a vertex line that can't be read.
+    for (const text of ['vertex 1 2 3', 'vertex 1 2 3\nvertex']) {
+      expect(() => stlPositions(new TextEncoder().encode(text))).toThrow(
+        PricingError,
+      );
+    }
+  });
+
+  it('counts triangles without reading them, binary or ASCII', () => {
+    expect(stlTriangleCount(binary(tetra))).toBe(4);
+    const ascii = tetra
+      .map((t) =>
+        [0, 3, 6]
+          .map((i) => `vertex ${t[i]} ${t[i + 1]} ${t[i + 2]}`)
+          .join('\n'),
+      )
+      .join('\n');
+    expect(stlTriangleCount(new TextEncoder().encode(ascii))).toBe(4);
+    expect(stlTriangleCount(new Uint8Array(10))).toBe(0);
   });
 });
 

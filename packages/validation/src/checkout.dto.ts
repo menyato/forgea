@@ -18,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { OptionSelectionDto } from './catalog.dto.js';
+import { MONEY_PATTERN } from './constants.js';
 import { Trim } from './email.js';
 import { CART_QUANTITY_MAX, PHONE_PATTERN } from './constants.js';
 
@@ -102,4 +103,13 @@ export class CheckoutDto {
   @IsString()
   @MaxLength(500)
   deliveryNotes?: string;
+}
+
+/**
+ * Accepting a custom request's quote: the order form, plus the price the customer saw. If the
+ * studio re-quoted meanwhile, the acceptance is refused and the page shows the new price.
+ */
+export class AcceptQuoteDto extends CheckoutDto {
+  @Matches(MONEY_PATTERN)
+  quotedPrice!: string;
 }

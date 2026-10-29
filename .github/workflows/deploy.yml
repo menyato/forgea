@@ -44,11 +44,11 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - id: tag
         run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -75,37 +75,32 @@ jobs:
       # Each branch deploys to the environment of the same name; a manual run names its target.
       TARGET: ${{ github.event.inputs.environment || github.ref_name }}
       TAG: ${{ github.event.inputs.tag || needs.images.outputs.tag }}
+    # No checkout: the server already has its stack definitions (deploy/sync-config.sh) and
+    # only ever receives an image tag from here.
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Connect to the server
-        env:
-          HOST: ${{ secrets.SSH_HOST }}
-          KEY: ${{ secrets.SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-        run: |
-          # Both go into commands on the server: only the shapes this workflow makes.
-          echo "$TAG" | grep -Eq '^sha-[0-9a-f]{7}$' || { echo "Not an image tag: $TAG"; exit 1; }
-          case "$TARGET" in production|staging) ;; *) echo "Unknown environment $TARGET"; exit 1 ;; esac
-          [ -n "$HOST" ] || { echo 'The SSH secrets are missing (deploy/README.md, step 6)'; exit 1; }
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          # The server's own fingerprint, saved when it was created: no trust on first use.
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          echo "SERVER=deploy@$HOST" >> "$GITHUB_ENV"
-
-      - name: Copy the stack definitions
-        run: |
-          scp deploy/edge/compose.yaml deploy/edge/Caddyfile "$SERVER:/srv/forgea/edge/"
-          scp deploy/app/compose.yaml deploy/app/postgres-init.sh deploy/app/deploy.sh \
-            deploy/app/backup.sh "$SERVER:/srv/forgea/$TARGET/"
-
-      # The job's own token, valid only while it runs, lets the server pull the private images.
       - name: Deploy ${{ env.TAG }} to ${{ env.TARGET }}
         env:
+          HOST: ${{ secrets.SSH_HOST }}
+          KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          # One key per environment; on the server each can only deploy its own environment.
+          PRODUCTION_KEY: ${{ secrets.PRODUCTION_DEPLOY_KEY }}
+          STAGING_KEY: ${{ secrets.STAGING_DEPLOY_KEY }}
+          # The job's own token, valid only while it runs, lets the server pull the private images.
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh "$SERVER" \
-            "docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null \
-             && cd /srv/forgea/$TARGET && chmod +x deploy.sh backup.sh \
-             && ./deploy.sh '$TAG'; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"
+          case "$TAG" in
+            sha-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *) echo "Not an image tag: $TAG"; exit 1 ;;
+          esac
+          case "$TARGET" in
+            production) key=$PRODUCTION_KEY ;;
+            staging) key=$STAGING_KEY ;;
+            *) echo "Unknown environment $TARGET"; exit 1 ;;
+          esac
+          [ -n "$HOST" ] && [ -n "$key" ] || { echo 'The deploy secrets are missing (deploy/README.md, step 7)'; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          # The server's own fingerprint, saved when it was created: no trust on first use.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The server runs only forgea-deploy-gate for this key: the "command" is just the tag.
+          printf '%s' "$GHCR_TOKEN" | ssh "ci@$HOST" "$TAG"
