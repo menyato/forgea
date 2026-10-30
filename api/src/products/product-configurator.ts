@@ -4,10 +4,12 @@ import {
   type OptionEffect,
   type UnitCostCalculator,
 } from '@forgea/pricing';
-import type {
-  ChosenOption,
-  OptionSelection,
-  ProductOption,
+import {
+  type ChosenOption,
+  formatSizeCm,
+  type OptionSelection,
+  PRODUCT_SIZE_GROUP_ID,
+  type ProductOption,
 } from '@forgea/types';
 import type { Prisma } from '../generated/prisma/client.js';
 import { OptionKind } from '../generated/prisma/enums.js';
@@ -26,6 +28,7 @@ export const withConfiguration = {
     },
     orderBy: [{ value: { sortOrder: 'asc' } }, { value: { label: 'asc' } }],
   },
+  sizes: { orderBy: { sortOrder: 'asc' } },
 } as const satisfies Prisma.ProductInclude;
 
 export type ConfigurableProduct = Prisma.ProductGetPayload<{
@@ -41,6 +44,8 @@ export interface Configuration {
   effects: OptionEffect[];
   /** One cart line per distinct configuration of a product. */
   configKey: string;
+  /** A chosen size prints with its own grams and hours instead of the product's. */
+  base?: { grams: string; printHours: string };
 }
 
 /**
@@ -52,6 +57,35 @@ export interface Configuration {
 export class ProductConfigurator {
   /** What the shop shows: the choices only, never the price rules behind them. */
   offered(product: ConfigurableProduct): ProductOption[] {
+    return [...this.sizeOption(product), ...this.groupOptions(product)];
+  }
+
+  /**
+   * The product's own sizes, if it has more than one: customers choose by measurements
+   * ("13 × 13 × 26 cm"); the names the owner gives them stay in the dashboard.
+   */
+  private sizeOption(product: ConfigurableProduct): ProductOption[] {
+    if (product.sizes.length === 0) return [];
+    return [
+      {
+        groupId: PRODUCT_SIZE_GROUP_ID,
+        name: 'Size',
+        kind: 'SIZE',
+        required: true,
+        maxLength: null,
+        choices: product.sizes.map((s) => ({
+          id: s.id,
+          label: formatSizeCm(sizeOf(s)),
+          swatchHex: null,
+        })),
+        defaultValueId: (
+          product.sizes.find((s) => s.isDefault) ?? product.sizes[0]!
+        ).id,
+      },
+    ];
+  }
+
+  private groupOptions(product: ConfigurableProduct): ProductOption[] {
     return this.groups(product).flatMap((pg): ProductOption[] => {
       const values = this.values(product, pg.groupId);
       if (pg.group.kind === OptionKind.CHOICE && values.length === 0) return [];
@@ -107,7 +141,9 @@ export class ProductConfigurator {
     };
     for (const option of offered.values()) {
       const selection = given.get(option.groupId);
-      if (option.kind === OptionKind.TEXT) {
+      if (option.kind === 'SIZE') {
+        this.applySize(product, option, selection, result);
+      } else if (option.kind === OptionKind.TEXT) {
         this.applyText(product, option, selection, result);
       } else {
         this.applyChoice(product, option, selection, result);
@@ -145,8 +181,9 @@ export class ProductConfigurator {
     return configuredUnitPrice(
       calculator,
       {
-        grams: product.grams.toString(),
-        printHours: product.printHours.toString(),
+        grams: configuration.base?.grams ?? product.grams.toString(),
+        printHours:
+          configuration.base?.printHours ?? product.printHours.toString(),
         pricePerGram: product.material.pricePerGram.toString(),
       },
       configuration.effects,
@@ -217,6 +254,31 @@ export class ProductConfigurator {
     });
   }
 
+  /** A size: its grams and hours replace the product's; the order keeps its measurements. */
+  private applySize(
+    product: ConfigurableProduct,
+    option: ProductOption,
+    selection: OptionSelection | undefined,
+    result: Configuration,
+  ): void {
+    if (selection?.text !== undefined) {
+      throw new BadRequestException('Choose a size from the list');
+    }
+    const size = product.sizes.find(
+      (s) => s.id === (selection?.valueId ?? option.defaultValueId),
+    );
+    if (!size) throw new BadRequestException('This size is not available');
+    result.selections.push({ groupId: option.groupId, valueId: size.id });
+    result.chosen.push({
+      group: option.name,
+      value: formatSizeCm(sizeOf(size)),
+    });
+    result.base = {
+      grams: size.grams.toString(),
+      printHours: size.printHours.toString(),
+    };
+  }
+
   private groups(product: ConfigurableProduct) {
     return product.optionGroups.filter((pg) => pg.group.active);
   }
@@ -227,3 +289,13 @@ export class ProductConfigurator {
     );
   }
 }
+
+const sizeOf = (s: {
+  sizeXcm: { toString(): string };
+  sizeYcm: { toString(): string };
+  sizeZcm: { toString(): string };
+}) => ({
+  x: s.sizeXcm.toString(),
+  y: s.sizeYcm.toString(),
+  z: s.sizeZcm.toString(),
+});

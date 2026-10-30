@@ -1,6 +1,6 @@
 import { estimatePrint } from '@forgea/pricing';
 import { Busy } from '~/components/brand/busy';
-import type { MaterialView } from '@forgea/types';
+import type { MaterialView, SizeCm } from '@forgea/types';
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
@@ -24,7 +24,12 @@ export function ModelField({
   modelKey: string | null;
   onModelKey: (key: string | null) => void;
   material: MaterialView | undefined;
-  onSuggest: (estimate: { grams: string; printHours: string }) => void;
+  /** Grams and hours from the volume, and the model's size in cm. */
+  onSuggest: (estimate: {
+    grams: string;
+    printHours: string;
+    size: SizeCm;
+  }) => void;
   name: string;
 }) {
   const upload = useFetcher<UploadResult>();
@@ -130,7 +135,15 @@ export function ModelField({
                 <strong>{estimate.grams} g</strong>,{' '}
                 <strong>{estimate.printHours} h</strong>
               </span>
-              <Button variant="secondary" onClick={() => onSuggest(estimate)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const [x, y, z] = measured.sizeMm.map((mm) =>
+                    (Math.round(mm) / 10).toFixed(1),
+                  ) as [string, string, string];
+                  onSuggest({ ...estimate, size: { x, y, z } });
+                }}
+              >
                 Use these numbers
               </Button>
             </p>

@@ -12,13 +12,18 @@ model Product {
   modelFileKey String?
   /// Its place on the home page's print bed (1 = the centre, 2–5 the corners), chosen in the
   /// dashboard; null = not on the bed.
-  plateOrder   Int?         @unique
+  plateOrder   Int?      @unique
 
   // Base pricing inputs fed to @forgea/pricing.
   grams      Decimal  @db.Decimal(10, 2)
   printHours Decimal  @db.Decimal(8, 2)
   materialId String   @db.Uuid
   material   Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  /// The printed size, in cm, that grams and printHours are for (measured from the 3D model):
+  /// width × depth × height, all three or none (CHECK constraint).
+  sizeXcm    Decimal? @db.Decimal(7, 1)
+  sizeYcm    Decimal? @db.Decimal(7, 1)
+  sizeZcm    Decimal? @db.Decimal(7, 1)
 
   /// Made to order for the customer: requires the 50% deposit at checkout.
   isCustom  Boolean  @default(false)
@@ -28,13 +33,36 @@ model Product {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  cartItems    CartItem[]
-  orderItems   OrderItem[]
-  optionGroups ProductOptionGroup[]
-  optionValues ProductOptionValue[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  optionGroups   ProductOptionGroup[]
+  optionValues   ProductOptionValue[]
   quotationLines QuotationLine[]
+  sizes          ProductSize[]
 
   @@index([active, id])
   @@index([categoryId])
   @@map("products")
+}
+
+/// A real size the product is sold in: its measurements and what it takes to print at that
+/// size. Choosing it prices the product with these grams and hours instead of the base ones.
+/// One may be the default (unique partial index); none means the product has one size.
+model ProductSize {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  productId  String  @db.Uuid
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Small, Large, A5…: what the customer picks.
+  label      String
+  /// Width × depth × height in cm, each above 0 (CHECK constraint).
+  sizeXcm    Decimal @db.Decimal(7, 1)
+  sizeYcm    Decimal @db.Decimal(7, 1)
+  sizeZcm    Decimal @db.Decimal(7, 1)
+  grams      Decimal @db.Decimal(10, 2)
+  printHours Decimal @db.Decimal(8, 2)
+  isDefault  Boolean @default(false)
+  sortOrder  Int     @default(0)
+
+  @@unique([productId, label])
+  @@map("product_sizes")
 }

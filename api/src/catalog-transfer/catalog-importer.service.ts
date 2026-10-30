@@ -205,6 +205,18 @@ export class CatalogImporter {
           ...(model ? { modelFileKey: model } : {}),
           imageKeys: images,
           options: (p.options ?? []).map((o) => productOption(groups, o)),
+          ...(p.size
+            ? { sizeXcm: p.size.x, sizeYcm: p.size.y, sizeZcm: p.size.z }
+            : {}),
+          sizes: (p.sizes ?? []).map((s) => ({
+            label: s.label,
+            sizeXcm: s.size?.x,
+            sizeYcm: s.size?.y,
+            sizeZcm: s.size?.z,
+            grams: s.grams,
+            printHours: s.printHours,
+            isDefault: s.default === true,
+          })),
         });
         if (found) await this.products.update(found.id, dto);
         else await this.products.create(dto);

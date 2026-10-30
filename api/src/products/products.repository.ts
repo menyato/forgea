@@ -130,7 +130,11 @@ export class ProductsRepository {
 
   create(dto: SaveProductDto): Promise<ConfigurableProduct> {
     return this.prisma.product.create({
-      data: { ...fields(dto), ...optionRows(dto) },
+      data: {
+        ...fields(dto),
+        ...optionRows(dto),
+        sizes: { create: dto.sizes.map(sizeRow) },
+      },
       include: withConfiguration,
     });
   }
@@ -140,6 +144,22 @@ export class ProductsRepository {
     return this.prisma.$transaction(async (tx) => {
       await tx.productOptionValue.deleteMany({ where: { productId: id } });
       await tx.productOptionGroup.deleteMany({ where: { productId: id } });
+      // Sizes keep their ids (matched by name), so carts holding one still find it.
+      const labels = dto.sizes.map((s) => s.label);
+      await tx.productSize.deleteMany({
+        where: { productId: id, label: { notIn: labels } },
+      });
+      await tx.productSize.updateMany({
+        where: { productId: id },
+        data: { isDefault: false },
+      });
+      for (const [i, size] of dto.sizes.entries()) {
+        await tx.productSize.upsert({
+          where: { productId_label: { productId: id, label: size.label } },
+          create: { productId: id, ...sizeRow(size, i) },
+          update: sizeRow(size, i),
+        });
+      }
       return tx.product.update({
         where: { id },
         data: { ...fields(dto), ...optionRows(dto) },
@@ -162,6 +182,20 @@ const fields = (dto: SaveProductDto) => ({
   active: dto.active,
   modelFileKey: dto.modelFileKey ?? null,
   imageKeys: dto.imageKeys,
+  sizeXcm: dto.sizeXcm ?? null,
+  sizeYcm: dto.sizeYcm ?? null,
+  sizeZcm: dto.sizeZcm ?? null,
+});
+
+const sizeRow = (s: SaveProductDto['sizes'][number], sortOrder: number) => ({
+  label: s.label,
+  sizeXcm: s.sizeXcm,
+  sizeYcm: s.sizeYcm,
+  sizeZcm: s.sizeZcm,
+  grams: s.grams,
+  printHours: s.printHours,
+  isDefault: s.isDefault,
+  sortOrder,
 });
 
 const optionRows = (dto: SaveProductDto) => ({

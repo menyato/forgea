@@ -160,3 +160,10 @@ as editable data, per-person grants and denials, checked on every request) witho
 - Not done from the review: a cache for rarely-changing settings (only safe with one API
   process), a per-account monthly balance table for the reports, and order search indexes
   (pg_trgm) — none matters at today's size.
+- **Before deployment (2026-10-30):** real product sizes (measured, per product, shown in cm
+  and priced with their own grams and hours) replace the shared Small/Standard/Large option;
+  the product page gets a size editor (one measurement, the rest suggested), "Same options as"
+  another product, Offer all / None and each choice's price effect, and Duplicate. Customers
+  get invoices on My orders, cancel an order before the studio starts, and Order again; the
+  dashboard opens on "Needs attention". The deploy gate script was ignored by git and is now
+  tracked.

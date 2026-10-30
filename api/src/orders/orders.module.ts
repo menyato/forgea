@@ -13,6 +13,7 @@ import { OrderStatusService } from './order-status.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersRepository } from './orders.repository.js';
 import { OrdersService } from './orders.service.js';
+import { ReorderService } from './reorder.service.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { OrdersService } from './orders.service.js';
     CheckoutService,
     CustomerOrdersService,
     OrderStatusService,
+    ReorderService,
   ],
   // Custom requests place an order when their quote is accepted.
   exports: [CheckoutService],

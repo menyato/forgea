@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CartLine, CartView, OptionSelection } from '@forgea/types';
+import type {
+  CartLine,
+  CartView,
+  ChosenOption,
+  OptionSelection,
+} from '@forgea/types';
 import { PricingService } from '../pricing/pricing.service.js';
 import { ProductConfigurator } from '../products/product-configurator.js';
 import { ProductsRepository } from '../products/products.repository.js';
@@ -70,6 +75,45 @@ export class CartService {
       clearGuestCookie: resolved.clearGuestCookie,
       ...(newGuestCartId ? { newGuestCartId } : {}),
     };
+  }
+
+  /**
+   * Adds a product with choices given by name ({ group: "Colour", value: "Black" }), as an
+   * order recorded them. Refuses (400) if the product or one of the choices is no longer sold.
+   */
+  async addByNames(
+    owner: CartOwner,
+    productId: string,
+    quantity: number,
+    chosen: readonly ChosenOption[],
+  ): Promise<CartResult> {
+    const product = await this.products.findActive(productId);
+    if (!product) throw new NotFoundException('no longer sold');
+    const offered = this.configurator.offered(product);
+    const selections: OptionSelection[] = [];
+    for (const c of Array.isArray(chosen) ? chosen : []) {
+      const option = offered.find((o) => o.name === c.group);
+      if (!option)
+        throw new BadRequestException(`${c.group} is no longer offered`);
+      if (option.kind === 'TEXT') {
+        selections.push({ groupId: option.groupId, text: c.value });
+        continue;
+      }
+      // Sizes are recorded by their measurements ("18 × 12 × 9 cm"); orders from before
+      // that wrote "Large (18 × 12 × 9 cm)", so the part in brackets counts too.
+      const recorded = /\(([^()]+)\)$/.exec(c.value)?.[1];
+      const choice = option.choices.find(
+        (ch) =>
+          ch.label === c.value ||
+          (option.kind === 'SIZE' && ch.label === recorded),
+      );
+      if (!choice)
+        throw new BadRequestException(
+          `${c.group} ${c.value} is no longer offered`,
+        );
+      selections.push({ groupId: option.groupId, valueId: choice.id });
+    }
+    return this.add(owner, productId, quantity, selections);
   }
 
   async setQuantity(

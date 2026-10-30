@@ -60,3 +60,5 @@ export {
   TEAM_ROLES_WITH_PERMISSIONS,
 } from './permissions.js';
 export type { Permission, PermissionRole } from './permissions.js';
+export { PRODUCT_SIZE_GROUP_ID } from './catalog.js';
+export { scaledSize } from './sizes.js';

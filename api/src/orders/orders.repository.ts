@@ -260,7 +260,6 @@ export class OrdersRepository {
     });
   }
 
-  /** All orders, for staff. */
   /** How many in each status: the numbers on the dashboard's tabs. */
   async countByStatus(): Promise<Partial<Record<OrderStatus, number>>> {
     const rows = await this.prisma.order.groupBy({
@@ -270,6 +269,28 @@ export class OrdersRepository {
     return Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
   }
 
+  /** One of the customer's own orders by number; anyone else's finds nothing. */
+  findOwn(userId: string, orderNumber: string) {
+    return this.prisma.order.findFirst({
+      where: { userId, orderNumber },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        depositPaid: true,
+        items: {
+          select: {
+            productId: true,
+            name: true,
+            quantity: true,
+            options: true,
+          },
+        },
+      },
+    });
+  }
+
+  /** All orders, for staff. */
   list(query: OrderListQuery) {
     const search = query.q?.toLowerCase();
     const where: Prisma.OrderWhereInput = {

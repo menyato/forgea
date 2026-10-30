@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -14,6 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   CheckoutResult,
   CustomerOrder,
+  ReorderResult,
   OrderListItem,
   Page,
   Permission,
@@ -43,6 +45,14 @@ import {
   type StatusChange,
 } from './order-status.service.js';
 import { OrdersService } from './orders.service.js';
+import { ReorderService } from './reorder.service.js';
+import { ParsePatternPipe } from '../custom-requests/parse-pattern.pipe.js';
+
+/** An order number as customers see it: FG- and ten characters. */
+const OrderNumber = new ParsePatternPipe(
+  /^FG-[0-9A-Z]{10}$/,
+  'Order not found',
+);
 
 @Controller('orders')
 export class OrdersController {
@@ -52,6 +62,7 @@ export class OrdersController {
     private readonly customerOrders: CustomerOrdersService,
     private readonly statuses: OrderStatusService,
     private readonly cartCookie: CartCookie,
+    private readonly reorders: ReorderService,
   ) {}
 
   /** The order pipeline for staff and admins. */
@@ -70,7 +81,29 @@ export class OrdersController {
     return this.customerOrders.mine(user.id, query);
   }
 
-  /** One order in full: customer, address, items with options, money, history. */
+  /** The customer cancels their own order, before the studio has started on it. */
+  @Throttle(THROTTLE.checkout)
+  @HttpCode(200)
+  @Post('mine/:number/cancel')
+  async cancelMine(
+    @Param('number', OrderNumber) number: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ cancelled: true }> {
+    await this.customerOrders.cancel(user.id, number);
+    return { cancelled: true };
+  }
+
+  /** "Order again": the order's lines back into the customer's cart, as sold today. */
+  @Throttle(THROTTLE.cart)
+  @HttpCode(200)
+  @Post('mine/:number/reorder')
+  async reorder(
+    @Param('number', OrderNumber) number: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ReorderResult> {
+    return (await this.reorders.reorder({ userId: user.id }, number)).result;
+  }
+
   /** How many in each status, for the dashboard's tabs. */
   @RequirePermission('orders.view')
   @Get('counts')

@@ -18,6 +18,12 @@ export function OptionPicker({
   const legend = (
     <legend className="mb-2 text-sm font-semibold">
       {option.name}
+      {option.kind === 'SIZE' && (
+        <span className="font-normal text-text-muted">
+          {' '}
+          (width × depth × height)
+        </span>
+      )}
       {!option.required && (
         <span className="font-normal text-text-muted"> (optional)</span>
       )}

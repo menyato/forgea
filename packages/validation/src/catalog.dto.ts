@@ -28,6 +28,8 @@ import {
   PRODUCT_IMAGES_MAX,
   SLUG_PATTERN,
   STORAGE_KEY_PATTERN,
+  PRODUCT_SIZES_MAX,
+  SIZE_CM_PATTERN,
 } from './constants.js';
 import { Trim } from './email.js';
 
@@ -179,6 +181,35 @@ export class ProductOptionConfigDto {
   defaultValueId?: string;
 }
 
+const SIZE_MESSAGE = { message: 'A size in cm, e.g. 12.5' };
+
+/** One size a product is sold in: its measurements and what it takes to print. */
+export class ProductSizeDto {
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Name the size, e.g. Large' })
+  @MaxLength(40)
+  label!: string;
+
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeXcm!: string;
+
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeYcm!: string;
+
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeZcm!: string;
+
+  @Matches(POSITIVE_DECIMAL, { message: 'Enter the grams at this size' })
+  grams!: string;
+
+  @Matches(POSITIVE_DECIMAL, { message: 'Enter the print time at this size' })
+  printHours!: string;
+
+  @IsBoolean()
+  isDefault: boolean = false;
+}
+
 export class SaveProductDto {
   @Trim()
   @Matches(SLUG_PATTERN, { message: SLUG_MESSAGE })
@@ -246,6 +277,26 @@ export class SaveProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductOptionConfigDto)
   options: ProductOptionConfigDto[] = [];
+
+  /** The printed size grams and printHours are for, in cm: all three or none. */
+  @IsOptional()
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeXcm?: string;
+
+  @IsOptional()
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeYcm?: string;
+
+  @IsOptional()
+  @Matches(SIZE_CM_PATTERN, SIZE_MESSAGE)
+  sizeZcm?: string;
+
+  /** The real sizes it is sold in; none: one size. */
+  @IsArray()
+  @ArrayMaxSize(PRODUCT_SIZES_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => ProductSizeDto)
+  sizes: ProductSizeDto[] = [];
 }
 
 /** A customer's choice for one option. */

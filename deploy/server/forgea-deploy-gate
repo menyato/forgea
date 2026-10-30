@@ -1,0 +1,15 @@
+#!/bin/sh
+# /usr/local/sbin/forgea-deploy-gate (root-owned). The only thing GitHub's SSH keys can run:
+# the `ci` user's authorized_keys pins each key to one environment, e.g.
+#   restrict,command="/usr/local/sbin/forgea-deploy-gate staging" ssh-ed25519 AAAA... github-staging
+# GitHub sends just the image tag as its "command"; anything else is refused. No shell, no
+# file copies, no other environment: a leaked staging key can only redeploy staging.
+set -eu
+ENV_NAME="$1"
+TAG="${SSH_ORIGINAL_COMMAND:-}"
+# A shell pattern matches the whole string (grep would match line by line).
+case "$TAG" in
+  sha-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+  *) echo "Send only an image tag" >&2; exit 2 ;;
+esac
+exec sudo -n -u deploy /usr/local/sbin/forgea-deploy "$ENV_NAME" "$TAG"

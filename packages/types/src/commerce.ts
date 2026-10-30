@@ -71,5 +71,23 @@ export interface CustomerOrder {
   items: { name: string; quantity: number; lineTotal: Money }[];
   /** Oldest first. */
   history: OrderHistoryEntry[];
+  /** Its invoices and credit notes, with what is still owed. */
+  invoices: {
+    number: string;
+    kind: 'deposit' | 'final' | 'credit note';
+    date: string;
+    total: Money;
+    residual: Money;
+    paid: boolean;
+  }[];
+  /** Still waiting for the studio (and no deposit paid): the customer may cancel it. */
+  canCancel: boolean;
   createdAt: string;
+}
+
+/** POST /orders/mine/:number/reorder: what went back into the cart. */
+export interface ReorderResult {
+  added: number;
+  /** Lines that could not be added, with why (no longer sold, a choice gone…). */
+  skipped: string[];
 }

@@ -1,6 +1,7 @@
 import {
   OptionKind,
   type OptionGroupView,
+  type OptionValueView,
   type ProductOptionConfig,
 } from '@forgea/types';
 import { Link } from 'react-router';
@@ -91,13 +92,44 @@ export function OptionsConfig({
                   />
                   Customers must choose this
                 </label>
+                {g.kind === OptionKind.CHOICE && (
+                  <div className="flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() =>
+                        update(g.id, {
+                          valueIds: activeValues.map((v) => v.id),
+                          defaultValueId:
+                            config.defaultValueId ??
+                            activeValues[0]?.id ??
+                            null,
+                        })
+                      }
+                    >
+                      Offer all
+                    </button>
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() =>
+                        update(g.id, { valueIds: [], defaultValueId: null })
+                      }
+                    >
+                      None
+                    </button>
+                  </div>
+                )}
                 {g.kind === OptionKind.CHOICE ? (
-                  <div className="grid gap-2 text-sm sm:grid-cols-2">
+                  <ul className="grid gap-1.5 text-sm">
                     {g.values.map((v) => {
                       const offered = config.valueIds.includes(v.id);
                       return (
-                        <div key={v.id} className="flex items-center gap-3">
-                          <label className="flex items-center gap-2">
+                        <li
+                          key={v.id}
+                          className="flex items-start justify-between gap-3 rounded-md px-2 py-1 hover:bg-surface-raised"
+                        >
+                          <label className="flex min-w-0 flex-1 items-start gap-2">
                             <input
                               type="checkbox"
                               name={`value-${v.id}`}
@@ -123,15 +155,23 @@ export function OptionsConfig({
                                 style={{ backgroundColor: v.swatchHex }}
                               />
                             )}
-                            {v.label}
-                            {!v.active && (
-                              <span className="text-xs text-warning">
-                                (off)
-                              </span>
-                            )}
+                            {/* Long names wrap inside the row; the effect goes under them. */}
+                            <span className="min-w-0 break-words">
+                              {v.label}
+                              {!v.active && (
+                                <span className="ml-1 text-xs text-warning">
+                                  (off)
+                                </span>
+                              )}
+                              {effectOf(v) && (
+                                <span className="block text-xs text-text-muted">
+                                  {effectOf(v)}
+                                </span>
+                              )}
+                            </span>
                           </label>
                           {offered && (
-                            <label className="flex items-center gap-1 text-xs text-text-muted">
+                            <label className="flex shrink-0 items-center gap-1 text-xs text-text-muted">
                               <input
                                 type="radio"
                                 name={`default-${g.id}`}
@@ -143,10 +183,10 @@ export function OptionsConfig({
                               default
                             </label>
                           )}
-                        </div>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 ) : (
                   <p className="text-sm text-text-muted">
                     Customers type up to {g.maxLength} characters
@@ -161,4 +201,19 @@ export function OptionsConfig({
       })}
     </div>
   );
+}
+
+/** What a choice does to the price, in a few words: "+$1.50", "material ×1.8". */
+function effectOf(v: OptionValueView): string | null {
+  const parts = [
+    ...(Number(v.extraPrice) > 0 ? [`+$${v.extraPrice}`] : []),
+    ...(Number(v.gramsMultiplier) !== 1
+      ? [`material ×${Number(v.gramsMultiplier)}`]
+      : []),
+    ...(Number(v.hoursMultiplier) !== 1
+      ? [`time ×${Number(v.hoursMultiplier)}`]
+      : []),
+    ...(v.materialId ? ['switches material'] : []),
+  ];
+  return parts.length ? `(${parts.join(', ')})` : null;
 }

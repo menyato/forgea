@@ -103,6 +103,8 @@ export class ProductsService {
       designer: p.designer,
       imageKeys: p.imageKeys,
       options: this.configurator.offered(p),
+      // One size only: show its measurements; with sizes, each choice shows its own.
+      size: p.sizes.length === 0 ? productSize(p) : null,
     };
   }
 
@@ -177,6 +179,26 @@ export class ProductsService {
    * options that would each switch the material.
    */
   private async checkSetup(dto: SaveProductDto): Promise<void> {
+    const measured = [dto.sizeXcm, dto.sizeYcm, dto.sizeZcm].filter(Boolean);
+    if (measured.length % 3 !== 0) {
+      throw new BadRequestException(
+        'Give all three measurements (width, depth, height) or none',
+      );
+    }
+    const labels = dto.sizes.map((s) => s.label.toLowerCase());
+    if (new Set(labels).size !== labels.length) {
+      throw new BadRequestException('Two sizes have the same name');
+    }
+    // Customers tell sizes apart by their measurements alone.
+    const measures = dto.sizes.map(
+      (s) => `${Number(s.sizeXcm)}×${Number(s.sizeYcm)}×${Number(s.sizeZcm)}`,
+    );
+    if (new Set(measures).size !== measures.length) {
+      throw new BadRequestException('Two sizes have the same measurements');
+    }
+    if (dto.sizes.filter((s) => s.isDefault).length > 1) {
+      throw new BadRequestException('Only one size can be the default');
+    }
     if (dto.modelFileKey) {
       await this.uploads.requireClean(
         [dto.modelFileKey],
@@ -239,6 +261,19 @@ export class ProductsService {
       active: p.active,
       modelFileKey: p.modelFileKey,
       imageKeys: p.imageKeys,
+      size: productSize(p),
+      sizes: p.sizes.map((s) => ({
+        id: s.id,
+        label: s.label,
+        size: {
+          x: s.sizeXcm.toString(),
+          y: s.sizeYcm.toString(),
+          z: s.sizeZcm.toString(),
+        },
+        grams: s.grams.toString(),
+        printHours: s.printHours.toString(),
+        isDefault: s.isDefault,
+      })),
       options: p.optionGroups.map((pg) => {
         const values = p.optionValues.filter(
           (v) => v.value.groupId === pg.groupId,
@@ -272,4 +307,15 @@ export class ProductsService {
       createdAt: p.createdAt.toISOString(),
     };
   }
+}
+
+/** The size grams and printHours are for, when it was measured. */
+function productSize(p: ConfigurableProduct) {
+  return p.sizeXcm && p.sizeYcm && p.sizeZcm
+    ? {
+        x: p.sizeXcm.toString(),
+        y: p.sizeYcm.toString(),
+        z: p.sizeZcm.toString(),
+      }
+    : null;
 }

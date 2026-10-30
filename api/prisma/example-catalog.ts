@@ -1,6 +1,6 @@
 // The development examples as a catalog file — the same format the dashboard exports and
 // imports (docs/CATALOG_IMPORT.md) — so the seed exercises the real import path.
-import type { CatalogFile, CatalogProduct } from '@forgea/types';
+import { type CatalogFile, type CatalogProduct, scaledSize } from '@forgea/types';
 import { EXAMPLE_MODELS } from './example-models.ts';
 
 type ModelName = keyof typeof EXAMPLE_MODELS;
@@ -50,12 +50,53 @@ const colour = (values: string[], def: string | null) => ({
   values,
   default: def,
 });
-const size = (values: string[], def: string) => ({
-  group: 'Size',
-  required: true,
-  values,
-  default: def,
+type Cm = { x: string; y: string; z: string };
+const cm = (x: number, y: number, z: number): Cm => ({
+  x: x.toFixed(1),
+  y: y.toFixed(1),
+  z: z.toFixed(1),
 });
+
+/**
+ * The real sizes a product is sold in, from its measured size (which its grams and hours are
+ * for): each label with its height as a share of that one; the other measurements, grams and
+ * hours follow (scaledSize). The first label with share 1 is the default.
+ */
+function sizes(
+  measured: { size: Cm; grams: string; printHours: string },
+  shares: [label: string, share: number][],
+): NonNullable<CatalogProduct['sizes']> {
+  return shares.map(([label, share]) => {
+    const scaled = scaledSize(measured, 'z', Number(measured.size.z) * share);
+    return {
+      label,
+      size: scaled.size,
+      grams: scaled.grams,
+      printHours: scaled.printHours,
+      default: share === 1,
+    };
+  });
+}
+
+/** A product's measured size, and its sizes when it comes in more than one. */
+const measured = (
+  p: { grams: string; printHours: string },
+  size: Cm,
+  shares?: [string, number][],
+) => ({
+  size,
+  ...(shares ? { sizes: sizes({ size, ...p }, shares) } : {}),
+});
+
+const SMALL_STANDARD_LARGE: [string, number][] = [
+  ['Small', 0.75],
+  ['Standard', 1],
+  ['Large', 1.3],
+];
+const STANDARD_LARGE: [string, number][] = [
+  ['Standard', 1],
+  ['Large', 1.3],
+];
 
 export function exampleCatalog(): CatalogFile {
   return {
@@ -83,14 +124,6 @@ export function exampleCatalog(): CatalogFile {
         ],
       },
       {
-        name: 'Size', kind: 'CHOICE', maxLength: null, textExtraPrice: '0', sortOrder: 2, active: true,
-        values: [
-          value('Small', { gramsMultiplier: '0.6', hoursMultiplier: '0.7' }, 0),
-          value('Standard', {}, 1),
-          value('Large', { gramsMultiplier: '1.8', hoursMultiplier: '1.5' }, 2),
-        ],
-      },
-      {
         name: 'Material', kind: 'CHOICE', maxLength: null, textExtraPrice: '0', sortOrder: 3, active: true,
         values: [
           value('PETG (heat-resistant)', { material: 'PETG' }, 0),
@@ -103,6 +136,7 @@ export function exampleCatalog(): CatalogFile {
       // The studio's own mark, as a desk plaque; it stands in the centre of the home page's bed.
       product({
         slug: 'forgea-logo', name: 'Forgea logo plaque', category: 'designer', material: 'PLA', grams: '30', printHours: '2.5',
+        ...measured({ grams: '30', printHours: '2.5' }, cm(10, 10, 1.2)),
         designer: 'Forgea Studio',
         description: 'Our build-plate mark in four printed layers: plate, square, bar and F. A desk piece for makers.',
         options: [colour(['Black', 'Copper silk', ...DESIGNER_COLOURS.slice(0, 3)], 'Black')],
@@ -110,30 +144,35 @@ export function exampleCatalog(): CatalogFile {
       // The designer collection: the studio's own pieces.
       product({
         slug: 'twist-vase', name: 'Twist vase', category: 'designer', material: 'PLA', grams: '95', printHours: '7',
+        ...measured({ grams: '95', printHours: '7' }, cm(9, 9, 18), SMALL_STANDARD_LARGE),
         designer: 'Forgea Studio',
         description: 'Six faces that turn a third of a circle from base to rim. Watertight for fresh flowers.',
-        options: [colour(DESIGNER_COLOURS, 'Sand'), size(['Small', 'Standard', 'Large'], 'Standard')],
+        options: [colour(DESIGNER_COLOURS, 'Sand')],
       }),
       product({
         slug: 'faceted-planter', name: 'Faceted planter', category: 'designer', material: 'PETG', grams: '120', printHours: '8',
+        ...measured({ grams: '120', printHours: '8' }, cm(12, 12, 11), STANDARD_LARGE),
         designer: 'Forgea Studio',
         description: 'An eight-sided planter that opens towards the rim, in plant-safe PETG.',
-        options: [colour(DESIGNER_COLOURS, 'Marble white'), size(['Standard', 'Large'], 'Standard')],
+        options: [colour(DESIGNER_COLOURS, 'Marble white')],
       }),
       product({
         slug: 'ribbed-pen-cup', name: 'Ribbed pen cup', category: 'designer', material: 'PLA', grams: '70', printHours: '4',
+        ...measured({ grams: '70', printHours: '4' }, cm(8, 8, 10)),
         designer: 'Forgea Studio',
         description: 'Twenty ribs catch the light around a desk-sized cup for pens and brushes.',
         options: [colour([...DESIGNER_COLOURS, 'Copper silk'], 'Black')],
       }),
       product({
         slug: 'spiral-tower', name: 'Spiral tower sculpture', category: 'designer', material: 'PLA', grams: '160', printHours: '9',
+        ...measured({ grams: '160', printHours: '9' }, cm(8, 8, 22), [['Small', 0.7], ['Standard', 1]]),
         designer: 'Forgea Studio',
         description: 'Twelve squares, each turned and a little smaller: a quiet desk sculpture.',
-        options: [colour(DESIGNER_COLOURS, 'Ocean silk'), size(['Small', 'Standard'], 'Standard')],
+        options: [colour(DESIGNER_COLOURS, 'Ocean silk')],
       }),
       product({
         slug: 'honeycomb-shelf', name: 'Honeycomb wall shelf', category: 'designer', material: 'PETG', grams: '150', printHours: '9',
+        ...measured({ grams: '150', printHours: '9' }, cm(30, 9, 26)),
         designer: 'Forgea Studio',
         description: 'Seven hexagonal cells for small plants and keepsakes; screws to the wall.',
         options: [colour(DESIGNER_COLOURS, 'Sand')],
@@ -141,16 +180,19 @@ export function exampleCatalog(): CatalogFile {
       // Everyday pieces.
       product({
         slug: 'cable-clip-set', name: 'Cable clip set (6)', category: 'home-desk', material: 'PLA', grams: '25', printHours: '1.5',
+        ...measured({ grams: '25', printHours: '1.5' }, cm(4, 2, 1.5)),
         description: 'Desk-edge clips that keep chargers and cables where you left them.',
         options: [colour(COLOURS, 'Black')],
       }),
       product({
         slug: 'phone-stand', name: 'Phone stand', category: 'home-desk', material: 'PLA', grams: '60', printHours: '3',
+        ...measured({ grams: '60', printHours: '3' }, cm(8, 9.5, 12), SMALL_STANDARD_LARGE),
         description: 'A weighted stand with a charging-cable channel, for portrait or landscape.',
-        options: [colour(COLOURS, 'Black'), size(['Small', 'Standard', 'Large'], 'Standard')],
+        options: [colour(COLOURS, 'Black')],
       }),
       product({
         slug: 'pi-5-case', name: 'Raspberry Pi 5 case', category: 'electronics', material: 'PETG', grams: '120', printHours: '6',
+        ...measured({ grams: '120', printHours: '6' }, cm(9.4, 6.6, 3.2)),
         description: 'Vented case with fan mount and labelled ports. Heat-resistant PETG.',
         options: [
           colour(['Black', 'White'], 'Black'),
@@ -159,22 +201,24 @@ export function exampleCatalog(): CatalogFile {
       }),
       product({
         slug: 'name-keychain', name: 'Custom name keychain', category: 'personalised', material: 'PLA', grams: '10', printHours: '0.75',
+        ...measured({ grams: '10', printHours: '0.75' }, cm(6, 2, 0.4)),
         isCustom: true,
         description: 'Your name or logo, printed in the colour you choose.',
         options: [colour(COLOURS, null), { group: 'Name on it', required: true, values: [], default: null }],
       }),
       product({
         slug: 'lamp-shade', name: 'Desk lamp shade', category: 'home-desk', material: 'PLA', grams: '150', printHours: '9',
+        ...measured({ grams: '150', printHours: '9' }, cm(16, 16, 14), STANDARD_LARGE),
         description: 'Faceted shade that throws a soft pattern on the wall. Fits E27 fittings.',
-        options: [colour(['White', 'Copper silk'], 'White'), size(['Standard', 'Large'], 'Standard')],
+        options: [colour(['White', 'Copper silk'], 'White')],
       }),
       product({
         slug: 'sensor-enclosure', name: 'Outdoor sensor enclosure', category: 'electronics', material: 'ASA', grams: '180', printHours: '10',
+        ...measured({ grams: '180', printHours: '10' }, cm(12, 8, 6), SMALL_STANDARD_LARGE),
         isCustom: true,
         description: 'Sized to your board, with cable glands and a gasket groove. UV-stable ASA.',
         options: [
           { group: 'Material', required: true, values: ['ASA (outdoor, UV-stable)', 'PETG (heat-resistant)'], default: 'ASA (outdoor, UV-stable)' },
-          size(['Small', 'Standard', 'Large'], 'Standard'),
         ],
       }),
     ],

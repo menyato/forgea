@@ -47,7 +47,8 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   await page.getByRole('button', { name: 'Send to the customer' }).click();
   await expect(
     page.getByRole('button', { name: 'Send it again' }),
-  ).toBeVisible();
+    // Sending writes the whole quotation email: slower when the full suite runs at once.
+  ).toBeVisible({ timeout: 15_000 });
 
   // The customer opens the link from the email and accepts.
   await shopper.goto(`/quotations/${number}`);

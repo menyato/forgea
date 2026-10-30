@@ -49,14 +49,32 @@ export interface OptionGroupView {
   values: OptionValueView[];
 }
 
+/**
+ * The choice of a product's own sizes travels like an option, under this group id, so the
+ * cart, checkout and order keep one shape for every choice.
+ */
+export const PRODUCT_SIZE_GROUP_ID = '00000000-0000-4000-8000-000000000051';
+
+/** A printed size in cm: width × depth × height. */
+export interface SizeCm {
+  x: string;
+  y: string;
+  z: string;
+}
+
 /** One option a product offers, as the shop shows it (no price rules: those stay server-side). */
 export interface ProductOption {
   groupId: string;
   name: string;
-  kind: OptionKind;
+  /** 'SIZE': the product's own sizes, each choice its measurements ("13 × 13 × 26 cm"). */
+  kind: OptionKind | 'SIZE';
   required: boolean;
   maxLength: number | null;
-  choices: { id: string; label: string; swatchHex: string | null }[];
+  choices: {
+    id: string;
+    label: string;
+    swatchHex: string | null;
+  }[];
   defaultValueId: string | null;
 }
 
@@ -80,6 +98,8 @@ export interface ProductDetail extends ProductListItem {
   designer: string | null;
   imageKeys: string[];
   options: ProductOption[];
+  /** Its printed size when it comes in one size only (with sizes, each choice says its own). */
+  size: SizeCm | null;
 }
 
 /** How a product offers one option group (dashboard). */
@@ -107,8 +127,21 @@ export interface AdminProduct {
   modelFileKey: string | null;
   imageKeys: string[];
   options: ProductOptionConfig[];
+  /** The printed size grams and printHours are for, measured from the model. */
+  size: SizeCm | null;
+  sizes: ProductSizeView[];
   /** Base price with default options, from the current pricing settings. */
   price: Money;
+}
+
+/** A size a product is sold in (dashboard): its measurements and what it takes to print. */
+export interface ProductSizeView {
+  id?: string;
+  label: string;
+  size: SizeCm;
+  grams: string;
+  printHours: string;
+  isDefault: boolean;
 }
 
 export interface AdminProductListItem {

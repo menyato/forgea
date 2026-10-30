@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { UnitCostCalculator } from '@forgea/pricing';
+import { PRODUCT_SIZE_GROUP_ID } from '@forgea/types';
 import { Prisma } from '../generated/prisma/client.js';
 import { OptionKind } from '../generated/prisma/enums.js';
 import {
@@ -65,6 +66,10 @@ function product(): ConfigurableProduct {
     printHours: D(1),
     materialId: 'm',
     material: { code: 'PLA', name: 'PLA', pricePerGram: D('0.10') },
+    sizeXcm: null,
+    sizeYcm: null,
+    sizeZcm: null,
+    sizes: [],
     isCustom: false,
     designer: null,
     active: true,
@@ -239,5 +244,81 @@ describe('ProductConfigurator', () => {
     ]);
     // 10 g × 2 × $0.10 = $2.00, + $2 copper + $1 text = $5.00
     expect(configurator.unitPrice(calculator, product(), c)).toBe('5.00');
+  });
+
+  describe('real sizes', () => {
+    const calculator = new UnitCostCalculator({
+      machineRatePerHour: 0,
+      purgeWastePercent: 0,
+      failureAllowancePercent: 0,
+      laborCostPerUnit: 0,
+      packagingCostPerUnit: 0,
+      markupMultiplier: 1,
+    });
+    const size = (
+      id: string,
+      label: string,
+      grams: number,
+      isDefault = false,
+    ) => ({
+      id,
+      productId: 'p',
+      label,
+      sizeXcm: D('10.0'),
+      sizeYcm: D('8.0'),
+      sizeZcm: D(grams / 10),
+      grams: D(grams),
+      printHours: D(1),
+      isDefault,
+      sortOrder: 0,
+    });
+    // Real sizes replace the old shared Size option on this product.
+    const sized = (): ConfigurableProduct => ({
+      ...product(),
+      optionGroups: product().optionGroups.filter((g) => g.groupId !== 'size'),
+      sizes: [size('s', 'Small', 10), size('l', 'Large', 40, true)],
+    });
+
+    it('offers them first, by their measurements only (names stay in the dashboard)', () => {
+      const [first] = configurator.offered(sized());
+      expect(first).toMatchObject({
+        name: 'Size',
+        kind: 'SIZE',
+        required: true,
+        defaultValueId: 'l',
+        choices: [
+          { id: 's', label: '10 × 8 × 1 cm' },
+          { id: 'l', label: '10 × 8 × 4 cm' },
+        ],
+      });
+    });
+
+    it('prices with the grams of the chosen size; the order keeps its name and measurements', () => {
+      const c = configurator.configure(sized(), [
+        { groupId: PRODUCT_SIZE_GROUP_ID, valueId: 's' },
+      ]);
+      expect(c.chosen).toContainEqual({
+        group: 'Size',
+        value: '10 × 8 × 1 cm',
+      });
+      // 10 g × $0.10 = $1.00 (the default black adds nothing)
+      expect(configurator.unitPrice(calculator, sized(), c)).toBe('1.00');
+      // The default size, Large: 40 g × $0.10 = $4.00
+      expect(
+        configurator.unitPrice(
+          calculator,
+          sized(),
+          configurator.starting(sized()),
+        ),
+      ).toBe('4.00');
+    });
+
+    it('refuses a size the product does not have', () => {
+      expect(() =>
+        configurator.configure(sized(), [
+          { groupId: PRODUCT_SIZE_GROUP_ID, valueId: 'x' },
+        ]),
+      ).toThrow(BadRequestException);
+    });
   });
 });

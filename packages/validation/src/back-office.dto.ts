@@ -30,6 +30,7 @@ import {
   MONEY_PATTERN,
   PERCENT_PATTERN,
   PHONE_PATTERN,
+  SIZE_CM_PATTERN,
 } from './constants.js';
 import { NormalizeEmail, QueryBoolean, Trim } from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
@@ -188,8 +189,6 @@ export class LeadListQuery extends CursorPageQuery {
 
 // Sales -------------------------------------------------------------------
 
-/** 0.1 to 9999.9 cm, one decimal at most. */
-const SIZE_CM = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
 const sizeMessage = { message: 'A size in cm, e.g. 12.5' };
 
 export class QuotationLineDto {
@@ -221,15 +220,15 @@ export class QuotationLineDto {
 
   /** The printed size in cm (width × depth × height): all three, or none. */
   @IsOptional()
-  @Matches(SIZE_CM, sizeMessage)
+  @Matches(SIZE_CM_PATTERN, sizeMessage)
   sizeXcm?: string;
 
   @IsOptional()
-  @Matches(SIZE_CM, sizeMessage)
+  @Matches(SIZE_CM_PATTERN, sizeMessage)
   sizeYcm?: string;
 
   @IsOptional()
-  @Matches(SIZE_CM, sizeMessage)
+  @Matches(SIZE_CM_PATTERN, sizeMessage)
   sizeZcm?: string;
 }
 

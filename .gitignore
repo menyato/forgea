@@ -40,7 +40,9 @@ manual-testing/
 deploy/**/*.env
 !deploy/env/*.env.example
 *.pem
-forgea-deploy-*
+# The deploy keys made in deploy/README.md (the gate script next to them is code, kept)
+forgea-deploy-staging*
+forgea-deploy-production*
 backup-key.json
 
 # Brand kit, Instagram reels/posts and video work: large media, kept out of git (marketing/README.md)

@@ -1,12 +1,16 @@
-import type {
-  AdminProduct,
-  CategoryView,
-  MaterialView,
-  OptionGroupView,
-  ProductOptionConfig,
+import {
+  type AdminProduct,
+  type CategoryView,
+  formatSizeCm,
+  type MaterialView,
+  type OptionGroupView,
+  type ProductOptionConfig,
+  type ProductSizeView,
+  type SizeCm,
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
+import type { loader as productLoader } from './route';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import {
@@ -20,6 +24,7 @@ import type { SaveResult } from '~/features/admin/staff.server';
 import { ImagesField } from './images-field';
 import { ModelField } from './model-field';
 import { OptionsConfig } from './options-config';
+import { NO_SIZE, SizesEditor } from './sizes-editor';
 
 const slugify = (s: string) =>
   s
@@ -33,8 +38,11 @@ export function ProductForm({
   categories,
   materials,
   groups,
+  others,
 }: {
   product: AdminProduct | null;
+  /** Other products, to copy their options from. */
+  others: readonly { id: string; name: string }[];
   categories: readonly CategoryView[];
   materials: readonly MaterialView[];
   groups: readonly OptionGroupView[];
@@ -56,10 +64,16 @@ export function ProductForm({
   const [options, setOptions] = useState<ProductOptionConfig[]>(
     product?.options ?? [],
   );
-  const suggest = useCallback((e: { grams: string; printHours: string }) => {
-    setGrams(e.grams);
-    setHours(e.printHours);
-  }, []);
+  const [measured, setMeasured] = useState<SizeCm>(product?.size ?? NO_SIZE);
+  const [sizes, setSizes] = useState<ProductSizeView[]>(product?.sizes ?? []);
+  const suggest = useCallback(
+    (e: { grams: string; printHours: string; size: SizeCm }) => {
+      setGrams(e.grams);
+      setHours(e.printHours);
+      setMeasured(e.size);
+    },
+    [],
+  );
   const optionErrors = Object.entries(errors)
     .filter(([k]) => k.startsWith('options'))
     .map(([, m]) => m);
@@ -90,6 +104,25 @@ export function ProductForm({
           value={JSON.stringify(imageKeys)}
         />
         <input type="hidden" name="options" value={JSON.stringify(options)} />
+        <input type="hidden" name="sizeXcm" value={measured.x} />
+        <input type="hidden" name="sizeYcm" value={measured.y} />
+        <input type="hidden" name="sizeZcm" value={measured.z} />
+        <input
+          type="hidden"
+          name="sizes"
+          value={JSON.stringify(
+            sizes.map((s) => ({
+              // An emptied name: the size goes by its measurements.
+              label: s.label.trim() || formatSizeCm(s.size),
+              sizeXcm: s.size.x,
+              sizeYcm: s.size.y,
+              sizeZcm: s.size.z,
+              grams: s.grams,
+              printHours: s.printHours,
+              isDefault: s.isDefault,
+            })),
+          )}
+        />
 
         <Panel title="Details">
           <Field
@@ -207,7 +240,20 @@ export function ProductForm({
           )}
         </Panel>
 
+        <Panel title="Size">
+          <SizesEditor
+            measured={measured}
+            onMeasured={setMeasured}
+            sizes={sizes}
+            onSizes={setSizes}
+            grams={grams}
+            printHours={hours}
+            errors={errors}
+          />
+        </Panel>
+
         <Panel title="Options customers choose">
+          <CopyOptions others={others} onCopy={setOptions} />
           <OptionsConfig
             groups={groups}
             value={options}
@@ -237,6 +283,48 @@ export function ProductForm({
           <SaveStatus state={fetcher.state} result={fetcher.data} />
         </div>
       </fetcher.Form>
+    </div>
+  );
+}
+
+/** Another product's colours, materials and other options, in one click (sizes stay this product's). */
+function CopyOptions({
+  others,
+  onCopy,
+}: {
+  others: readonly { id: string; name: string }[];
+  onCopy: (options: ProductOptionConfig[]) => void;
+}) {
+  const source = useFetcher<typeof productLoader>();
+  const [from, setFrom] = useState('');
+  const loaded = source.data?.product;
+  if (others.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-end gap-2 border-b border-border pb-3">
+      <SelectField
+        label="Same options as"
+        name="copy-options-from"
+        value={from}
+        onChange={(e) => {
+          setFrom(e.currentTarget.value);
+          if (e.currentTarget.value)
+            source.load(`/admin/products/${e.currentTarget.value}`);
+        }}
+      >
+        <option value="">Choose a product…</option>
+        {others.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </SelectField>
+      <Button
+        variant="secondary"
+        disabled={!from || source.state !== 'idle' || loaded?.id !== from}
+        onClick={() => loaded && onCopy(loaded.options)}
+      >
+        Copy its options
+      </Button>
     </div>
   );
 }

@@ -82,6 +82,16 @@ export interface CatalogProduct {
     values: string[];
     default: string | null;
   }[];
+  /** The printed size grams and printHours are for (optional in older files). */
+  size?: { x: string; y: string; z: string } | null;
+  /** The real sizes it is sold in (optional in older files). */
+  sizes?: {
+    label: string;
+    size: { x: string; y: string; z: string };
+    grams: string;
+    printHours: string;
+    default: boolean;
+  }[];
 }
 
 /** What an import did, per kind of entry. */

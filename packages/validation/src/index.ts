@@ -55,6 +55,7 @@ export {
   OptionSelectionDto,
   ProductOptionConfigDto,
   ProductPriceDto,
+  ProductSizeDto,
   SaveCategoryDto,
   SaveMaterialDto,
   SaveOptionGroupDto,

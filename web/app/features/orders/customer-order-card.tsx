@@ -1,5 +1,7 @@
 import { ORDER_STATUS_LABELS, type CustomerOrder } from '@forgea/types';
+import { Form, useNavigation } from 'react-router';
 import { Money } from '~/components/money';
+import { Button } from '~/components/ui/button';
 import { OrderTimeline } from './order-timeline';
 
 const placed = new Intl.DateTimeFormat('en-GB', {
@@ -68,10 +70,82 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
           {order.paymentMethod === 'COD' ? 'cash on delivery' : 'bank transfer'}
         </p>
       </div>
+      {order.invoices.length > 0 && (
+        <section aria-label="Invoices" className="grid gap-2">
+          <h3 className="text-sm font-semibold">Invoices</h3>
+          <ul className="grid gap-1 text-sm">
+            {order.invoices.map((i) => (
+              <li
+                key={i.number}
+                className="flex flex-wrap justify-between gap-2"
+              >
+                <span>
+                  <span className="font-mono">{i.number}</span>{' '}
+                  <span className="text-text-muted">
+                    · {i.kind} · {new Date(i.date).toLocaleDateString('en-GB')}
+                  </span>
+                </span>
+                <span>
+                  <Money amount={i.total} />{' '}
+                  {i.paid ? (
+                    <span className="text-success">paid</span>
+                  ) : (
+                    <span className="text-warning">
+                      <Money amount={i.residual} /> to pay
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <OrderActions order={order} />
       <section aria-label="Status history">
         <h3 className="mb-3 text-sm font-semibold">Progress</h3>
         <OrderTimeline history={order.history} />
       </section>
     </article>
+  );
+}
+
+/** "Order again", and cancelling while the studio hasn't started (the API checks both). */
+function OrderActions({ order }: { order: CustomerOrder }) {
+  const busy = useNavigation().state !== 'idle';
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Form method="post">
+        <input type="hidden" name="number" value={order.orderNumber} />
+        <Button
+          type="submit"
+          name="intent"
+          value="reorder"
+          variant="secondary"
+          disabled={busy}
+        >
+          Order again
+        </Button>
+      </Form>
+      {order.canCancel && (
+        <Form
+          method="post"
+          onSubmit={(e) => {
+            if (!window.confirm(`Cancel order ${order.orderNumber}?`))
+              e.preventDefault();
+          }}
+        >
+          <input type="hidden" name="number" value={order.orderNumber} />
+          <Button
+            type="submit"
+            name="intent"
+            value="cancel"
+            variant="quiet"
+            disabled={busy}
+          >
+            Cancel this order
+          </Button>
+        </Form>
+      )}
+    </div>
   );
 }

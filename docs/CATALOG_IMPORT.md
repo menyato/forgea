@@ -91,12 +91,22 @@ theirs.
       "images": [],
       "options": [
         { "group": "Colour", "required": true, "values": ["Sand", "Black"], "default": "Sand" }
+      ],
+      "size": { "x": "9.0", "y": "9.0", "z": "18.0" },
+      "sizes": [
+        { "label": "Small", "size": { "x": "6.8", "y": "6.8", "z": "13.5" },
+          "grams": "40.08", "printHours": "2.95", "default": false },
+        { "label": "Standard", "size": { "x": "9.0", "y": "9.0", "z": "18.0" },
+          "grams": "95.00", "printHours": "7.00", "default": true }
       ] }
   ]
 }
 ```
 
-Money and measurements are strings (`"12.50"`), so no rounding happens on the way. `material`
+Money and measurements are strings (`"12.50"`), so no rounding happens on the way. `size` is
+the printed size in cm (width, depth, height) that `grams` and `printHours` are for; `sizes` are
+the real sizes a product is sold in, each with its own measurements, grams and hours (both are
+optional, so older files still import). `material`
 on an option value is the code of the material it switches to. Files are base64 inside the
 JSON; a catalog with many large models can be hundreds of MB, in which case use the command
 line.

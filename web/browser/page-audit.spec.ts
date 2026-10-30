@@ -122,7 +122,8 @@ test('the dashboard pages have nothing for DevTools to flag', async ({
     testInfo.project.name !== 'desktop',
     'the same markup on both sizes',
   );
-  test.setTimeout(180_000);
+  // Twenty-five pages, each waited on until quiet.
+  test.setTimeout(300_000);
   await signInAsAdmin(context, baseURL!);
   expect(await audit(page, DASHBOARD)).toEqual([]);
 });

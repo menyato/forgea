@@ -38,7 +38,7 @@ export function Field({
 }: FieldProps & InputHTMLAttributes<HTMLInputElement>) {
   const id = useId();
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
@@ -65,7 +65,7 @@ export function TextAreaField({
 }: FieldProps & TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const id = useId();
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
@@ -94,7 +94,7 @@ export function SelectField({
   SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   const id = useId();
   return (
-    <div className="grid gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>

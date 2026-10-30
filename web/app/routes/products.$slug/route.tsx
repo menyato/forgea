@@ -1,5 +1,6 @@
 import { CurrencyConverter, type OrderSettings } from '@forgea/pricing';
 import {
+  formatSizeCm,
   type CurrencyQuote,
   OptionKind,
   type OptionSelection,
@@ -175,6 +176,12 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
           <p className="max-w-[60ch] text-lg text-text-muted">
             {product.description}
           </p>
+          {product.size && (
+            <p className="text-sm">
+              Size: {formatSizeCm(product.size)}{' '}
+              <span className="text-text-muted">(width × depth × height)</span>
+            </p>
+          )}
           {product.designer && (
             <p className="text-sm">Designed by {product.designer}</p>
           )}

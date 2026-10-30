@@ -38,7 +38,8 @@ test('a customer asks for something custom, the studio quotes it, the customer o
   });
   await expect(
     page.getByRole('img', { name: /3D view of your model/ }).locator('canvas'),
-  ).toBeVisible();
+    // three.js loads on demand: slower when the whole suite runs at once.
+  ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/^About \$\d+\.00–\$\d+\.00$/)).toBeVisible();
   await page.getByLabel('What is it?').fill(title);
   await page

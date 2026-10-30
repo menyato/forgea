@@ -72,6 +72,23 @@ test('a visitor browses without an account, signs up at checkout and pays by tra
   await addPhoneStandToCart(page);
   await page.goto('/checkout');
   await expect(page.getByLabel('Phone')).toHaveValue('70 123 456');
+
+  // From My orders: the same order again, then cancelling it before the studio starts.
+  await page.goto('/orders');
+  const card = page.getByRole('article', { name: orderNumber });
+  await card.getByRole('button', { name: 'Order again' }).click();
+  await expect(page.getByText(/back in your cart/)).toBeVisible();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page
+    .getByRole('article', { name: orderNumber })
+    .getByRole('button', { name: 'Cancel this order' })
+    .click();
+  await expect(page.getByText('Your order is cancelled.')).toBeVisible();
+  await expect(
+    page
+      .getByRole('article', { name: orderNumber })
+      .getByRole('button', { name: 'Cancel this order' }),
+  ).toHaveCount(0);
 });
 
 test('the theme button cycles Auto → Light → Dark and is remembered', async ({

@@ -101,6 +101,25 @@ export class CatalogExporter {
               default: values.find((v) => v.isDefault)?.value.label ?? null,
             };
           }),
+          size:
+            p.sizeXcm && p.sizeYcm && p.sizeZcm
+              ? {
+                  x: p.sizeXcm.toString(),
+                  y: p.sizeYcm.toString(),
+                  z: p.sizeZcm.toString(),
+                }
+              : null,
+          sizes: p.sizes.map((s) => ({
+            label: s.label,
+            size: {
+              x: s.sizeXcm.toString(),
+              y: s.sizeYcm.toString(),
+              z: s.sizeZcm.toString(),
+            },
+            grams: s.grams.toString(),
+            printHours: s.printHours.toString(),
+            default: s.isDefault,
+          })),
         })),
       ),
     };

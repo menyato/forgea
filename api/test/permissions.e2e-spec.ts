@@ -36,6 +36,8 @@ const CUSTOMER_ROUTES = [
   'POST /auth/verify-email/resend',
   'POST /orders/checkout',
   'GET /orders/mine',
+  'POST /orders/mine/:number/cancel',
+  'POST /orders/mine/:number/reorder',
   'GET /custom-requests/mine',
   'GET /custom-requests/mine/:number',
   'POST /custom-requests',

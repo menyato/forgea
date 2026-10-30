@@ -97,3 +97,8 @@ export const REQUEST_DESCRIPTION_MAX_LENGTH = 4000;
 export const REQUEST_QUANTITY_MAX = 1000;
 /** The largest upload limit the owner can set for customer files, in MB. */
 export const CUSTOM_UPLOAD_CEILING_MB = 100;
+
+/** A printed size in cm: 0.1 to 9999.9, one decimal at most (quotations, product sizes). */
+export const SIZE_CM_PATTERN = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
+/** Sizes a product can be sold in. */
+export const PRODUCT_SIZES_MAX = 10;
