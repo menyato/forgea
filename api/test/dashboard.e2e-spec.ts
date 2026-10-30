@@ -233,7 +233,7 @@ describe('Dashboard (e2e)', () => {
       expect(back.body).toMatchObject({ role: 'ADMIN', disabled: false });
     });
 
-    it('refuses changing yourself, customers, and removing the last admin', async () => {
+    it('refuses changing yourself, customers, and anyone switched off demoting the last admin', async () => {
       const admin = await signedInAs(app, Role.ADMIN);
       await as(admin.cookie)
         .put(`/users/${admin.user.id}/team`, { role: 'STAFF', active: true })
@@ -246,7 +246,10 @@ describe('Dashboard (e2e)', () => {
         .put(`/users/${randomUUID()}/team`, { role: 'STAFF', active: true })
         .expect(404);
 
-      // With every other admin switched off, this one can't be demoted by anyone.
+      // With every other admin switched off, this one can't be demoted: those admins' tokens are
+      // still valid, but the API reads who is switched off from the database on every call.
+      // (The 'at least one admin' rule stays as a second line: an active admin acting on another
+      // always leaves one.)
       const other = await signedInAs(app, Role.ADMIN);
       const others = await prisma.user.findMany({
         where: { role: 'ADMIN', disabledAt: null, id: { not: admin.user.id } },
@@ -257,10 +260,16 @@ describe('Dashboard (e2e)', () => {
         data: { disabledAt: new Date() },
       });
       try {
-        const res = await as(other.cookie)
+        await as(other.cookie)
           .put(`/users/${admin.user.id}/team`, { role: 'STAFF', active: true })
-          .expect(400);
-        expect(res.body.message).toMatch(/at least one admin/);
+          .expect(403);
+        expect(
+          (
+            await prisma.user.findUniqueOrThrow({
+              where: { id: admin.user.id },
+            })
+          ).role,
+        ).toBe('ADMIN');
       } finally {
         await prisma.user.updateMany({
           where: { id: { in: others.map((o) => o.id) } },
@@ -342,6 +351,77 @@ describe('Dashboard (e2e)', () => {
           },
         }),
       ).toBe(3);
+    });
+
+    it('saved themes: keep several, switch the live site between them for everyone, delete one', async () => {
+      await prisma.siteTheme.deleteMany();
+      await prisma.savedTheme.deleteMany();
+      const admin = await signedInAs(app, Role.ADMIN);
+      const a = as(admin.cookie);
+      await as((await signedInAs(app, Role.STAFF)).cookie)
+        .get('/site-theme/saved')
+        .expect(403);
+
+      await a
+        .post('/site-theme/saved', {
+          name: 'Ramadan',
+          palette: palettes.maroon,
+          basedOn: 'maroon',
+        })
+        .expect(201);
+      const list = (
+        await a
+          .post('/site-theme/saved', {
+            name: 'Summer',
+            palette: palettes.resin,
+            basedOn: 'resin',
+          })
+          .expect(201)
+      ).body;
+      expect(list.map((t: { name: string }) => t.name)).toEqual([
+        'Ramadan',
+        'Summer',
+      ]);
+      // Keeping one changes nothing on the site.
+      expect((await http().get('/site-theme')).body).toEqual({ theme: null });
+      await a
+        .post('/site-theme/saved', {
+          name: '',
+          palette: palettes.resin,
+          basedOn: 'resin',
+        })
+        .expect(400);
+      await a
+        .post('/site-theme/saved', {
+          name: 'Broken',
+          palette: { ...palettes.resin, red: 'red' },
+          basedOn: 'resin',
+        })
+        .expect(400);
+
+      const summer = list.find((t: { name: string }) => t.name === 'Summer');
+      await a.post(`/site-theme/saved/${summer.id}/apply`, {}).expect(201);
+      // What every visitor's page reads: no account needed.
+      expect((await http().get('/site-theme')).body.theme).toMatchObject({
+        palette: palettes.resin,
+        basedOn: 'resin',
+      });
+      const live = (await a.get('/site-theme/saved').expect(200)).body;
+      expect(
+        live.map((t: { name: string; live: boolean }) => [t.name, t.live]),
+      ).toEqual([
+        ['Ramadan', false],
+        ['Summer', true],
+      ]);
+
+      // Back to the defaults: the first palette, not the last saved one.
+      await a.delete('/site-theme').expect(200, { theme: null });
+      expect((await http().get('/site-theme')).body).toEqual({ theme: null });
+
+      await a.delete(`/site-theme/saved/${summer.id}`).expect(200);
+      await a.delete(`/site-theme/saved/${summer.id}`).expect(404);
+      await a.post(`/site-theme/saved/${summer.id}/apply`, {}).expect(404);
+      await prisma.savedTheme.deleteMany();
     });
   });
 

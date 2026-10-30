@@ -134,7 +134,8 @@ export class Invoicing {
   async list(take = 100): Promise<InvoiceListItem[]> {
     const entries = await this.prisma.journalEntry.findMany({
       where: { type: { in: [EntryType.INVOICE, EntryType.CREDIT_NOTE] } },
-      orderBy: { createdAt: 'desc' },
+      // Newest first by id (UUIDv7: creation order, already indexed).
+      orderBy: { id: 'desc' },
       take,
       include: withLines,
     });

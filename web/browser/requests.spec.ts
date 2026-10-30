@@ -1,4 +1,5 @@
-import type { Page } from '@playwright/test';
+import { palettes } from '@forgea/brand';
+import type { Browser, Page } from '@playwright/test';
 import { cube } from '../../api/prisma/example-models';
 import { signInAsAdmin } from './admin-session';
 import { expect, test } from './fixtures';
@@ -140,8 +141,81 @@ test('the owner changes the site palette; every page follows; then goes back', a
   expect(await accent()).toBe('#8a1538');
   await page.goto('/admin/theme');
 
-  await page.getByRole('button', { name: 'Back to the default' }).click();
+  await page
+    .getByRole('button', { name: 'Back to the original colours' })
+    .click();
   await expect(saved(page)).toBeVisible();
   await page.goto('/shop');
   expect(await accent()).toBe('#c87533');
+});
+
+/** A second visitor in their own browser. */
+async function visitorBrowser(browser: Browser, baseURL: string) {
+  const context = await browser.newContext({
+    baseURL,
+    extraHTTPHeaders: {
+      'cf-connecting-ip': `198.18.${Math.floor(Math.random() * 254) + 1}.78`,
+    },
+  });
+  return { context, page: await context.newPage() };
+}
+
+test('saved themes switch the whole site for every visitor; "back to the original" really goes back', async ({
+  page,
+  context,
+  baseURL,
+  browser,
+}, testInfo) => {
+  // The site has one theme: change it from one run only.
+  test.skip(
+    testInfo.project.name !== 'desktop',
+    'one site theme, changed once',
+  );
+  await signInAsAdmin(context, baseURL!);
+  const visitor = await visitorBrowser(browser, baseURL!);
+  const visitorStyle = async () => {
+    await visitor.page.goto('/');
+    return (await visitor.page.locator('head').innerHTML()).toLowerCase();
+  };
+  const name = `Test ${Date.now().toString(36)}`;
+  try {
+    await page.goto('/admin/theme');
+    await page.getByRole('button', { name: /resin/i }).first().click();
+    await page.getByLabel('Name').fill(name);
+    await page
+      .getByRole('button', { name: 'Save these colours as a theme' })
+      .click();
+    const saved = page.getByRole('listitem').filter({ hasText: name });
+    await expect(saved).toBeVisible();
+    // Keeping it changes nothing for visitors yet.
+    expect(await visitorStyle()).not.toContain(
+      palettes.resin.accent.toLowerCase(),
+    );
+
+    await saved
+      .getByRole('button', { name: `Use ${name} on the site` })
+      .click();
+    await expect(saved.getByText('On the site now')).toBeVisible();
+    // A visitor without an account gets the new colours on their next page.
+    expect(await visitorStyle()).toContain(palettes.resin.accent.toLowerCase());
+
+    await page
+      .getByRole('button', { name: 'Back to the original colours' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Back to the original colours' }),
+    ).toHaveCount(0);
+    expect(await visitorStyle()).not.toContain(
+      palettes.resin.accent.toLowerCase(),
+    );
+    // The editor shows the original palette again, not the last colours.
+    await expect(saved.getByText('On the site now')).toHaveCount(0);
+
+    await saved.getByRole('button', { name: `Delete ${name}` }).click();
+    await expect(
+      page.getByRole('listitem').filter({ hasText: name }),
+    ).toHaveCount(0);
+  } finally {
+    await visitor.context.close();
+  }
 });

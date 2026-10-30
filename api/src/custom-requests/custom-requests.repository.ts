@@ -92,10 +92,23 @@ export class CustomRequestsRepository {
   }
 
   /** The dashboard inbox. */
+  /** How many in each status: the numbers on the dashboard's tabs. */
+  async countByStatus(): Promise<Partial<Record<CustomRequestStatus, number>>> {
+    const rows = await this.prisma.customRequest.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    return Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
+  }
+
   list(query: CustomRequestListQuery) {
     const q = query.q?.trim();
     return this.page(query, {
-      ...(query.status ? { status: query.status } : {}),
+      ...(query.statuses?.length
+        ? { status: { in: query.statuses } }
+        : query.status
+          ? { status: query.status }
+          : {}),
       ...(q
         ? {
             OR: [

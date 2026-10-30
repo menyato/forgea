@@ -1,6 +1,6 @@
 /// Shop-wide settings the owner edits in the dashboard. Exactly one row (id = 1).
 model StoreSettings {
-  id                   Int      @id @default(1)
+  id                   Int     @id @default(1)
   /// Customers pay "transfer" orders by sending money to this number (Whish, OMTâ¦).
   transferPhone        String
   /// Optional extra instructions shown with the number, e.g. which apps are accepted.
@@ -10,18 +10,24 @@ model StoreSettings {
 
   // Custom requests (owner decisions 2026-10-27; see docs/CUSTOM_REQUESTS.md).
   /// A quote the customer hasn't answered within this many days expires.
-  quoteValidityDays       Int     @default(7)
+  quoteValidityDays       Int      @default(7)
   /// Whether the deposit is refunded when the customer cancels before printing starts.
-  depositRefundable       Boolean @default(true)
+  depositRefundable       Boolean  @default(true)
   /// Largest file a customer may attach to a request, in MB (at most 100, the upload ceiling).
-  customUploadMaxMb       Int     @default(50)
+  customUploadMaxMb       Int      @default(50)
   /// Instant estimates for an attached 3D model: how solid the print is assumed to be…
-  estimateSolidityPercent Int     @default(40)
+  estimateSolidityPercent Int      @default(40)
   /// …and how wide the shown range is around the computed price (±%).
-  estimateSpreadPercent   Int     @default(20)
-  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
-  updatedByUserId      String?  @db.Uuid
-  updatedBy            User?    @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  estimateSpreadPercent   Int      @default(20)
+  // The quotation email in the owner's words; empty means the standard wording
+  // (QUOTATION_EMAIL_DEFAULTS in @forgea/types). {name}, {number}, {total} and {validUntil} are
+  // filled in; the lines, sizes and totals always follow the introduction.
+  quotationEmailSubject   String?
+  quotationEmailIntro     String?
+  quotationEmailClosing   String?
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+  updatedByUserId         String?  @db.Uuid
+  updatedBy               User?    @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)
 
   @@map("store_settings")
 }

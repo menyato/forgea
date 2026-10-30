@@ -1,9 +1,11 @@
-import { type InvoiceListItem, Role } from '@forgea/types';
-import { Link } from 'react-router';
+import type { InvoiceListItem } from '@forgea/types';
+import { Link, useSearchParams } from 'react-router';
 import { buttonClass } from '~/components/ui/button';
+import { can } from '~/features/admin/access';
 import { AdminHeader, Panel } from '~/features/admin/admin-ui';
 import { staffContext } from '~/features/admin/staff.server';
 import { InvoiceTable } from '~/features/accounting/invoice-table';
+import { ViewTabs } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -14,12 +16,26 @@ export async function loader({ context }: Route.LoaderArgs) {
   if (!r.ok) throw new Response(r.message, { status: r.status });
   return {
     invoices: r.data,
-    admin: context.get(staffContext).role === Role.ADMIN,
+    books: can(context.get(staffContext), 'books.view'),
   };
 }
 
 export default function Accounting({ loaderData }: Route.ComponentProps) {
-  const { invoices, admin } = loaderData;
+  const { invoices, books } = loaderData;
+  const tab = useSearchParams()[0].get('tab') ?? 'unpaid';
+  const unpaid = invoices.filter(
+    (i) => i.type === 'INVOICE' && Number(i.residual) > 0,
+  );
+  const shown =
+    tab === 'unpaid'
+      ? unpaid
+      : tab === 'paid'
+        ? invoices.filter(
+            (i) => i.type === 'INVOICE' && Number(i.residual) <= 0,
+          )
+        : tab === 'credit'
+          ? invoices.filter((i) => i.type !== 'INVOICE')
+          : invoices;
   const owed = invoices
     .filter((i) => i.type === 'INVOICE')
     .reduce((s, i) => s + Number(i.residual), 0);
@@ -29,7 +45,7 @@ export default function Accounting({ loaderData }: Route.ComponentProps) {
         title="Invoices"
         intro="Invoices are made by the orders themselves: a deposit invoice when the deposit arrives, the final invoice on delivery (cash on delivery is recorded as paid). Record other payments from the order's page."
         action={
-          admin ? (
+          books ? (
             <span className="flex gap-2">
               <Link
                 to="/admin/accounting/reports"
@@ -48,7 +64,17 @@ export default function Accounting({ loaderData }: Route.ComponentProps) {
         }
       />
       <Panel title={`Still owed: $${owed.toFixed(2)}`}>
-        <InvoiceTable invoices={invoices} />
+        <ViewTabs
+          label="Invoice groups"
+          current={tab}
+          tabs={[
+            { key: 'unpaid', label: 'Unpaid', count: unpaid.length },
+            { key: 'paid', label: 'Paid' },
+            { key: 'credit', label: 'Credit notes' },
+            { key: 'all', label: 'All' },
+          ]}
+        />
+        <InvoiceTable invoices={shown} />
       </Panel>
     </>
   );

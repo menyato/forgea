@@ -51,29 +51,31 @@ model Lead {
   referenceUpload   Upload?    @relation(fields: [referenceUploadId], references: [id], onDelete: SetNull)
   budgetRange       String?
 
-  stageId         String      @db.Uuid
-  stage           LeadStage   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  stageId         String         @db.Uuid
+  stage           LeadStage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
   /// 0–100. 100 in the won stage, 0 once lost.
-  probability     Int         @default(10)
+  probability     Int            @default(10)
   /// USD. Prorated revenue (expected × probability) is computed, not stored.
-  expectedRevenue Decimal?    @db.Decimal(12, 2)
+  expectedRevenue Decimal?       @db.Decimal(12, 2)
   /// Expected closing date.
-  deadline        DateTime?   @db.Date
-  assignedToId    String?     @db.Uuid
-  assignedTo      User?       @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  deadline        DateTime?      @db.Date
+  assignedToId    String?        @db.Uuid
+  assignedTo      User?          @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   /// The customer's account, when they have one.
-  customerId      String?     @db.Uuid
-  customer        User?       @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  customRequestId String?     @unique @db.Uuid
+  customerId      String?        @db.Uuid
+  customer        User?          @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  customRequestId String?        @unique @db.Uuid
   customRequest   CustomRequest? @relation(fields: [customRequestId], references: [id], onDelete: SetNull)
   /// Set when won or lost; null while open.
-  closedAt        DateTime?   @db.Timestamptz(3)
-  lostReasonId    String?     @db.Uuid
-  lostReason      LostReason? @relation(fields: [lostReasonId], references: [id], onDelete: Restrict)
-  stageChangedAt  DateTime    @default(now()) @db.Timestamptz(3)
+  closedAt        DateTime?      @db.Timestamptz(3)
+  lostReasonId    String?        @db.Uuid
+  lostReason      LostReason?    @relation(fields: [lostReasonId], references: [id], onDelete: Restrict)
+  stageChangedAt  DateTime       @default(now()) @db.Timestamptz(3)
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  /// When someone in the team first opened it: unopened leads are the "New" tab.
+  openedAt  DateTime? @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
 
   activities LeadActivity[]
   notes      LeadNote[]

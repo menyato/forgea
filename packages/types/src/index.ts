@@ -28,15 +28,35 @@ export {
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABELS,
 } from './order-status.js';
-export type { RequestSettings, StoreSettings } from './store.js';
+export type {
+  QuotationEmailSettings,
+  RequestSettings,
+  StoreSettings,
+} from './store.js';
 export {
   CUSTOM_REQUEST_STATUS_LABELS,
   isRequestExpired,
 } from './custom-requests.js';
-export { PAYMENT_METHOD_LABELS, whatsappUrl } from './store.js';
+export {
+  fillQuotationText,
+  formatSizeCm,
+  PAYMENT_METHOD_LABELS,
+  QUOTATION_EMAIL_DEFAULTS,
+  whatsappUrl,
+} from './store.js';
 export { safeNext } from './safe-next.js';
 export {
   PRINT_JOB_FLOW,
   PRINT_JOB_STATUS_LABELS,
   PRINT_JOB_USES_MATERIAL,
 } from './print-jobs.js';
+export {
+  DEFAULT_ROLE_PERMISSIONS,
+  effectivePermissions,
+  isPermission,
+  PERMISSION_GROUPS,
+  PERMISSION_INCLUDES,
+  PERMISSIONS,
+  TEAM_ROLES_WITH_PERMISSIONS,
+} from './permissions.js';
+export type { Permission, PermissionRole } from './permissions.js';

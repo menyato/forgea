@@ -33,7 +33,7 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   await page.getByRole('button', { name: 'Add the lead' }).click();
   await expect(page).toHaveURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
   await page.getByRole('link', { name: 'Write a quotation' }).click();
-  await expect(page.getByLabel('Customer account email')).toHaveValue(email);
+  await expect(page.getByLabel('Customer email')).toHaveValue(email);
   await page.getByLabel('Phone').fill('70 111 222');
   await page.getByLabel('Description').fill('Name tag, PLA, two colours');
   await page.getByLabel('Qty').fill('20');

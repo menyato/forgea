@@ -13,3 +13,19 @@ model SiteTheme {
 
   @@map("site_theme")
 }
+
+/// Palettes the owner kept under a name, to switch the site to later (Dashboard → Theme).
+/// Saving one changes nothing on the site; applying it writes it to SiteTheme.
+model SavedTheme {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  /// 1–60 characters (CHECK constraint); unique, so the list reads clearly.
+  name        String   @unique
+  /// packages/brand `Palette`, every value #rrggbb (checked by the API).
+  palette     Json
+  basedOn     String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@map("saved_themes")
+}

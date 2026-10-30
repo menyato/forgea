@@ -10,6 +10,7 @@ import {
   ScrollRestoration,
   useNavigation,
   useRouteLoaderData,
+  type ShouldRevalidateFunctionArgs,
 } from 'react-router';
 
 import type { Route } from './+types/root';
@@ -42,7 +43,7 @@ export const middleware: Route.MiddlewareFunction[] = [
 export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const [me, cart, store, siteTheme, theme] = await Promise.all([
-    api.hasSession ? api.get<Profile>('/auth/me') : Promise.resolve(null),
+    api.hasSession ? api.me() : Promise.resolve(null),
     api.get<CartView>('/cart'),
     api.get<StoreSettings>('/store-settings'),
     api.get<{ theme: SiteTheme | null }>('/site-theme'),
@@ -58,6 +59,20 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     paletteCss: isPalette(palette) ? paletteCss(palette) : null,
     theme,
   };
+}
+
+/**
+ * The shell's data (who is signed in, the cart count, store numbers, the palette) changes only
+ * when something is sent: adding to the cart, signing in or out, saving a setting. Moving from
+ * page to page keeps it, so a click costs one page's calls, not the shell's four as well.
+ */
+export function shouldRevalidate({
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (formMethod && formMethod.toUpperCase() !== 'GET')
+    return defaultShouldRevalidate;
+  return false;
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -128,7 +143,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       details = "That page doesn't exist, or it has moved.";
     } else if (error.status === 403) {
       title = 'Not allowed';
-      details = 'This request was refused.';
+      // Our own refusals say why (e.g. a dashboard page someone's permissions don't cover).
+      details =
+        typeof error.data === 'string' && error.data
+          ? error.data
+          : 'This request was refused.';
     } else if (error.status === 429 || error.status === 503) {
       title = 'One moment';
       details =

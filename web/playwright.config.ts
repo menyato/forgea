@@ -46,6 +46,8 @@ export default defineConfig({
         DATABASE_URL: database,
         // The test database's files: shared with the API's e2e tests and the seed below.
         UPLOAD_DIR: '.uploads-test',
+        // Emails as files the tests read (browser/mail.ts).
+        MAIL_OUTBOX_DIR: '.outbox-browser',
         PUBLIC_WEB_URL: WEB,
         PUBLIC_API_URL: API,
         INTERNAL_PROXY_SECRET: PROXY_SECRET,

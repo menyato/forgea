@@ -53,6 +53,7 @@ export function OptionsConfig({
             <label className="flex items-center gap-2 font-semibold">
               <input
                 type="checkbox"
+                name={`offer-${g.id}`}
                 checked={config !== undefined}
                 onChange={(e) =>
                   onChange(
@@ -82,6 +83,7 @@ export function OptionsConfig({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
+                    name={`required-${g.id}`}
                     checked={config.required}
                     onChange={(e) =>
                       update(g.id, { required: e.currentTarget.checked })
@@ -98,6 +100,7 @@ export function OptionsConfig({
                           <label className="flex items-center gap-2">
                             <input
                               type="checkbox"
+                              name={`value-${v.id}`}
                               checked={offered}
                               onChange={(e) => {
                                 const valueIds = e.currentTarget.checked

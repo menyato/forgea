@@ -75,6 +75,17 @@ export interface DesignTokens {
 }
 
 /** The palette the owner saved in the dashboard (GET /site-theme); null means tokens.ts. */
+/** A palette the owner kept under a name (Dashboard → Theme). */
+export interface SavedThemeView {
+  id: string;
+  name: string;
+  palette: Palette;
+  basedOn: string;
+  /** The site uses exactly these colours right now. */
+  live: boolean;
+  createdAt: string;
+}
+
 export interface SiteTheme {
   palette: Palette;
   /** The built-in palette it started from, or "custom". */

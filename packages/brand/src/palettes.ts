@@ -1,7 +1,9 @@
 import type { Palette } from './types.js';
 
 /**
- * Candidate brand palettes. tokens.ts picks one by name; see docs/brand/BRIEF.md for the idea
+ * Candidate brand palettes. `white` is "cards and panels" in light mode: a shade below the page
+ * (`paper`), as dark mode's panels sit a shade above theirs, so boxes stand out in both.
+ * tokens.ts picks one by name; see docs/brand/BRIEF.md for the idea
  * behind each.
  */
 export const palettes = {
@@ -12,7 +14,7 @@ export const palettes = {
     stone: '#8a8a85',
     ash: '#d7d7d3',
     paper: '#fafaf8',
-    white: '#ffffff',
+    white: '#eeeeea',
     accent: '#e98a7e',
     accentDeep: '#c9655a',
     onAccent: '#1c1c1c',
@@ -33,7 +35,7 @@ export const palettes = {
     stone: '#8c8378',
     ash: '#e6dccd',
     paper: '#faf6ef',
-    white: '#ffffff',
+    white: '#f0e8db',
     accent: '#ff6a1a',
     accentDeep: '#c24a05',
     onAccent: '#1e1b18',
@@ -54,7 +56,7 @@ export const palettes = {
     stone: '#9a888b',
     ash: '#e9dfd7',
     paper: '#fbf8f4',
-    white: '#ffffff',
+    white: '#f1e9e3',
     accent: '#8a1538',
     accentDeep: '#5e0e26',
     onAccent: '#fbf8f4',
@@ -76,7 +78,7 @@ export const palettes = {
     stone: '#86978f',
     ash: '#d3e3df',
     paper: '#f6faf9',
-    white: '#ffffff',
+    white: '#e6efed',
     accent: '#f2b134',
     accentDeep: '#a86f05',
     onAccent: '#142321',
@@ -97,7 +99,7 @@ export const palettes = {
     stone: '#8b9095',
     ash: '#dfe1e2',
     paper: '#f8f8f7',
-    white: '#ffffff',
+    white: '#eceef0',
     accent: '#c87533',
     accentDeep: '#8f4a17',
     onAccent: '#17191b',

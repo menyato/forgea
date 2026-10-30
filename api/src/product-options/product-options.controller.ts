@@ -10,19 +10,19 @@ import {
 import type { OptionGroupView } from '@forgea/types';
 import { SaveOptionGroupDto, SaveOptionValueDto } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { RequirePermission } from '../authorization/decorators.js';
 import { ProductOptionsService } from './product-options.service.js';
 
 /**
  * Dashboard: option groups and their values with price rules. Admin only and audit-logged;
  * shoppers see a product's options (never the rules) on GET /products/:slug.
  */
-@Roles(Role.DESIGNER)
+@RequirePermission('catalog.manage')
 @Controller('option-groups')
 export class ProductOptionsController {
   constructor(private readonly options: ProductOptionsService) {}
 
+  @RequirePermission('catalog.view')
   @Get()
   list(): Promise<OptionGroupView[]> {
     return this.options.list();

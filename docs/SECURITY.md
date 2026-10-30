@@ -79,13 +79,27 @@ Locally the database runs on `localhost` with credentials in the gitignored `api
   before the victim ever signs in with Google, that password is removed (and audit-logged) when
   Google proves the real owner, and every session started with it ends in the same
   transaction: whoever registered first is signed out for good.
-- **Roles** (checked by the API on every call; the dashboard only hides what a role can't use):
-  admins reach everything; **staff** run orders, production, custom-request quotes, leads,
-  quotations, invoices and payments;
-  **designers** run the catalog (products, 3D models, categories, options) and add design
-  previews to requests, and can read materials but not change what they cost. Neither staff nor
-  designers see pricing settings, exchange rates, the team, the audit log, catalog transfer,
-  the books (accounts, manual entries, lock date, tax) or the financial reports.
+- **Permissions** (checked by the API on every call; the dashboard refuses the page and hides
+  what someone can't use): each team route needs one permission (`@forgea/types`
+  `PERMISSION_GROUPS`). What a person holds is their role's permissions (Dashboard → Roles &
+  permissions), plus what an admin granted them, minus what an admin denied them (a denial
+  always wins, also over a permission that needs the denied one). By default **staff** run
+  orders, production, custom-request quotes, leads, quotations, invoices and payments, and
+  **designers** run the catalog and add design previews; neither sees pricing settings,
+  exchange rates, the audit log, catalog transfer, the books or the financial reports unless an
+  admin grants it. **Admins** hold everything. Managing the team and permissions is admin-only
+  and is not a permission, so nobody can grant themselves or anyone else more than an admin
+  gave them; an admin can't change their own access, and only staff and designers have
+  permissions to edit (the database refuses them on customer and admin accounts).
+- **Changes apply on the next request.** The API reads the caller's role, permissions and
+  "switched off" flag from the database on every team call, never from the 15-minute access
+  token: a demoted admin, a removed permission or a switched-off account is refused at once.
+- **Data, not just buttons.** Where a page shows something from another area (an order's
+  invoices), the API leaves it out for someone without that permission.
+- **Tested route by route.** `api/test/permissions.e2e-spec.ts` lists every API route: each
+  one is public, a customer route on a reviewed list, or names its permission, and for each
+  protected route a customer and a staff member without it get 403 while one with only that
+  permission gets through. The browser tests type refused addresses directly.
 - **The team is managed by address** (Dashboard → Team): an admin adds a Workspace address with
   a role; Google links it at the first sign-in. Customer accounts can never be given a team
   role, nobody can change their own access, and the last active admin can't be removed.
@@ -125,9 +139,10 @@ Global guards run in this order on every route:
    cross-site` is refused. This sits on top of the `SameSite=Strict` cookies.
 3. **Authentication:** every route requires a signed-in user unless it is explicitly marked
    `@Public()`. A forgotten decorator fails closed.
-4. **Roles:** `ADMIN` reaches everything; `STAFF` reaches routes marked for staff (orders and
-   print jobs), never pricing settings or user management; `CUSTOMER` reaches only their own
-   orders and cart, enforced by ownership checks in each service.
+4. **Permissions:** `PermissionsGuard` lets a team member through only with the route's
+   permission, read fresh from the database; `ADMIN` reaches everything; `@AdminOnly()` routes
+   (the team, permissions) never accept anyone else; `CUSTOMER` reaches only their own orders,
+   requests and cart, enforced by ownership checks in each service.
 
 Also on every request:
 
@@ -185,6 +200,7 @@ the cookies the API sets. API addresses and tokens never reach browser code.
 | Custom-design form | 3 per 10 min, 10/hour | Spam |
 | Quotes, cart | 30/min and 60/min | Bounded work per client |
 | Checkout | 5/min, 20/hour | A person places a few orders at most |
+| Product models and photos | 900/min, 20000/hour | A shop page shows dozens; shoppers share office and mobile addresses |
 
 Rate-limit counters are kept in the API's memory; each server runs one API, so they are exact
 (they reset when it restarts, e.g. on a deploy). An IPv6 client counts per /64, the block an
@@ -293,13 +309,26 @@ Gmail and Calendar use one service account with domain-wide delegation limited t
 (the server's `api.env` in production, `api/.env` locally); no mailbox password exists anywhere. A
 Workspace admin revokes it in one place.
 
+## Quotation links
+
+A quotation is emailed with a link that opens it without an account (`/q/<token>`): a signed
+token (its own audience, never accepted as a sign-in, reset or verification token) naming the
+quotation and the address it was sent to. Editing the quotation to another address retires
+older links; a draft never opens; the link stays readable 60 days past the validity date, and
+accepting an expired quotation is refused. The link only reads: accepting places an order,
+which needs a signed-in customer account whose address is the one it was sent to (a forwarded
+link is not enough), and the API refuses team addresses as quotation customers. The page sends
+no referrer and is not indexed. Everything typed into a quotation is escaped in the email.
+
 ## Site theme
 
 The owner's palette is applied to every page as an inline `<style>`. Only a palette whose 18
 values are all `#rrggbb` is stored (checked by the API) and written into the page (checked again
 by the storefront), so nothing else can reach that style block. A palette that fails a
 readability check (WCAG AA, light and dark) is refused unless the owner ticks "keep my colours
-anyway" (the save is audit-logged); the editor also offers to fix it in one click.
+anyway" (the save is audit-logged); the editor also offers to fix it in one click. Saved
+themes are kept under a name and switched to with the same checks; every change is
+audit-logged, and "back to the original colours" removes the owner's palette entirely.
 
 ## Pricing data
 

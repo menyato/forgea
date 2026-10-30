@@ -131,6 +131,8 @@ model JournalEntry {
   lines JournalLine[]
 
   @@index([journalId, date])
+  /// The journal page: posted entries, newest date first.
+  @@index([state, date, createdAt])
   @@index([customerId])
   @@index([orderId])
   @@map("journal_entries")

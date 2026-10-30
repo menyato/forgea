@@ -9,6 +9,7 @@ import { data, Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { TextAreaField } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
@@ -72,6 +73,7 @@ const ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
 export default function OrderPage({ loaderData }: Route.ComponentProps) {
   const { order: o } = loaderData;
   const fetcher = useFetcher<SaveResult>();
+  const can = useCan();
   const waitingForDeposit = o.status === OrderStatus.AWAITING_DEPOSIT;
 
   return (
@@ -200,6 +202,10 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
           <Panel title="Next step">
             {o.nextStatuses.length === 0 ? (
               <p className="text-text-muted">This order is closed.</p>
+            ) : !can('orders.manage') ? (
+              <p className="text-text-muted">
+                Waiting for: {ORDER_STATUS_LABELS[o.nextStatuses[0]!].title}
+              </p>
             ) : (
               <fetcher.Form method="post" className="grid gap-3">
                 <TextAreaField
@@ -229,7 +235,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
               </fetcher.Form>
             )}
           </Panel>
-          <InvoicesPanel order={o} />
+          {o.invoices && <InvoicesPanel order={o} invoices={o.invoices} />}
           <Panel title="History">
             <ol className="grid gap-3 border-l border-border pl-4 text-sm">
               {o.history.map((h) => (

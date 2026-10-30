@@ -62,3 +62,27 @@ export function SaveStatus({
     </p>
   );
 }
+
+/**
+ * For someone who may look but not change: every field and button inside is locked, with a
+ * line saying why. The API refuses the change anyway; this keeps the page honest.
+ */
+export function ViewOnly({
+  editable,
+  children,
+}: {
+  editable: boolean;
+  children: ReactNode;
+}) {
+  if (editable) return children;
+  return (
+    <>
+      <p className="mb-4 text-sm text-text-muted">
+        You can see this page but not change it. Ask an admin if you need to.
+      </p>
+      <fieldset disabled className="contents">
+        {children}
+      </fieldset>
+    </>
+  );
+}

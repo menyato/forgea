@@ -28,8 +28,7 @@ import {
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import { Books } from './books.service.js';
 import { Invoicing } from './invoicing.service.js';
 
@@ -47,13 +46,13 @@ export class AccountingController {
     private readonly books: Books,
   ) {}
 
-  @Roles(Role.STAFF)
+  @RequirePermission('invoices.view')
   @Get('invoices')
   invoices(): Promise<InvoiceListItem[]> {
     return this.invoicing.list();
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('invoices.view')
   @Get('orders/:orderId/invoices')
   forOrder(
     @Param('orderId', ParseUUIDPipe) orderId: string,
@@ -61,7 +60,7 @@ export class AccountingController {
     return this.invoicing.forOrder(orderId);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('invoices.create')
   @Audit({
     action: 'invoice.deposit',
     targetType: 'Order',
@@ -75,7 +74,7 @@ export class AccountingController {
     return this.invoicing.depositInvoice(orderId, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('invoices.create')
   @Audit({
     action: 'invoice.final',
     targetType: 'Order',
@@ -89,7 +88,7 @@ export class AccountingController {
     return this.invoicing.finalInvoice(orderId, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('payments.record')
   @Audit({ action: 'payment.record', targetType: 'Invoice', resultKey: 'id' })
   @Post('payments')
   recordPayment(
@@ -99,7 +98,7 @@ export class AccountingController {
     return this.invoicing.recordPayment(dto, user.id);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.manage')
   @Audit({ action: 'invoice.credit-note', targetType: 'Invoice' })
   @Post('invoices/:id/credit-note')
   creditNote(
@@ -109,19 +108,19 @@ export class AccountingController {
     return this.invoicing.creditNote(id, user.id);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('entries')
   entries(@Query() query: EntryListQuery): Promise<JournalEntryView[]> {
     return this.books.entries(query.type);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('entries/:id')
   entry(@Param('id', ParseUUIDPipe) id: string): Promise<JournalEntryView> {
     return this.books.entry(id);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.manage')
   @Audit({ action: 'entry.manual', targetType: 'JournalEntry' })
   @Post('entries')
   manualEntry(
@@ -131,20 +130,20 @@ export class AccountingController {
     return this.books.manualEntry(dto, user.id);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('accounts')
   accounts(): Promise<AccountView[]> {
     return this.books.accounts();
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.manage')
   @Audit({ action: 'account.create', targetType: 'Account', targetId: 'new' })
   @Post('accounts')
   createAccount(@Body() dto: SaveAccountDto): Promise<AccountView[]> {
     return this.books.saveAccount(null, dto);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.manage')
   @Audit({ action: 'account.update', targetType: 'Account' })
   @Put('accounts/:id')
   updateAccount(
@@ -154,13 +153,13 @@ export class AccountingController {
     return this.books.saveAccount(id, dto);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('settings')
   settings(): Promise<AccountingSettingsView> {
     return this.books.settings();
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.manage')
   @Audit({
     action: 'accounting.settings',
     targetType: 'AccountingSettings',
@@ -173,7 +172,7 @@ export class AccountingController {
     return this.books.updateSettings(dto);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @HttpCode(200)
   @Get('reports/profit-and-loss')
   profitAndLoss(@Query() q: ReportPeriodQuery): Promise<ProfitAndLoss> {
@@ -183,13 +182,13 @@ export class AccountingController {
     );
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('reports/balance-sheet')
   balanceSheet(@Query() q: ReportPeriodQuery): Promise<BalanceSheet> {
     return this.books.balanceSheet(q.to ? new Date(q.to) : today());
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('books.view')
   @Get('reports/aged-receivables')
   agedReceivables(@Query() q: ReportPeriodQuery): Promise<AgedReceivables> {
     return this.books.agedReceivables(q.to ? new Date(q.to) : today());

@@ -33,8 +33,15 @@ import {
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
-import { Role, UploadPurpose } from '../generated/prisma/enums.js';
+import {
+  CurrentUser,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
+import {
+  UploadPurpose,
+  type CustomRequestStatus,
+} from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UPLOAD_POLICIES } from '../uploads/upload-policies.js';
 import { UploadSlots } from '../uploads/upload-slots.interceptor.js';
@@ -154,7 +161,7 @@ export class CustomRequestsController {
   }
 
   /** The dashboard inbox, for staff (who quote) and designers (who design). */
-  @Roles(Role.STAFF, Role.DESIGNER)
+  @RequirePermission('requests.view')
   @Get()
   list(
     @Query() query: CustomRequestListQuery,
@@ -162,7 +169,14 @@ export class CustomRequestsController {
     return this.requests.list(query);
   }
 
-  @Roles(Role.STAFF, Role.DESIGNER)
+  /** How many in each status, for the dashboard's tabs. */
+  @RequirePermission('requests.view')
+  @Get('counts')
+  counts(): Promise<Partial<Record<CustomRequestStatus, number>>> {
+    return this.requests.counts();
+  }
+
+  @RequirePermission('requests.view')
   @Get(':id')
   detail(@Param('id', ParseUUIDPipe) id: string): Promise<StaffCustomRequest> {
     return this.requests.detail(id);
@@ -172,7 +186,7 @@ export class CustomRequestsController {
    * The studio's design for the request — a 3D model or an image — shown to the customer
    * with the quote. Replaces the previous one while the request is still open. Audit-logged.
    */
-  @Roles(Role.STAFF, Role.DESIGNER)
+  @RequirePermission('requests.design')
   @Audit({ action: 'custom-request.design', targetType: 'CustomRequest' })
   @Post(':id/design')
   @UseInterceptors(
@@ -194,7 +208,7 @@ export class CustomRequestsController {
   }
 
   /** Sends the price; the customer sees it at once. Audit-logged. */
-  @Roles(Role.STAFF)
+  @RequirePermission('requests.quote')
   @Audit({ action: 'custom-request.quote', targetType: 'CustomRequest' })
   @HttpCode(200)
   @Post(':id/quote')
@@ -206,7 +220,7 @@ export class CustomRequestsController {
     return this.requests.quote(id, dto, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('requests.quote')
   @Audit({ action: 'custom-request.cancel', targetType: 'CustomRequest' })
   @HttpCode(200)
   @Post(':id/cancel')

@@ -42,7 +42,11 @@ export async function keysetPage<Row extends { id: string }>(
   request: KeysetRequest<Row>,
   fetch: (query: KeysetQuery) => Promise<Row[]>,
 ): Promise<{ rows: Row[]; nextCursor: string | null; hasMore: boolean }> {
-  const { sortField, order, limit } = request;
+  const { order, limit } = request;
+  // Ids are UUIDv7, made by the database at insert: their order is creation order and they
+  // are indexed everywhere, so "newest first" reads one page instead of sorting the table.
+  const sortField =
+    request.sortField === 'createdAt' ? 'id' : request.sortField;
   const op = order === 'asc' ? 'gt' : 'lt';
   let after: Record<string, unknown> = {};
 

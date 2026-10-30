@@ -47,8 +47,11 @@ export interface StaffOrder {
     note: string | null;
     changedBy: string | null;
   }[];
-  /** Its invoices and credit notes (deposit, final), with what is still owed. */
-  invoices: import('./crm.js').InvoiceListItem[];
+  /**
+   * Its invoices and credit notes (deposit, final), with what is still owed. Null for someone
+   * without permission to see invoices: the API leaves them out.
+   */
+  invoices: import('./crm.js').InvoiceListItem[] | null;
   /** When the order came from accepting a custom request's quote. */
   customRequestNumber: string | null;
   createdAt: string;

@@ -191,7 +191,11 @@ export class UploadsService {
     const copy = parseModelVariantKey(requestedKey);
     const upload = await this.prisma.upload.findFirst({
       where: {
-        storageKey: copy ? { startsWith: `${copy.stem}.` } : requestedKey,
+        // The original of a compressed copy is the STL or GLB with its stem: named exactly, so
+        // the unique index finds it (a prefix search reads every upload).
+        storageKey: copy
+          ? { in: [`${copy.stem}.stl`, `${copy.stem}.glb`] }
+          : requestedKey,
         status: UploadStatus.CLEAN,
       },
       select: { storageKey: true, mimeType: true, uploadedById: true },

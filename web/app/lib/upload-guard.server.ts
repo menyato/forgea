@@ -19,7 +19,7 @@ export async function readUploadForm(
   // No declared length (a chunked upload) counts as large.
   const length = Number(request.headers.get('content-length') ?? Infinity);
   if (length <= LARGE_BODY) return request.formData();
-  if (api && !(await api.get('/auth/me')).ok) {
+  if (api && !(await api.me()).ok) {
     throw data(
       { error: 'Sign in again, then send the file.' },
       { status: 401 },

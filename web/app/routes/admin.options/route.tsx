@@ -9,7 +9,13 @@ import { useState } from 'react';
 import { data, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
-import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
+import { useCan } from '~/features/admin/access';
+import {
+  AdminHeader,
+  Panel,
+  SaveStatus,
+  ViewOnly,
+} from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
@@ -87,34 +93,39 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Options({ loaderData }: Route.ComponentProps) {
   const { groups, materials } = loaderData;
+  const editable = useCan()('catalog.manage');
   return (
     <>
       <AdminHeader
         title="Options"
         intro="What customers can choose on a product — colour, size, material, a name to print — and what each choice does to the price. Products pick which of these they offer."
       />
-      <div className="grid gap-6">
-        <GroupForm key="new" />
-        {groups.map((g) => (
-          <Panel key={g.id} title={g.name}>
-            <GroupForm group={g} />
-            {g.kind === OptionKind.CHOICE && (
-              <div className="grid gap-3">
-                <h3 className="text-sm font-semibold">Choices</h3>
-                {g.values.map((v) => (
-                  <ValueForm
-                    key={v.id}
-                    groupId={g.id}
-                    value={v}
-                    materials={materials}
-                  />
-                ))}
-                <ValueForm key="new" groupId={g.id} materials={materials} />
-              </div>
-            )}
-          </Panel>
-        ))}
-      </div>
+      <ViewOnly editable={editable}>
+        <div className="grid gap-6">
+          {editable && <GroupForm key="new" />}
+          {groups.map((g) => (
+            <Panel key={g.id} title={g.name}>
+              <GroupForm group={g} />
+              {g.kind === OptionKind.CHOICE && (
+                <div className="grid gap-3">
+                  <h3 className="text-sm font-semibold">Choices</h3>
+                  {g.values.map((v) => (
+                    <ValueForm
+                      key={v.id}
+                      groupId={g.id}
+                      value={v}
+                      materials={materials}
+                    />
+                  ))}
+                  {editable && (
+                    <ValueForm key="new" groupId={g.id} materials={materials} />
+                  )}
+                </div>
+              )}
+            </Panel>
+          ))}
+        </div>
+      </ViewOnly>
     </>
   );
 }

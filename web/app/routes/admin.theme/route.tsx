@@ -4,16 +4,22 @@ import {
   fixContrast,
   type Palette,
   PALETTE_KEYS,
+  type SavedThemeView,
   paletteChecks,
   palettes,
   schemeVariables,
   type SiteTheme,
 } from '@forgea/brand';
-import { SaveSiteThemeDto } from '@forgea/validation';
+import {
+  ApplyThemeDto,
+  SaveNamedThemeDto,
+  SaveSiteThemeDto,
+} from '@forgea/validation';
 import { type CSSProperties, useState } from 'react';
 import { data, useFetcher } from 'react-router';
 import { Logo } from '~/components/brand/logo';
 import { Button, buttonClass } from '~/components/ui/button';
+import { Field } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
@@ -21,16 +27,45 @@ import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 export async function loader({ context }: Route.LoaderArgs) {
-  const r = await context
-    .get(apiContext)
-    .get<{ theme: SiteTheme | null }>('/site-theme');
-  return { theme: r.ok ? r.data.theme : null };
+  const api = context.get(apiContext);
+  const [r, saved] = await Promise.all([
+    api.get<{ theme: SiteTheme | null }>('/site-theme'),
+    api.get<SavedThemeView[]>('/site-theme/saved'),
+  ]);
+  return {
+    theme: r.ok ? r.data.theme : null,
+    saved: saved.ok ? saved.data : [],
+  };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
-  if (form.get('intent') === 'reset') {
+  const intent = form.get('intent');
+  const id = encodeURIComponent(text(form, 'id') ?? '');
+  if (intent === 'keep') {
+    return save(
+      SaveNamedThemeDto,
+      {
+        name: text(form, 'name'),
+        palette: jsonField(form, 'palette'),
+        basedOn: text(form, 'basedOn'),
+      },
+      (dto) => api.post('/site-theme/saved', dto),
+    );
+  }
+  if (intent === 'apply') {
+    return save(ApplyThemeDto, {}, (dto) =>
+      api.post(`/site-theme/saved/${id}/apply`, dto),
+    );
+  }
+  if (intent === 'forget') {
+    const r = await api.delete(`/site-theme/saved/${id}`);
+    return r.ok
+      ? data<SaveResult>({ ok: true })
+      : data<SaveResult>({ error: r.message }, { status: r.status });
+  }
+  if (intent === 'reset') {
     const r = await api.delete('/site-theme');
     return r.ok
       ? data<SaveResult>({ ok: true })
@@ -87,14 +122,44 @@ const GROUPS: { title: string; colours: [Key, string][] }[] = [
 ];
 
 export default function Theme({ loaderData }: Route.ComponentProps) {
-  const { theme } = loaderData;
+  // A new editor whenever the site's theme changes (saved, switched, back to the original),
+  // so it always starts from what the site shows now, never from leftover edits.
+  // The forms' results live here, so "Saved" outlasts the editor being rebuilt.
+  const fetchers = {
+    save: useFetcher<SaveResult>(),
+    reset: useFetcher<SaveResult>(),
+    keep: useFetcher<SaveResult>(),
+    act: useFetcher<SaveResult>(),
+  };
+  return (
+    <ThemeEditor
+      key={loaderData.theme?.updatedAt ?? 'original'}
+      {...loaderData}
+      fetchers={fetchers}
+    />
+  );
+}
+
+type Fetchers = Record<
+  'save' | 'reset' | 'keep' | 'act',
+  ReturnType<typeof useFetcher<SaveResult>>
+>;
+
+function ThemeEditor({
+  theme,
+  saved,
+  fetchers,
+}: {
+  theme: SiteTheme | null;
+  saved: SavedThemeView[];
+  fetchers: Fetchers;
+}) {
   const [basedOn, setBasedOn] = useState(theme?.basedOn ?? defaultPaletteName);
   const [palette, setPalette] = useState<Palette>(
     theme?.palette ?? palettes[defaultPaletteName],
   );
   const [keepAnyway, setKeepAnyway] = useState(false);
-  const save = useFetcher<SaveResult>();
-  const reset = useFetcher<SaveResult>();
+  const { save, reset } = fetchers;
   const checks = paletteChecks(palette);
   const failing = checks.filter((c) => !c.passes);
   const schemes = colorSchemes(palette);
@@ -143,6 +208,7 @@ export default function Theme({ loaderData }: Route.ComponentProps) {
                   <label key={key} className="flex items-center gap-3 text-sm">
                     <input
                       type="color"
+                      name={`colour-${key}`}
                       value={palette[key]}
                       onChange={(e) => {
                         const v = e.currentTarget.value;
@@ -268,14 +334,136 @@ export default function Theme({ loaderData }: Route.ComponentProps) {
                   variant="secondary"
                   disabled={reset.state !== 'idle'}
                 >
-                  Back to the default
+                  Back to the original colours
                 </Button>
               </reset.Form>
             )}
             <SaveStatus state={save.state} result={save.data ?? reset.data} />
           </div>
+          <SavedThemes
+            saved={saved}
+            palette={palette}
+            basedOn={basedOn}
+            fetchers={fetchers}
+            onOpen={(t) => {
+              setBasedOn(t.basedOn);
+              setPalette(t.palette);
+            }}
+          />
         </div>
       </div>
     </>
+  );
+}
+
+/** Themes kept under a name: keep the editor's colours, switch the site to one, or remove it. */
+function SavedThemes({
+  saved,
+  palette,
+  basedOn,
+  fetchers: { keep, act },
+  onOpen,
+}: {
+  saved: SavedThemeView[];
+  palette: Palette;
+  basedOn: string;
+  fetchers: Fetchers;
+  onOpen: (theme: SavedThemeView) => void;
+}) {
+  return (
+    <Panel title="Saved themes">
+      <p className="text-sm text-text-muted">
+        Keep the colours above under a name, then switch the whole site to any
+        of them in one click. Customers see the switch on the next page they
+        open.
+      </p>
+      <keep.Form
+        method="post"
+        key={keep.data?.ok ? 'kept' : 'form'}
+        className="flex flex-wrap items-end gap-3"
+      >
+        <input type="hidden" name="intent" value="keep" />
+        <input type="hidden" name="palette" value={JSON.stringify(palette)} />
+        <input type="hidden" name="basedOn" value={basedOn} />
+        <Field
+          label="Name"
+          name="name"
+          required
+          maxLength={60}
+          hint="The same name replaces that theme"
+          error={keep.data?.errors?.['name']}
+        />
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={keep.state !== 'idle'}
+        >
+          Save these colours as a theme
+        </Button>
+        <SaveStatus state={keep.state} result={keep.data} />
+      </keep.Form>
+      {saved.length > 0 && (
+        <ul className="grid gap-3">
+          {saved.map((t) => (
+            <li
+              key={t.id}
+              className="flex flex-wrap items-center gap-3 border-t border-border pt-3"
+            >
+              <span className="flex gap-1" aria-hidden>
+                {(
+                  ['paper', 'ink', 'accent', 'night', 'accentDark'] as const
+                ).map((k) => (
+                  <span
+                    key={k}
+                    className="size-5 rounded-full border border-border"
+                    style={{ background: t.palette[k] }}
+                  />
+                ))}
+              </span>
+              <span className="font-semibold">{t.name}</span>
+              {t.live && (
+                <span className="text-sm font-semibold text-success">
+                  On the site now
+                </span>
+              )}
+              <act.Form method="post" className="ml-auto flex flex-wrap gap-2">
+                <input type="hidden" name="id" value={t.id} />
+                <Button
+                  type="button"
+                  variant="quiet"
+                  onClick={() => onOpen(t)}
+                  aria-label={`Open ${t.name} in the editor`}
+                >
+                  Open in the editor
+                </Button>
+                {!t.live && (
+                  <Button
+                    type="submit"
+                    name="intent"
+                    value="apply"
+                    variant="secondary"
+                    disabled={act.state !== 'idle'}
+                    aria-label={`Use ${t.name} on the site`}
+                  >
+                    Use on the site
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  name="intent"
+                  value="forget"
+                  variant="quiet"
+                  disabled={act.state !== 'idle'}
+                  aria-label={`Delete ${t.name}`}
+                >
+                  Delete
+                </Button>
+              </act.Form>
+            </li>
+          ))}
+        </ul>
+      )}
+      <SaveStatus state={act.state} result={act.data} />
+    </Panel>
   );
 }

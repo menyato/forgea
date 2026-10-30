@@ -140,6 +140,8 @@ test('the home page and the shop show each product as its 3D model', async ({
   // Other tests add products to this database; search for the seeded one.
   await page.goto('/shop?q=Phone%20stand');
   const card = page.getByRole('article').filter({ hasText: 'Phone stand' });
+  // Models load as a card nears the screen; the test database's many categories can push it down.
+  await card.scrollIntoViewIfNeeded();
   // The card's model is drawn once it has downloaded (the canvas fades in).
   await expect(card.locator('canvas')).toHaveClass(/opacity-100/);
   await card.getByRole('link', { name: 'Phone stand', exact: true }).click();

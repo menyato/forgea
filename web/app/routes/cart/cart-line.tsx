@@ -42,6 +42,7 @@ export function CartLineRow({ line }: { line: CartLine }) {
           <input
             type="number"
             name="quantity"
+            autoComplete="off"
             min={1}
             max={CART_QUANTITY_MAX}
             defaultValue={line.quantity}

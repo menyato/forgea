@@ -21,5 +21,6 @@ export type {
   FontStack,
   LogoColors,
   Palette,
+  SavedThemeView,
   SiteTheme,
 } from './types.js';

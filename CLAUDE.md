@@ -12,6 +12,7 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
   - `types` — enums generated from the Prisma schema (second generator), plus shared domain types.
   - `pricing` — pure pricing engine (Phase 2).
   - `validation` — class-validator DTO classes shared by api and web (Phase 4).
+- `marketing/` — not in git: brand kit (`brand-kit/BRAND-GUIDE.md`, primary logo `logo/primary/forgea-logo_dark.svg`), Instagram reels/posts, motion pieces. Social/video colours match the `copper` palette in `packages/brand`.
 - `docs/` — ROADMAP, LOCAL_SETUP, SECURITY, BACK_OFFICE, CATALOG_IMPORT.
 - `Dockerfile` (targets `api`, `web`, `migrate`), `deploy/` (the servers' Compose stack, Caddy, deploy and backup scripts, env templates), `infra/` (server setup), `.github/workflows/` (CI; branches `development` → `staging` → `production`, the last two deploy to their environment).
 
@@ -40,12 +41,15 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - In loaders/actions, read the page URL from the `url` argument, never `new URL(request.url)`: on client navigations `request.url` is the internal `/page.data` URL.
 - Anyone can browse and fill a cart; ordering needs an account + phone. Pages that need an account redirect with `signInFor(url)`; sign-in returns via `?next=` (`safeNext`).
 - Store settings (transfer and WhatsApp numbers) come from the root loader (`store`); WhatsApp links only through `WhatsAppLink` / `whatsappUrl`.
-- Light/dark: `forgea_theme` cookie read on the server, `<html data-theme>`; colours only through the brand tokens' CSS variables, never hardcoded.
+- Light/dark: `forgea_theme` cookie read on the server, `<html data-theme>`; colours only through the brand tokens' CSS variables, never hardcoded. In light mode panels (`white`) sit a shade below the page (`paper`), as dark mode's sit above theirs.
+- The root loader (`api.me()`, cart, store settings, theme) reruns only after a form is sent (`shouldRevalidate`); `api.me()` asks once per request. Lists sorted by `createdAt` page by `id` (UUIDv7, creation order).
 
 ## Dashboard and catalog conventions
 
-- Dashboard routes are `app/routes/admin*`; the `admin` layout's `staffMiddleware` refuses visitors and customers, and its `SECTIONS` list says which roles see each page. The API still checks every call and `@Audit`s changes.
-- Roles: ADMIN everything (plus the books and reports); STAFF orders, production, request quotes, leads, quotations, invoices and payments; DESIGNER catalog, 3D uploads, request designs and the home page bed. Team members are Workspace accounts (Google only); `disabledAt` switches one off.
+- Dashboard routes are `app/routes/admin*`. Every page has a rule in `PAGES` (`app/features/admin/access.ts`): `staffMiddleware` refuses a page someone's permissions don't cover (even typed in) and the menu lists only the rest; an unlisted page is admin-only. Buttons and forms show only with `useCan()('x.y')`; read-only pages use `<ViewOnly>`. The frame is `DashboardShell`: a side menu that folds to a strip on wide screens (remembered) and opens over the page on phones (CSS decides which). Menu entries carry a `group` (Sales, Orders, Accounting, Catalog, Settings: `DashboardNav`); lists split work with `ViewTabs` (`?tab=`), boards with `ViewSwitch`/`Board` (`?view=board`), counts from `GET /<list>/counts`.
+- Every form control has an id or name and says whether autofill applies (`autocomplete`; the shared fields default it). `web/browser/page-audit.spec.ts` fails on any DevTools issue, console error or such field, on every page. The API still checks every call and `@Audit`s changes.
+- Permissions (`PERMISSION_GROUPS` in `@forgea/types`) are the unit of access, not roles. Every team API route says `@RequirePermission('x.y')` or `@AdminOnly()`; `PermissionsGuard` reads the caller's role, permissions and `disabledAt` from the database on each call, so changes apply at once. Effective = role's permissions (Roles & permissions page) + the person's grants − denials, with `PERMISSION_INCLUDES` added; a denial always wins. ADMIN holds everything, CUSTOMER nothing; managing the team and permissions is admin-only and never a permission. Data someone may not see is left out by the API (`@CallerPermissions()`), not just hidden. A new signed-in route without a permission must be added to `CUSTOMER_ROUTES` in `api/test/permissions.e2e-spec.ts`, which checks every route.
+- Roles (defaults, editable): STAFF orders, production, request quotes, leads, quotations, invoices and payments; DESIGNER catalog, 3D uploads, request designs and the home page bed. Team members are Workspace accounts (Google only); `disabledAt` switches one off.
 - Status changes (orders and custom requests) go through guarded `updateMany` calls inside a transaction that first calls `setStatusActor` (`api/src/common/status-actor.ts`); database triggers write the history.
 - The home page bed shows products by `plateOrder` (1 = centre … 5), set in Dashboard → Home page bed (`PUT /products/plate`); with none set, the newest products with a model stand in. Model files are preloaded in the home route's `meta`, and printing starts only once every model has loaded.
 - The catalog moves between installations as one JSON file (docs/CATALOG_IMPORT.md); the importer reuses the catalog services and DTOs. The seed (`api/scripts/seed.ts`) loads `prisma/example-catalog.ts` through it.
@@ -68,6 +72,7 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 
 - Design: docs/BACK_OFFICE.md (Odoo 20 `crm`/`sale`/`account` as the functional reference, nothing copied).
 - Every sale is an order: quotations become orders through `CheckoutService.placeQuotation`, like checkout and custom requests.
+- Quotations go to any email address (`customerEmail`; `customerId` only once they have an account). Sending emails the whole quotation with a `QuotationLinkTokens` link (`/q/<token>`, no account needed to read); accepting needs an account with that address; staff confirming for someone without one creates a passwordless customer account. Line sizes are X × Y × Z in cm (all three or none). The email's subject, introduction and closing are owner text (`QUOTATION_EMAIL_DEFAULTS` when empty).
 - Quotation status changes follow the order rule (guarded update + `setStatusActor`; a trigger writes the history).
 - Ledger entries only through `Ledger.post` (draft with lines, then posted with a number). Never update or delete a posted entry; the database refuses it. Corrections are new entries or credit notes.
 - Order invoices come from `Invoicing.onOrderStatus`; its failures are logged, never block the status change.

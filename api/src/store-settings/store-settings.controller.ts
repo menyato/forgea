@@ -1,13 +1,17 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import type { StoreSettings } from '@forgea/types';
+import type { QuotationEmailSettings, StoreSettings } from '@forgea/types';
 import {
+  UpdateQuotationEmailDto,
   UpdateRequestSettingsDto,
   UpdateStoreSettingsDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import {
+  CurrentUser,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
 import { StoreSettingsService } from './store-settings.service.js';
 
 @Controller('store-settings')
@@ -22,7 +26,7 @@ export class StoreSettingsController {
   }
 
   /** Admin only: where customers send money is a financial setting. Audit-logged. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('store.manage')
   @Audit({
     action: 'store-settings.update',
     targetType: 'StoreSettings',
@@ -37,7 +41,7 @@ export class StoreSettingsController {
   }
 
   /** Admin only: quote validity, deposit refunds, upload limit, estimate rules. Audit-logged. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('store.manage')
   @Audit({
     action: 'store-settings.requests.update',
     targetType: 'StoreSettings',
@@ -49,5 +53,26 @@ export class StoreSettingsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StoreSettings> {
     return this.storeSettings.updateRequestRules(dto, user.id);
+  }
+
+  @RequirePermission('store.manage')
+  @Get('quotation-email')
+  quotationEmail(): Promise<QuotationEmailSettings> {
+    return this.storeSettings.quotationEmail();
+  }
+
+  /** The quotation email's wording. Audit-logged. */
+  @RequirePermission('store.manage')
+  @Audit({
+    action: 'store-settings.quotation-email.update',
+    targetType: 'StoreSettings',
+    targetId: 'store',
+  })
+  @Put('quotation-email')
+  updateQuotationEmail(
+    @Body() dto: UpdateQuotationEmailDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuotationEmailSettings> {
+    return this.storeSettings.updateQuotationEmail(dto, user.id);
   }
 }

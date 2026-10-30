@@ -20,7 +20,7 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   if (!api.hasSession) throw redirect(signInFor(url));
-  const me = await api.get<Profile>('/auth/me');
+  const me = await api.me();
   if (me.status === 401) throw redirect(signInFor(url));
   if (!me.ok) throw new Response(me.message, { status: me.status });
   return { profile: me.data };

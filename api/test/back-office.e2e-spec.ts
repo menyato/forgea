@@ -173,8 +173,9 @@ describe('Back office (e2e)', () => {
         },
       ],
     };
+    // Anyone can get a quotation by email, but never a team account.
     await s
-      .post('/quotations', { ...form, customerEmail: 'nobody@example.com' })
+      .post('/quotations', { ...form, customerEmail: staff.user.email })
       .expect(400);
     const created = await s.post('/quotations', form).expect(201);
     expect(created.body).toMatchObject({

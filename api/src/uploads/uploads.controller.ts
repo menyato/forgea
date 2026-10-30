@@ -8,13 +8,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { UploadedFile as UploadedFileView } from '@forgea/types';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Roles } from '../authorization/decorators.js';
+import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import type { Upload } from '../generated/prisma/client.js';
-import {
-  Role,
-  UploadPurpose,
-  UploadStatus,
-} from '../generated/prisma/enums.js';
+import { UploadPurpose, UploadStatus } from '../generated/prisma/enums.js';
 import { UPLOAD_POLICIES } from './upload-policies.js';
 import { UploadsService } from './uploads.service.js';
 
@@ -32,7 +28,7 @@ const single = (purpose: UploadPurpose) =>
  * Dashboard uploads. The answer is the object key to save on the product; the file goes
  * through the same quarantine and inspection as every upload.
  */
-@Roles(Role.DESIGNER)
+@RequirePermission('catalog.manage')
 @Controller('uploads')
 export class UploadsController {
   constructor(private readonly uploads: UploadsService) {}

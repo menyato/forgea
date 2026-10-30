@@ -6,6 +6,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
   QuotationStatus,
+  Role,
   type PaymentMethod,
 } from '../generated/prisma/enums.js';
 
@@ -23,7 +24,9 @@ export type QuotationRow = Prisma.QuotationGetPayload<{
 }>;
 
 export interface QuotationData {
-  customerId: string;
+  /** Their account if the address has one; the quotation is emailed either way. */
+  customerId: string | null;
+  customerEmail: string;
   leadId: string | null;
   validUntil: Date;
   note: string | null;
@@ -41,6 +44,9 @@ export interface QuotationData {
     unitPrice: string;
     discountPercent: string;
     isCustom: boolean;
+    sizeXcm: string | null;
+    sizeYcm: string | null;
+    sizeZcm: string | null;
   }[];
 }
 
@@ -98,6 +104,7 @@ export class QuotationsRepository {
         },
         data: {
           customerId: q.customerId,
+          customerEmail: q.customerEmail,
           leadId: q.leadId,
           validUntil: q.validUntil,
           note: q.note,
@@ -155,6 +162,15 @@ export class QuotationsRepository {
     });
   }
 
+  /** How many in each status: the numbers on the dashboard's tabs. */
+  async countByStatus(): Promise<Partial<Record<QuotationStatus, number>>> {
+    const rows = await this.prisma.quotation.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+    return Object.fromEntries(rows.map((r) => [r.status, r._count._all]));
+  }
+
   list(query: QuotationListQuery) {
     const q = query.q?.trim();
     const where: Prisma.QuotationWhereInput = {
@@ -163,7 +179,8 @@ export class QuotationsRepository {
         ? {
             OR: [
               { number: { contains: q.toUpperCase() } },
-              { customer: { email: { contains: q.toLowerCase() } } },
+              { customerEmail: { contains: q.toLowerCase() } },
+              { customerName: { contains: q, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -185,6 +202,37 @@ export class QuotationsRepository {
           include: withDetail,
         }),
     );
+  }
+
+  /**
+   * Ties a quotation sent to an address without an account to the account that now accepts
+   * it with that address. Only while it has none: never moves someone else's quotation.
+   */
+  async linkCustomer(id: string, customerId: string): Promise<boolean> {
+    const { count } = await this.prisma.quotation.updateMany({
+      where: { id, customerId: null },
+      data: { customerId },
+    });
+    return count === 1;
+  }
+
+  /**
+   * Staff confirm a quotation for someone without an account (they said yes on the phone):
+   * the order needs one, so a customer account is made for the address, with no password.
+   * Its owner sets one with "forgot your password", which proves the address.
+   */
+  createCustomer(email: string, name: string, phone: string) {
+    return this.prisma.user.create({
+      data: { email, name, phone, role: Role.CUSTOMER },
+      select: { id: true },
+    });
+  }
+
+  account(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, role: true, disabledAt: true },
+    });
   }
 
   customerByEmail(email: string) {

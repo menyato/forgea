@@ -7,7 +7,8 @@ import type {
 } from '@forgea/types';
 import { SaveProductDto } from '@forgea/validation';
 import { data, redirect } from 'react-router';
-import { AdminHeader } from '~/features/admin/admin-ui';
+import { useCan } from '~/features/admin/access';
+import { AdminHeader, ViewOnly } from '~/features/admin/admin-ui';
 import { checked, save, text } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
@@ -105,13 +106,16 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 export default function EditProduct({ loaderData }: Route.ComponentProps) {
   const { product } = loaderData;
+  const editable = useCan()('catalog.manage');
   return (
     <>
       <AdminHeader
         title={product ? product.name : 'New product'}
         intro="Upload the model to see it in 3D and get suggested grams and print time, then choose the category and the options customers can pick."
       />
-      <ProductForm key={product?.id ?? 'new'} {...loaderData} />
+      <ViewOnly editable={editable}>
+        <ProductForm key={product?.id ?? 'new'} {...loaderData} />
+      </ViewOnly>
     </>
   );
 }

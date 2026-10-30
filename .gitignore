@@ -20,6 +20,7 @@ Thumbs.db
 # Emails written instead of sent (development and tests).
 .outbox/
 .outbox-test/
+.outbox-browser/
 
 # Playwright
 test-results/
@@ -41,3 +42,6 @@ deploy/**/*.env
 *.pem
 forgea-deploy-*
 backup-key.json
+
+# Brand kit, Instagram reels/posts and video work: large media, kept out of git (marketing/README.md)
+marketing/

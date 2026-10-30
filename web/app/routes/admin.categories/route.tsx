@@ -1,7 +1,13 @@
 import type { CategoryView } from '@forgea/types';
 import { SaveCategoryDto } from '@forgea/validation';
 import { useFetcher } from 'react-router';
-import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
+import { useCan } from '~/features/admin/access';
+import {
+  AdminHeader,
+  Panel,
+  SaveStatus,
+  ViewOnly,
+} from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
@@ -42,18 +48,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Categories({ loaderData }: Route.ComponentProps) {
+  const editable = useCan()('catalog.manage');
   return (
     <>
       <AdminHeader
         title="Categories"
         intro="Sections of the shop. Customers filter by them; hidden ones disappear from the shop but keep their products."
       />
-      <div className="grid gap-4">
-        <CategoryForm key="new" />
-        {loaderData.categories.map((c) => (
-          <CategoryForm key={c.id} category={c} />
-        ))}
-      </div>
+      <ViewOnly editable={editable}>
+        <div className="grid gap-4">
+          {editable && <CategoryForm key="new" />}
+          {loaderData.categories.map((c) => (
+            <CategoryForm key={c.id} category={c} />
+          ))}
+        </div>
+      </ViewOnly>
     </>
   );
 }

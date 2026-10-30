@@ -1,6 +1,8 @@
 import { OrderStatus, PrintJobStatus } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsIn,
   IsInt,
   IsISO8601,
@@ -12,7 +14,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Trim } from './email.js';
+import { CommaList, Trim } from './email.js';
 import {
   AUDIT_LOG_SORTS,
   ORDER_SORTS,
@@ -84,6 +86,14 @@ export class OrderListQuery extends CursorPageQuery {
   @IsOptional()
   @IsIn(Object.values(OrderStatus))
   status?: OrderStatus;
+
+  /** Several statuses, comma-separated (a dashboard tab, the production planner). */
+  @IsOptional()
+  @CommaList()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsIn(Object.values(OrderStatus), { each: true })
+  statuses?: OrderStatus[];
 
   /** Placed on or after (ISO 8601). */
   @IsOptional()

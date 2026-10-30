@@ -3,46 +3,57 @@ import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { InvoiceTable } from '~/features/accounting/invoice-table';
+import { useCan } from '~/features/admin/access';
 import { Panel, SaveStatus } from '~/features/admin/admin-ui';
 import type { SaveResult } from '~/features/admin/staff.server';
 
 /**
  * The order's invoices. Usually made by the pipeline itself (deposit received, delivered);
  * these buttons cover the rest: an invoice missed (e.g. while the books were locked) and
- * payments collected another way.
+ * payments collected another way. Each shows only to whoever may use it; the whole panel only to
+ * whoever may see invoices (the API leaves them out for anyone else).
  */
-export function InvoicesPanel({ order: o }: { order: StaffOrder }) {
+export function InvoicesPanel({
+  order: o,
+  invoices: all,
+}: {
+  order: StaffOrder;
+  invoices: NonNullable<StaffOrder['invoices']>;
+}) {
   const fetcher = useFetcher<SaveResult>();
-  const invoices = o.invoices.filter((i) => i.type === 'INVOICE');
+  const can = useCan();
+  const invoices = all.filter((i) => i.type === 'INVOICE');
   const hasDeposit = invoices.some((i) => i.invoiceKind === 'DEPOSIT');
   const hasFinal = invoices.some((i) => i.invoiceKind === 'FINAL');
   const open = invoices.filter((i) => Number(i.residual) > 0);
   return (
     <Panel title="Invoices">
-      <InvoiceTable invoices={o.invoices} showOrder={false} />
-      <fetcher.Form method="post" className="flex flex-wrap gap-2">
-        {Number(o.depositRequired) > 0 && !hasDeposit && (
-          <Button
-            type="submit"
-            name="intent"
-            value="deposit-invoice"
-            variant="secondary"
-          >
-            Invoice the deposit
-          </Button>
-        )}
-        {!hasFinal && (
-          <Button
-            type="submit"
-            name="intent"
-            value="final-invoice"
-            variant="secondary"
-          >
-            Invoice the order
-          </Button>
-        )}
-      </fetcher.Form>
-      {open.length > 0 && (
+      <InvoiceTable invoices={all} showOrder={false} />
+      {can('invoices.create') && (
+        <fetcher.Form method="post" className="flex flex-wrap gap-2">
+          {Number(o.depositRequired) > 0 && !hasDeposit && (
+            <Button
+              type="submit"
+              name="intent"
+              value="deposit-invoice"
+              variant="secondary"
+            >
+              Invoice the deposit
+            </Button>
+          )}
+          {!hasFinal && (
+            <Button
+              type="submit"
+              name="intent"
+              value="final-invoice"
+              variant="secondary"
+            >
+              Invoice the order
+            </Button>
+          )}
+        </fetcher.Form>
+      )}
+      {open.length > 0 && can('payments.record') && (
         <fetcher.Form
           method="post"
           className="grid gap-3 border-t border-border pt-4 sm:grid-cols-4 sm:items-end"

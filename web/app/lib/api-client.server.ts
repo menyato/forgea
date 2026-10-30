@@ -1,4 +1,4 @@
-import { HTTP } from '@forgea/types';
+import { HTTP, type Profile } from '@forgea/types';
 import { serverEnv, type ServerEnv } from './env.server';
 
 const {
@@ -36,6 +36,8 @@ export class ApiClient {
   private readonly setCookies: string[] = [];
   /** One renewal per request, shared by every loader that hits an expired token at once. */
   private refreshing: Promise<boolean> | undefined;
+  /** "Who am I", asked once per request however many loaders want it (see `me`). */
+  private profile: Promise<ApiResult<Profile>> | undefined;
 
   constructor(
     private readonly request: Request,
@@ -48,6 +50,16 @@ export class ApiClient {
   /** Whether the browser sent any session cookie (skip "who am I" calls for anonymous visitors). */
   get hasSession(): boolean {
     return this.jar.has(HTTP.ACCESS_COOKIE) || this.jar.has(REFRESH_COOKIE);
+  }
+
+  /**
+   * GET /auth/me, shared by the dashboard's middleware, the page shell and the page itself
+   * within one request. Any change sent through this client forgets it, so a page never
+   * shows a profile from before its own save.
+   */
+  me(): Promise<ApiResult<Profile>> {
+    this.profile ??= this.get<Profile>('/auth/me');
+    return this.profile;
   }
 
   get<T>(path: string): Promise<ApiResult<T>> {
@@ -108,6 +120,7 @@ export class ApiClient {
     body: Body,
     isRetry = false,
   ): Promise<ApiResult<T>> {
+    if (method !== 'GET') this.profile = undefined;
     const response = await this.fetchImpl(new URL(path, this.env.API_URL), {
       method,
       headers: this.requestHeaders(body),

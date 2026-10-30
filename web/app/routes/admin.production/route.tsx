@@ -35,7 +35,10 @@ export async function loader({ url, context }: Route.LoaderArgs) {
     api.get<Page<PrintJobListItem>>(
       `/print-jobs?limit=100&scheduledFrom=${week.toISOString()}&scheduledTo=${end.toISOString()}`,
     ),
-    api.get<Page<OrderListItem>>('/orders?limit=100'),
+    // Only orders being produced, however old: jobs are made for those.
+    api.get<Page<OrderListItem>>(
+      '/orders?limit=100&statuses=CONFIRMED,IN_PRODUCTION',
+    ),
     api.get<MaterialView[]>('/materials'),
   ]);
   for (const r of [open, scheduled, orders]) {
@@ -45,12 +48,7 @@ export async function loader({ url, context }: Route.LoaderArgs) {
     week: week.toISOString(),
     jobs: open.ok ? open.data.items : [],
     thisWeek: scheduled.ok ? scheduled.data.items : [],
-    // Jobs are made for orders that are being produced.
-    orders: orders.ok
-      ? orders.data.items.filter((o) =>
-          ['CONFIRMED', 'IN_PRODUCTION'].includes(o.status),
-        )
-      : [],
+    orders: orders.ok ? orders.data.items : [],
     materials: materials.ok ? materials.data.filter((m) => m.active) : [],
   };
 }

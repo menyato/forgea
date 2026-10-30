@@ -20,6 +20,7 @@ import type { GoogleClaims } from './google-oidc.js';
 import { PasswordHasher } from './password-hasher.js';
 import type { RequestContext } from './request-context.js';
 import { PasswordResetTokens } from '../authorization/password-reset-tokens.js';
+import { TeamPermissions } from '../authorization/team-permissions.js';
 import { LoginAttempts } from './login-attempts.js';
 import { SessionService } from './session.service.js';
 
@@ -51,6 +52,7 @@ export class AuthService {
     private readonly notifications: Notifications,
     private readonly attempts: LoginAttempts,
     private readonly resetTokens: PasswordResetTokens,
+    private readonly team: TeamPermissions,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.workspaceDomain = config.get('WORKSPACE_DOMAIN', { infer: true });
@@ -149,7 +151,7 @@ export class AuthService {
         'This link has expired or is not valid. Ask for a new one from your account.',
       );
     }
-    return toProfile(
+    return this.toProfile(
       user.emailVerifiedAt ? user : await this.users.markEmailVerified(user.id),
     );
   }
@@ -240,7 +242,7 @@ export class AuthService {
     userId: string,
     contact: { name: string; phone: string },
   ): Promise<Profile> {
-    return toProfile(await this.users.updateContact(userId, contact));
+    return this.toProfile(await this.users.updateContact(userId, contact));
   }
 
   logout(refreshToken: string): Promise<void> {
@@ -252,7 +254,7 @@ export class AuthService {
     // A switched-off team member's last access token is refused here too, so the dashboard
     // closes for them at once (other API calls end when that token expires, ≤ 15 minutes).
     if (!user || user.disabledAt) throw new UnauthorizedException();
-    return toProfile(user);
+    return this.toProfile(user);
   }
 
   private async resolveStaff(
@@ -370,7 +372,7 @@ export class AuthService {
 
   private async sign(user: User, refreshToken: string): Promise<IssuedSession> {
     return {
-      profile: toProfile(user),
+      profile: await this.toProfile(user),
       accessToken: await this.accessTokens.sign({
         id: user.id,
         role: user.role,
@@ -384,16 +386,17 @@ export class AuthService {
   private isWorkspaceEmail(email: string): boolean {
     return email.endsWith(`@${this.workspaceDomain}`);
   }
-}
 
-function toProfile(user: User): Profile {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    phone: user.phone,
-    role: user.role,
-    emailVerified: user.emailVerifiedAt !== null,
-    hasPassword: user.passwordHash !== null,
-  };
+  private async toProfile(user: User): Promise<Profile> {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+      emailVerified: user.emailVerifiedAt !== null,
+      hasPassword: user.passwordHash !== null,
+      permissions: await this.team.of(user),
+    };
+  }
 }

@@ -121,11 +121,24 @@ export class LeadsService {
       'Added by the team.',
     );
     await this.leads.addNote(id, 'Lead created.', actorId);
+    // Whoever adds it has seen it.
+    await this.leads.markOpened(id);
     return this.detail(id);
   }
 
   async list(query: LeadListQuery): Promise<Page<LeadListItem>> {
     return toPage(await this.leads.list(query), toListItem);
+  }
+
+  /** Opening a lead in the dashboard: it is no longer new. */
+  async open(id: string): Promise<LeadDetail> {
+    const lead = await this.detail(id);
+    await this.leads.markOpened(id);
+    return lead;
+  }
+
+  async counts(): Promise<{ unopened: number }> {
+    return { unopened: await this.leads.countUnopened() };
   }
 
   async detail(id: string): Promise<LeadDetail> {
@@ -313,6 +326,7 @@ function toListItem(l: LeadRow): LeadListItem {
     stage: l.stage,
     state: stateOf(l),
     probability: l.probability,
+    isNew: l.openedAt === null,
     expectedRevenue: l.expectedRevenue?.toFixed(2) ?? null,
     proratedRevenue: l.expectedRevenue
       ? l.expectedRevenue.times(l.probability).div(100).toFixed(2)

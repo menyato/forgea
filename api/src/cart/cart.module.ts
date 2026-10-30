@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AbandonedCartsCleaner } from './abandoned-carts-cleaner.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { PricingModule } from '../pricing/pricing.module.js';
 import { ProductsModule } from '../products/products.module.js';
@@ -10,7 +11,7 @@ import { CartService } from './cart.service.js';
 @Module({
   imports: [DatabaseModule, PricingModule, ProductsModule],
   controllers: [CartController],
-  providers: [CartService, CartRepository, CartCookie],
+  providers: [CartService, CartRepository, CartCookie, AbandonedCartsCleaner],
   // Checkout (orders module) reads and clears the cart.
   exports: [CartService, CartRepository, CartCookie],
 })

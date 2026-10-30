@@ -11,11 +11,13 @@ import type {
   QuotationListItem,
 } from '@forgea/types';
 import type { QuotationListQuery, SaveQuotationDto } from '@forgea/validation';
+import { QuotationLinkTokens } from '../authorization/quotation-link-tokens.js';
 import { toPage } from '../common/pagination/keyset.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { QuotationStatus } from '../generated/prisma/enums.js';
+import { QuotationStatus, Role } from '../generated/prisma/enums.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { CheckoutService } from '../orders/checkout.service.js';
+import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import {
   type QuotationData,
   type QuotationRow,
@@ -42,10 +44,14 @@ const lineTotal = (l: {
 
 const todayUtc = () => new Date(new Date().toISOString().slice(0, 10));
 
+const NOT_FOUND = 'Quotation not found';
+
 /**
- * Quotations (Odoo `sale.order` before confirmation): the team writes one, sends it, and it
- * is confirmed — by staff, or by the customer accepting it online — into a normal order.
- * Every status change is recorded by the database trigger, with who made it.
+ * Quotations (Odoo `sale.order` before confirmation): the team writes one for any email
+ * address, sends it, and it is confirmed — by staff, or by the customer accepting it online —
+ * into a normal order. The email carries a link that opens the quotation without an account;
+ * accepting it needs one with that address (ordering always does). Every status change is
+ * recorded by the database trigger, with who made it.
  */
 @Injectable()
 export class QuotationsService {
@@ -53,7 +59,13 @@ export class QuotationsService {
     private readonly quotations: QuotationsRepository,
     private readonly checkout: CheckoutService,
     private readonly notifications: Notifications,
+    private readonly links: QuotationLinkTokens,
+    private readonly store: StoreSettingsService,
   ) {}
+
+  counts(): Promise<Partial<Record<QuotationStatus, number>>> {
+    return this.quotations.countByStatus();
+  }
 
   async list(query: QuotationListQuery): Promise<Page<QuotationListItem>> {
     return toPage(await this.quotations.list(query), toListItem);
@@ -81,7 +93,10 @@ export class QuotationsService {
     return this.detail(id);
   }
 
-  /** Emails the customer a link to it; a draft becomes "sent" (a sent one is sent again). */
+  /**
+   * Emails it, in full, to the address it was written for, with a link that needs no account;
+   * a draft becomes "sent" (a sent one is sent again, e.g. after a change).
+   */
   async send(id: string, actorId: string): Promise<QuotationDetail> {
     const q = await this.require(id);
     if (
@@ -99,18 +114,32 @@ export class QuotationsService {
         null,
       );
     }
+    const [token, wording, store] = await Promise.all([
+      this.links.issue(q.id, q.customerEmail, q.validUntil),
+      this.store.quotationEmail(),
+      this.store.get(),
+    ]);
+    const detail = toDetail(q);
     this.notifications.send('quotationSent', {
-      to: q.customer.email,
+      to: q.customerEmail,
+      name: q.customerName,
       number: q.number,
-      total: q.total.toFixed(2),
+      total: detail.total,
       validUntil: q.validUntil,
+      lines: detail.lines,
+      note: q.note,
+      delivery: q.delivery,
+      token,
+      wording,
+      whatsappPhone: store.whatsappPhone,
     });
     return this.detail(id);
   }
 
   /** Staff confirm it (e.g. the customer said yes on the phone). */
   async confirm(id: string, actorId: string): Promise<CheckoutResult> {
-    return this.place(await this.require(id), actorId, [
+    const q = await this.require(id);
+    return this.place(await this.withAccount(q), actorId, [
       QuotationStatus.DRAFT,
       QuotationStatus.SENT,
     ]);
@@ -123,17 +152,50 @@ export class QuotationsService {
   async accept(customerId: string, number: string): Promise<CheckoutResult> {
     const q = await this.quotations.findMine(customerId, number);
     if (!q || q.status === QuotationStatus.DRAFT) {
-      throw new NotFoundException('Quotation not found');
+      throw new NotFoundException(NOT_FOUND);
     }
-    return this.place(q, customerId, [QuotationStatus.SENT]);
+    return this.place({ ...q, customerId }, customerId, [QuotationStatus.SENT]);
   }
 
   async mine(customerId: string, number: string): Promise<QuotationDetail> {
     const q = await this.quotations.findMine(customerId, number);
     if (!q || q.status === QuotationStatus.DRAFT) {
-      throw new NotFoundException('Quotation not found');
+      throw new NotFoundException(NOT_FOUND);
     }
     return toDetail(q);
+  }
+
+  /** The emailed link: the quotation, for anyone holding the link. */
+  async byLink(token: string): Promise<QuotationDetail> {
+    return toDetail(await this.fromLink(token));
+  }
+
+  /**
+   * Accepting from the emailed link. The signed-in account must have the address it was sent
+   * to (the link alone proves nothing about who holds it); the quotation is then theirs.
+   */
+  async acceptByLink(token: string, userId: string): Promise<CheckoutResult> {
+    const q = await this.fromLink(token);
+    const user = await this.quotations.account(userId);
+    if (
+      !user ||
+      user.disabledAt ||
+      user.role !== Role.CUSTOMER ||
+      user.email !== q.customerEmail
+    ) {
+      throw new ConflictException(
+        `This quotation was sent to ${q.customerEmail}: sign in with that address to accept it`,
+      );
+    }
+    if (q.customerId === null) {
+      // Someone else may have linked it a moment ago; only then is it not ours to take.
+      await this.quotations.linkCustomer(q.id, user.id);
+    }
+    const now = await this.require(q.id);
+    if (now.customerId !== user.id) throw new NotFoundException(NOT_FOUND);
+    return this.place({ ...now, customerId: user.id }, user.id, [
+      QuotationStatus.SENT,
+    ]);
   }
 
   async cancel(
@@ -156,8 +218,49 @@ export class QuotationsService {
     return this.detail(id);
   }
 
-  private place(
+  /** A valid link to a quotation that was sent, still for the address in the link. */
+  private async fromLink(token: string): Promise<QuotationRow> {
+    const claims = await this.links.verify(token);
+    const q = claims && (await this.quotations.findById(claims.quotationId));
+    if (
+      !claims ||
+      !q ||
+      q.status === QuotationStatus.DRAFT ||
+      q.customerEmail !== claims.email
+    ) {
+      throw new NotFoundException(
+        'This link is not valid any more. Ask the studio to send the quotation again.',
+      );
+    }
+    return q;
+  }
+
+  /** The order needs an account: the existing one for the address, or a new one. */
+  private async withAccount(
     q: QuotationRow,
+  ): Promise<QuotationRow & { customerId: string }> {
+    if (q.customerId !== null) return { ...q, customerId: q.customerId };
+    const existing = await this.quotations.customerByEmail(q.customerEmail);
+    if (existing && existing.role !== Role.CUSTOMER) {
+      throw new BadRequestException(
+        'This address belongs to a team account, not a customer',
+      );
+    }
+    const customerId =
+      existing?.id ??
+      (
+        await this.quotations.createCustomer(
+          q.customerEmail,
+          q.customerName,
+          q.phone,
+        )
+      ).id;
+    await this.quotations.linkCustomer(q.id, customerId);
+    return { ...q, customerId };
+  }
+
+  private place(
+    q: QuotationRow & { customerId: string },
     actorId: string,
     openStatuses: QuotationStatus[],
   ): Promise<CheckoutResult> {
@@ -183,7 +286,7 @@ export class QuotationsService {
         lines: q.lines.map((l) => ({
           id: l.id,
           productId: l.productId,
-          description: l.description,
+          description: withSize(l),
           quantity: l.quantity,
           unitPrice: discountedUnit({
             unitPrice: l.unitPrice.toFixed(2),
@@ -197,13 +300,16 @@ export class QuotationsService {
     );
   }
 
-  /** Checks the customer account, products and lead, and computes the total. */
+  /** Checks the address, products, sizes and lead, and computes the total. */
   private async prepare(dto: SaveQuotationDto): Promise<QuotationData> {
     const customer = await this.quotations.customerByEmail(dto.customerEmail);
-    if (!customer || customer.disabledAt) {
+    if (customer && customer.role !== Role.CUSTOMER) {
       throw new BadRequestException(
-        'No account with this email: ask the customer to create one on the site first',
+        'This address belongs to a team account, not a customer',
       );
+    }
+    if (customer?.disabledAt) {
+      throw new BadRequestException('This customer account is switched off');
     }
     const productIds = [
       ...new Set(dto.lines.flatMap((l) => (l.productId ? [l.productId] : []))),
@@ -213,6 +319,14 @@ export class QuotationsService {
     ) {
       throw new BadRequestException('One of the products does not exist');
     }
+    const halfSized = dto.lines.findIndex(
+      (l) => [l.sizeXcm, l.sizeYcm, l.sizeZcm].filter(Boolean).length % 3 !== 0,
+    );
+    if (halfSized >= 0) {
+      throw new BadRequestException(
+        `Line ${halfSized + 1}: give all three sizes (width, depth, height) or none`,
+      );
+    }
     if (dto.leadId && !(await this.quotations.leadExists(dto.leadId))) {
       throw new BadRequestException('Lead not found');
     }
@@ -221,7 +335,8 @@ export class QuotationsService {
       new Prisma.Decimal(0),
     );
     return {
-      customerId: customer.id,
+      customerId: customer?.id ?? null,
+      customerEmail: dto.customerEmail,
       leadId: dto.leadId ?? null,
       validUntil: new Date(dto.validUntil),
       note: dto.note ?? null,
@@ -239,15 +354,37 @@ export class QuotationsService {
         unitPrice: l.unitPrice,
         discountPercent: l.discountPercent,
         isCustom: l.isCustom,
+        sizeXcm: l.sizeXcm ?? null,
+        sizeYcm: l.sizeYcm ?? null,
+        sizeZcm: l.sizeZcm ?? null,
       })),
     };
   }
 
   private async require(id: string): Promise<QuotationRow> {
     const q = await this.quotations.findById(id);
-    if (!q) throw new NotFoundException('Quotation not found');
+    if (!q) throw new NotFoundException(NOT_FOUND);
     return q;
   }
+}
+
+type LineRow = QuotationRow['lines'][number];
+
+const sizeOf = (l: LineRow) =>
+  l.sizeXcm && l.sizeYcm && l.sizeZcm
+    ? {
+        x: l.sizeXcm.toString(),
+        y: l.sizeYcm.toString(),
+        z: l.sizeZcm.toString(),
+      }
+    : null;
+
+/** The order line keeps the size the customer agreed to, in its description. */
+function withSize(l: LineRow): string {
+  const size = sizeOf(l);
+  return size
+    ? `${l.description} (${size.x} × ${size.y} × ${size.z} cm)`
+    : l.description;
 }
 
 function toListItem(q: QuotationRow): QuotationListItem {
@@ -255,7 +392,11 @@ function toListItem(q: QuotationRow): QuotationListItem {
     id: q.id,
     number: q.number,
     status: q.status,
-    customer: q.customer,
+    customer: {
+      id: q.customer?.id ?? null,
+      email: q.customerEmail,
+      name: q.customer?.name ?? q.customerName,
+    },
     total: q.total.toFixed(2),
     validUntil: q.validUntil.toISOString().slice(0, 10),
     expired:
@@ -291,6 +432,7 @@ function toDetail(q: QuotationRow): QuotationDetail {
         discountPercent: l.discountPercent.toString(),
       }).toFixed(2),
       isCustom: l.isCustom,
+      size: sizeOf(l),
     })),
     history: q.statusHistory.map((h) => ({
       status: h.status,

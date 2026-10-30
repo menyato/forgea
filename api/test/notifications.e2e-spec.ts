@@ -1,11 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
-import { Notifications } from '../src/mail/notifications.service.js';
 import {
   CSRF,
   cookiePairs,
@@ -14,30 +11,7 @@ import {
   signedInCustomer,
 } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
-
-const OUTBOX = resolve('.outbox-test');
-
-/** Emails written to the test outbox for one address: subject and decoded plain text. */
-async function inbox(app: NestExpressApplication, to: string) {
-  await app.get(Notifications).settled();
-  const files = await readdir(OUTBOX).catch(() => [] as string[]);
-  const mails = await Promise.all(
-    files.map((f) => readFile(join(OUTBOX, f), 'utf8')),
-  );
-  return mails
-    .filter((m) => m.includes(`\r\nTo: ${to}\r\n`))
-    .map((m) => ({
-      subject: /\r\nSubject: (.*)\r\n/.exec(m)?.[1] ?? '',
-      text: Buffer.from(
-        (
-          /text\/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([\s\S]*?)\r\n--/.exec(
-            m,
-          )?.[1] ?? ''
-        ).replace(/\r\n/g, ''),
-        'base64',
-      ).toString('utf8'),
-    }));
-}
+import { inbox } from './mail-helpers.js';
 
 describe('Emails and the production planner (e2e)', () => {
   let app: NestExpressApplication;

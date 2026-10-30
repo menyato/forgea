@@ -7,7 +7,11 @@ const css = toCssVariables(tokens);
 
 describe('toCssVariables', () => {
   it('emits light colors on :root, kebab-cased', () => {
-    expect(css).toMatch(/:root \{[^}]*--forgea-color-surface-raised: #ffffff;/);
+    expect(css).toMatch(
+      new RegExp(
+        `:root \\{[^}]*--forgea-color-surface-raised: ${tokens.color.light.surfaceRaised};`,
+      ),
+    );
   });
 
   it('applies dark colors from the OS preference unless light is pinned', () => {

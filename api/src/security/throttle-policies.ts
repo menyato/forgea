@@ -46,6 +46,14 @@ export const THROTTLE = {
     default: { limit: 10, ttl: minutes(10) },
     hourly: { limit: 40, ttl: hours(1) },
   },
+  /**
+   * Product models and photos: a shop page alone shows dozens, and shoppers behind one office
+   * or mobile network share an address. Bounded so a script can't read the disk flat out.
+   */
+  media: {
+    default: { limit: 900, ttl: minutes(1) },
+    hourly: { limit: 20_000, ttl: hours(1) },
+  },
   /** Cart changes (Phase 5): generous for shoppers, bounded for scripts. */
   cart: {
     default: { limit: 60, ttl: minutes(1) },

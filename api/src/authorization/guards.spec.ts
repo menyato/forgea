@@ -10,9 +10,10 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import { Role } from '../generated/prisma/enums.js';
 import { AccessTokenService } from './access-token.service.js';
 import { ACCESS_COOKIE, AuthCookies } from './auth-cookies.js';
-import { IS_PUBLIC, ROLES } from './decorators.js';
+import { ACCESS, IS_PUBLIC } from './decorators.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
-import { RolesGuard } from './roles.guard.js';
+import { PermissionsGuard } from './permissions.guard.js';
+import type { CurrentAccess, TeamPermissions } from './team-permissions.js';
 
 const SECRET = 'test-secret-that-is-at-least-32-chars-long';
 const config = new ConfigService({
@@ -124,40 +125,68 @@ describe('JwtAuthGuard', () => {
   });
 });
 
-describe('RolesGuard', () => {
-  const guard = new RolesGuard(new Reflector());
-  const as = (role: Role, required?: Role[]) =>
-    route(required ? { [ROLES]: required } : {}, { user: { id: 'u', role } })
-      .ctx;
+describe('PermissionsGuard', () => {
+  /** What the database says about each user, whatever their token claims. */
+  const db = new Map<string, CurrentAccess>([
+    ['admin', { role: Role.ADMIN, disabled: false, permissions: [] }],
+    [
+      'staff',
+      { role: Role.STAFF, disabled: false, permissions: ['orders.view'] },
+    ],
+    ['off', { role: Role.STAFF, disabled: true, permissions: ['orders.view'] }],
+    ['customer', { role: Role.CUSTOMER, disabled: false, permissions: [] }],
+  ]);
+  const team = {
+    current: async (id: string) => db.get(id) ?? null,
+  } as unknown as TeamPermissions;
+  const guard = new PermissionsGuard(new Reflector(), team);
+  /** A request by `id` whose token says `role`, on a route needing `access`. */
+  const call = (id: string | null, access?: string, role: Role = Role.STAFF) =>
+    route(access ? { [ACCESS]: access } : {}, id ? { user: { id, role } } : {});
 
-  it('allows any signed-in user on routes without @Roles()', () => {
-    expect(guard.canActivate(as(Role.CUSTOMER))).toBe(true);
+  it('lets any signed-in user through routes that need no permission', async () => {
+    await expect(guard.canActivate(call('customer').ctx)).resolves.toBe(true);
   });
 
-  it('ADMIN reaches everything', () => {
-    expect(guard.canActivate(as(Role.ADMIN, [Role.STAFF]))).toBe(true);
-    expect(guard.canActivate(as(Role.ADMIN, [Role.CUSTOMER]))).toBe(true);
+  it('lets admins through everything, admin-only routes included', async () => {
+    await expect(
+      guard.canActivate(call('admin', 'books.manage').ctx),
+    ).resolves.toBe(true);
+    await expect(guard.canActivate(call('admin', 'admin').ctx)).resolves.toBe(
+      true,
+    );
   });
 
-  it('STAFF reaches staff routes but not admin-only ones', () => {
-    expect(guard.canActivate(as(Role.STAFF, [Role.STAFF]))).toBe(true);
-    expect(() => guard.canActivate(as(Role.STAFF, [Role.ADMIN]))).toThrow(
+  it('lets a team member through only with the permission', async () => {
+    await expect(
+      guard.canActivate(call('staff', 'orders.view').ctx),
+    ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(call('staff', 'orders.manage').ctx),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('never lets a team member through an admin-only route', async () => {
+    await expect(guard.canActivate(call('staff', 'admin').ctx)).rejects.toThrow(
       ForbiddenException,
     );
   });
 
-  it('CUSTOMER cannot reach staff or admin routes', () => {
-    expect(() => guard.canActivate(as(Role.CUSTOMER, [Role.STAFF]))).toThrow(
-      ForbiddenException,
-    );
-    expect(() => guard.canActivate(as(Role.CUSTOMER, [Role.ADMIN]))).toThrow(
-      ForbiddenException,
-    );
+  it('believes the database, not the token: an old ADMIN token gets nothing extra', async () => {
+    await expect(
+      guard.canActivate(call('staff', 'books.view', Role.ADMIN).ctx),
+    ).rejects.toThrow(ForbiddenException);
+    const allowed = call('staff', 'orders.view', Role.ADMIN);
+    await guard.canActivate(allowed.ctx);
+    // Handlers then see the role as it is now.
+    expect(allowed.request.user).toEqual({ id: 'staff', role: Role.STAFF });
   });
 
-  it('refuses role-restricted routes when nobody is signed in', () => {
-    expect(() =>
-      guard.canActivate(route({ [ROLES]: [Role.STAFF] }).ctx),
-    ).toThrow(ForbiddenException);
+  it('refuses someone switched off, a customer, a deleted account and nobody', async () => {
+    for (const id of ['off', 'customer', 'gone', null]) {
+      await expect(
+        guard.canActivate(call(id, 'orders.view').ctx),
+      ).rejects.toThrow(ForbiddenException);
+    }
   });
 });

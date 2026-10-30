@@ -1,6 +1,6 @@
 import { type Page, Role, type UserListItem } from '@forgea/types';
 import { AddTeamMemberDto, UpdateTeamMemberDto } from '@forgea/validation';
-import { Form, useFetcher, useSearchParams } from 'react-router';
+import { Form, Link, useFetcher, useSearchParams } from 'react-router';
 import { Button, buttonClass } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
@@ -59,7 +59,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 const ROLE_LABELS: Record<Role, string> = {
   [Role.ADMIN]: 'Admin: everything, including money and the team',
-  [Role.STAFF]: 'Staff: orders, production and quotes',
+  [Role.STAFF]: 'Staff: orders, production, sales and invoices',
   [Role.DESIGNER]: 'Designer: the catalog and request designs',
   [Role.CUSTOMER]: 'Customer',
 };
@@ -72,7 +72,7 @@ export default function Team({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         title="Team"
-        intro="Who can open the dashboard and what they can do. Team members sign in with their Google Workspace account only; add their address here first."
+        intro="Who can open the dashboard. Team members sign in with their Google Workspace account only; add their address here first. What each role may do is set on Roles & permissions; open a person for their own exceptions."
       />
       <div className="grid gap-6">
         <AddMember />
@@ -165,6 +165,15 @@ function MemberRow({ user, isMe }: { user: UserListItem; isMe: boolean }) {
           {user.disabled && ' · access switched off'}
         </span>
       </p>
+      {!isMe && user.role !== Role.ADMIN && (
+        <Link
+          to={`/admin/team/${user.id}`}
+          className="text-sm underline"
+          aria-label={`Access for ${user.name ?? user.email}`}
+        >
+          Permissions for this person
+        </Link>
+      )}
       {isMe ? (
         <p className="text-sm text-text-muted">
           {ROLE_LABELS[user.role]} (you)

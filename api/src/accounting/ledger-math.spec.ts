@@ -1,5 +1,4 @@
 import {
-  ageBucket,
   entryNumber,
   isBalanced,
   paymentState,
@@ -50,21 +49,6 @@ describe('paymentState', () => {
     expect(paymentState('30', '12.5', false)).toBe('partial');
     expect(paymentState('30', '0', false)).toBe('paid');
     expect(paymentState('30', '0', true)).toBe('reversed');
-  });
-});
-
-describe('ageBucket', () => {
-  const asOf = new Date('2026-10-27T00:00:00Z');
-  it.each([
-    ['2026-10-30', 'notDue'],
-    ['2026-10-27', 'notDue'],
-    ['2026-10-26', 'days1to30'],
-    ['2026-09-27', 'days1to30'],
-    ['2026-09-26', 'days31to60'],
-    ['2026-08-01', 'days61to90'],
-    ['2026-01-01', 'older'],
-  ])('due %s is %s', (due, bucket) => {
-    expect(ageBucket(new Date(`${due}T00:00:00Z`), asOf)).toBe(bucket);
   });
 });
 

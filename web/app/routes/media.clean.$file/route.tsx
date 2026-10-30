@@ -11,6 +11,14 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   if (!isMediaKey(key)) throw new Response('Not found', { status: 404 });
   const api = context.get(apiContext);
   const upstream = await api.file(`/media/${key}`);
+  // Too many at once: say so (with when to retry), rather than "not found", which would
+  // make the page show the model as missing.
+  if (upstream.status === 429) {
+    throw new Response('Too many requests', {
+      status: 429,
+      headers: { 'retry-after': upstream.headers.get('retry-after') ?? '5' },
+    });
+  }
   if (!upstream.ok || !upstream.body)
     throw new Response('Not found', { status: 404 });
   // Session cookies the API set are added by apiMiddleware.

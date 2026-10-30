@@ -25,8 +25,12 @@ import {
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
-import { Role, UploadPurpose } from '../generated/prisma/enums.js';
+import {
+  CurrentUser,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
+import { UploadPurpose } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UPLOAD_POLICIES } from '../uploads/upload-policies.js';
 import { UploadSlots } from '../uploads/upload-slots.interceptor.js';
@@ -37,7 +41,7 @@ import { LeadsService } from './leads.service.js';
 export class LeadsController {
   constructor(private readonly leads: LeadsService) {}
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.view')
   @Get()
   list(@Query() query: LeadListQuery): Promise<Page<LeadListItem>> {
     return this.leads.list(query);
@@ -70,7 +74,7 @@ export class LeadsController {
   }
 
   /** A lead the team adds (a call, a fair, a referral). */
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Audit({ action: 'lead.create', targetType: 'Lead' })
   @Post('manual')
   createManual(
@@ -80,13 +84,21 @@ export class LeadsController {
     return this.leads.createManual(dto, user.id);
   }
 
-  @Roles(Role.STAFF)
-  @Get(':id')
-  detail(@Param('id', ParseUUIDPipe) id: string): Promise<LeadDetail> {
-    return this.leads.detail(id);
+  /** Leads nobody has opened yet: the "New" tab's number. */
+  @RequirePermission('leads.view')
+  @Get('counts')
+  counts(): Promise<{ unopened: number }> {
+    return this.leads.counts();
   }
 
-  @Roles(Role.STAFF)
+  /** Opening it in the dashboard marks it as seen (no longer "New"). */
+  @RequirePermission('leads.view')
+  @Get(':id')
+  detail(@Param('id', ParseUUIDPipe) id: string): Promise<LeadDetail> {
+    return this.leads.open(id);
+  }
+
+  @RequirePermission('leads.manage')
   @Audit({ action: 'lead.update', targetType: 'Lead' })
   @Put(':id')
   update(
@@ -96,7 +108,7 @@ export class LeadsController {
     return this.leads.update(id, dto);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Audit({ action: 'lead.stage', targetType: 'Lead' })
   @HttpCode(200)
   @Post(':id/stage')
@@ -108,7 +120,7 @@ export class LeadsController {
     return this.leads.move(id, dto.stageId, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Audit({ action: 'lead.lose', targetType: 'Lead' })
   @HttpCode(200)
   @Post(':id/lose')
@@ -120,7 +132,7 @@ export class LeadsController {
     return this.leads.lose(id, dto, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Audit({ action: 'lead.restore', targetType: 'Lead' })
   @HttpCode(200)
   @Post(':id/restore')
@@ -131,7 +143,7 @@ export class LeadsController {
     return this.leads.restore(id, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Post(':id/activities')
   addActivity(
     @Param('id', ParseUUIDPipe) id: string,
@@ -141,7 +153,7 @@ export class LeadsController {
     return this.leads.addActivity(id, dto, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @HttpCode(200)
   @Post(':id/activities/:activityId/done')
   completeActivity(
@@ -152,7 +164,7 @@ export class LeadsController {
     return this.leads.completeActivity(id, activityId, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.manage')
   @Post(':id/notes')
   addNote(
     @Param('id', ParseUUIDPipe) id: string,

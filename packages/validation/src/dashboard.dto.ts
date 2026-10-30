@@ -1,4 +1,10 @@
-import { CustomRequestStatus, PrintJobStatus, Role } from '@forgea/types';
+import {
+  CustomRequestStatus,
+  type Permission,
+  PERMISSIONS,
+  PrintJobStatus,
+  Role,
+} from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -33,7 +39,7 @@ import {
   STATUS_NOTE_MAX_LENGTH,
   STORAGE_KEY_PATTERN,
 } from './constants.js';
-import { NormalizeEmail, Trim } from './email.js';
+import { CommaList, NormalizeEmail, Trim } from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
 
 const money = { message: 'Enter an amount, e.g. 12.50' };
@@ -182,6 +188,28 @@ export class SaveSiteThemeDto {
   allowLowContrast?: boolean;
 }
 
+/** A palette kept under a name, to switch to later. */
+export class SaveNamedThemeDto {
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Give the theme a name' })
+  @MaxLength(60)
+  name!: string;
+
+  @IsObject()
+  palette!: Record<string, string>;
+
+  @Matches(/^[a-z]{2,20}$/)
+  basedOn!: string;
+}
+
+/** Switching the site to a saved theme; the same readability rule as saving one. */
+export class ApplyThemeDto {
+  @IsOptional()
+  @IsBoolean()
+  allowLowContrast?: boolean;
+}
+
 /** "Make me something": what the customer describes, with an optional uploaded file. */
 export class CreateCustomRequestDto {
   @Trim()
@@ -261,6 +289,14 @@ export class CustomRequestListQuery extends CursorPageQuery {
   @IsIn(Object.values(CustomRequestStatus))
   status?: CustomRequestStatus;
 
+  /** Several statuses, comma-separated (a dashboard tab). */
+  @IsOptional()
+  @CommaList()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsIn(Object.values(CustomRequestStatus), { each: true })
+  statuses?: CustomRequestStatus[];
+
   /** Request number, title or customer email. */
   @IsOptional()
   @Trim()
@@ -318,4 +354,49 @@ export class UpdatePrintJobDto {
   @MinLength(1)
   @MaxLength(50)
   machine?: string;
+}
+
+/** What one role may do (Roles & permissions page). */
+export class SaveRolePermissionsDto {
+  @IsArray()
+  @ArrayMaxSize(PERMISSIONS.length)
+  @ArrayUnique()
+  @IsIn(PERMISSIONS, { each: true, message: 'Unknown permission' })
+  permissions!: Permission[];
+}
+
+/** One team member's own changes on top of their role; the API refuses a key in both lists. */
+export class SaveTeamAccessDto {
+  @IsArray()
+  @ArrayMaxSize(PERMISSIONS.length)
+  @ArrayUnique()
+  @IsIn(PERMISSIONS, { each: true, message: 'Unknown permission' })
+  granted!: Permission[];
+
+  @IsArray()
+  @ArrayMaxSize(PERMISSIONS.length)
+  @ArrayUnique()
+  @IsIn(PERMISSIONS, { each: true, message: 'Unknown permission' })
+  denied!: Permission[];
+}
+
+/** The quotation email in the owner's words; empty means the standard wording. */
+export class UpdateQuotationEmailDto {
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(150)
+  subject?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  intro?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  closing?: string;
 }

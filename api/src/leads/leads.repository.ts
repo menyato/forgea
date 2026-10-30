@@ -125,6 +125,21 @@ export class LeadsRepository {
     });
   }
 
+  /** The first time someone in the team opens it; it stops being "New". */
+  async markOpened(id: string): Promise<void> {
+    await this.prisma.lead.updateMany({
+      where: { id, openedAt: null },
+      data: { openedAt: new Date() },
+    });
+  }
+
+  /** Open leads nobody has opened yet. */
+  countUnopened(): Promise<number> {
+    return this.prisma.lead.count({
+      where: { closedAt: null, openedAt: null },
+    });
+  }
+
   list(query: LeadListQuery) {
     const state: Prisma.LeadWhereInput =
       query.state === 'open'
@@ -136,6 +151,7 @@ export class LeadsRepository {
       ...state,
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.assignedToId ? { assignedToId: query.assignedToId } : {}),
+      ...(query.unopened ? { openedAt: null } : {}),
       ...(query.q
         ? {
             OR: [

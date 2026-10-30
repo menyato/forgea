@@ -15,6 +15,7 @@ import type {
   UsersRepository,
 } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
+import type { TeamPermissions } from '../authorization/team-permissions.js';
 import { PasswordResetTokens } from '../authorization/password-reset-tokens.js';
 import { LoginAttempts } from './login-attempts.js';
 import type { GoogleClaims } from './google-oidc.js';
@@ -31,6 +32,8 @@ class FakeUsers {
       name: null,
       phone: null,
       disabledAt: null,
+      grantedPermissions: [],
+      deniedPermissions: [],
       googleId: null,
       passwordHash: null,
       emailVerifiedAt: null,
@@ -120,6 +123,7 @@ describe('AuthService', () => {
       notifications,
       new LoginAttempts(),
       new PasswordResetTokens(jwt),
+      { of: async () => [] } as unknown as TeamPermissions,
       config,
     );
   });

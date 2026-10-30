@@ -9,6 +9,7 @@ import { data, Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { Field, SelectField, TextAreaField } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { apiContext } from '~/lib/request.server';
@@ -89,6 +90,8 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
   const { lead: l, stages, reasons } = loaderData;
   const move = useFetcher<SaveResult>();
   const restore = useFetcher<SaveResult>();
+  const can = useCan();
+  const mayWork = can('leads.manage');
   return (
     <>
       <AdminHeader
@@ -106,7 +109,15 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
         <div className="grid content-start gap-6">
           <Panel title="Stage">
-            {l.state === 'open' ? (
+            {!mayWork ? (
+              <p className="text-sm">
+                {l.state === 'open'
+                  ? `${l.stage.name}, ${l.probability}%`
+                  : l.state === 'won'
+                    ? 'This lead was won.'
+                    : `Lost: ${l.lostReason}.`}
+              </p>
+            ) : l.state === 'open' ? (
               <move.Form method="post" className="flex flex-wrap gap-2">
                 <input type="hidden" name="intent" value="stage" />
                 {stages.map((s) => (
@@ -173,12 +184,14 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
                 ))}
               </ul>
             )}
-            <Link
-              to={`/admin/quotations/new?lead=${l.id}&email=${encodeURIComponent(l.customer?.email ?? l.email)}&name=${encodeURIComponent(l.name)}`}
-              className={buttonClass('secondary', 'justify-self-start')}
-            >
-              Write a quotation
-            </Link>
+            {can('quotations.manage') && (
+              <Link
+                to={`/admin/quotations/new?lead=${l.id}&email=${encodeURIComponent(l.customer?.email ?? l.email)}&name=${encodeURIComponent(l.name)}`}
+                className={buttonClass('secondary', 'justify-self-start')}
+              >
+                Write a quotation
+              </Link>
+            )}
           </Panel>
 
           <Panel title="Log">
@@ -193,7 +206,7 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
                 </li>
               ))}
             </ol>
-            <NoteForm />
+            {mayWork && <NoteForm />}
           </Panel>
         </div>
 
@@ -201,12 +214,12 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
           <Panel title="Follow-ups">
             <ul className="grid gap-2 text-sm">
               {l.activities.map((a) => (
-                <ActivityRow key={a.id} activity={a} />
+                <ActivityRow key={a.id} activity={a} mayWork={mayWork} />
               ))}
             </ul>
-            <ActivityForm />
+            {mayWork && <ActivityForm />}
           </Panel>
-          {l.state === 'open' && reasons.length > 0 && (
+          {mayWork && l.state === 'open' && reasons.length > 0 && (
             <LoseForm reasons={reasons} />
           )}
         </div>
@@ -217,8 +230,10 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
 
 function ActivityRow({
   activity: a,
+  mayWork,
 }: {
   activity: LeadDetail['activities'][number];
+  mayWork: boolean;
 }) {
   const fetcher = useFetcher<SaveResult>();
   const late = !a.doneAt && new Date(a.dueAt) < new Date();
@@ -235,7 +250,7 @@ function ActivityRow({
           {a.assignedTo ? ` · ${a.assignedTo}` : ''}
         </span>
       </span>
-      {!a.doneAt && (
+      {!a.doneAt && mayWork && (
         <fetcher.Form method="post">
           <input type="hidden" name="intent" value="done" />
           <input type="hidden" name="activityId" value={a.id} />

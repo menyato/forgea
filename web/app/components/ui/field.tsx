@@ -11,6 +11,16 @@ const CONTROL =
   'placeholder:text-text-muted focus-visible:outline-2 focus-visible:outline-offset-1 ' +
   'focus-visible:outline-focus-ring aria-[invalid=true]:border-danger';
 
+/**
+ * Every control says whether the browser may autofill it (DevTools flags those that don't):
+ * contact fields by their type, everything else off. A field's own autoComplete wins.
+ */
+const AUTOFILL: Partial<Record<string, string>> = {
+  email: 'email',
+  tel: 'tel',
+  password: 'current-password',
+};
+
 interface FieldProps {
   label: string;
   name: string;
@@ -38,6 +48,7 @@ export function Field({
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? `${id}-note` : undefined}
         className={CONTROL}
+        autoComplete={AUTOFILL[input.type ?? 'text'] ?? 'off'}
         {...input}
       />
       <FieldNote id={`${id}-note`} error={error} hint={hint} />
@@ -64,6 +75,7 @@ export function TextAreaField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? `${id}-note` : undefined}
         className={`${CONTROL} min-h-24`}
+        autoComplete="off"
         {...input}
       />
       <FieldNote id={`${id}-note`} error={error} hint={hint} />
@@ -92,6 +104,7 @@ export function SelectField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? `${id}-note` : undefined}
         className={CONTROL}
+        autoComplete="off"
         {...select}
       >
         {children}
@@ -118,6 +131,7 @@ export function CheckboxField({
         value="on"
         aria-describedby={hint ? `${id}-note` : undefined}
         className="mt-1 size-4 accent-[var(--forgea-color-accent)]"
+        autoComplete="off"
         {...input}
       />
       <div className="grid gap-0.5">

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { StoreSettings } from '@forgea/types';
+import type { QuotationEmailSettings, StoreSettings } from '@forgea/types';
 import type {
+  UpdateQuotationEmailDto,
   UpdateRequestSettingsDto,
   UpdateStoreSettingsDto,
 } from '@forgea/validation';
@@ -37,6 +38,37 @@ export class StoreSettingsService {
   ): Promise<StoreSettings> {
     return toView(await this.settings.updateRequestRules(dto, adminId));
   }
+
+  /** The quotation email's own words (null: the standard wording). Never shown publicly. */
+  async quotationEmail(): Promise<QuotationEmailSettings> {
+    return toEmail(await this.settings.get());
+  }
+
+  async updateQuotationEmail(
+    dto: UpdateQuotationEmailDto,
+    adminId: string,
+  ): Promise<QuotationEmailSettings> {
+    // An empty box goes back to the standard wording.
+    const own = (v: string | undefined) => (v ? v : null);
+    return toEmail(
+      await this.settings.updateQuotationEmail(
+        {
+          quotationEmailSubject: own(dto.subject),
+          quotationEmailIntro: own(dto.intro),
+          quotationEmailClosing: own(dto.closing),
+        },
+        adminId,
+      ),
+    );
+  }
+}
+
+function toEmail(row: StoreSettingsRow): QuotationEmailSettings {
+  return {
+    subject: row.quotationEmailSubject,
+    intro: row.quotationEmailIntro,
+    closing: row.quotationEmailClosing,
+  };
 }
 
 function toView(row: StoreSettingsRow): StoreSettings {

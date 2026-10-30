@@ -1,5 +1,5 @@
 import {
-  type AdminProductListItem,
+  type ProductListItem,
   type CheckoutResult,
   type Page,
   PAYMENT_METHOD_LABELS,
@@ -18,6 +18,7 @@ import {
   SelectField,
   TextAreaField,
 } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   checked,
@@ -31,15 +32,16 @@ import type { Route } from './+types/route';
 
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const products = await api.get<Page<AdminProductListItem>>(
-    '/products/manage?limit=100&sort=name&order=asc',
-  );
+  // The shop's own list (what is for sale, at today's prices): quoting needs no catalog access.
   const isNew = params.id === 'new';
-  const quotation = isNew
-    ? null
-    : await api.get<QuotationDetail>(
-        `/quotations/${encodeURIComponent(params.id)}`,
-      );
+  const [products, quotation] = await Promise.all([
+    api.get<Page<ProductListItem>>('/products?limit=100&sort=name&order=asc'),
+    isNew
+      ? null
+      : api.get<QuotationDetail>(
+          `/quotations/${encodeURIComponent(params.id)}`,
+        ),
+  ]);
   if (quotation && !quotation.ok)
     throw new Response(quotation.message, { status: quotation.status });
   const in30 = new Date(Date.now() + 30 * 86_400_000)
@@ -47,7 +49,7 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
     .slice(0, 10);
   return {
     quotation: quotation?.ok ? quotation.data : null,
-    products: products.ok ? products.data.items.filter((p) => p.active) : [],
+    products: products.ok ? products.data.items : [],
     // Coming from a lead: who it's for.
     prefill: {
       leadId: url.searchParams.get('lead'),
@@ -116,6 +118,10 @@ interface Line {
   unitPrice: string;
   discountPercent: string;
   isCustom: boolean;
+  /** Printed size in cm: width, depth, height (all three or none). */
+  sizeX: string;
+  sizeY: string;
+  sizeZ: string;
 }
 
 const lineTotal = (l: Line) =>
@@ -128,10 +134,12 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
   const { quotation: q, products, prefill } = loaderData;
   const fetcher = useFetcher<ActionResult>();
   const errors = fetcher.data?.errors ?? {};
+  const mayManage = useCan()('quotations.manage');
   const editable =
-    !q ||
-    q.status === QuotationStatus.DRAFT ||
-    q.status === QuotationStatus.SENT;
+    mayManage &&
+    (!q ||
+      q.status === QuotationStatus.DRAFT ||
+      q.status === QuotationStatus.SENT);
   const [delivery, setDelivery] = useState(q?.delivery ?? false);
   const [lines, setLines] = useState<Line[]>(
     q?.lines.map((l) => ({
@@ -141,6 +149,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
       unitPrice: l.unitPrice,
       discountPercent: l.discountPercent,
       isCustom: l.isCustom,
+      sizeX: l.size?.x ?? '',
+      sizeY: l.size?.y ?? '',
+      sizeZ: l.size?.z ?? '',
     })) ?? [
       {
         productId: '',
@@ -149,6 +160,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
         unitPrice: '',
         discountPercent: '0',
         isCustom: false,
+        sizeX: '',
+        sizeY: '',
+        sizeZ: '',
       },
     ],
   );
@@ -163,7 +177,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
         intro={
           q
             ? `${q.expired ? 'Expired' : q.status.toLowerCase()} · for ${q.customer.email}${q.orderNumber ? ` · order ${q.orderNumber}` : ''}`
-            : 'For a customer with an account on the site. Prices in USD; shown with taxes included, like the shop.'
+            : 'For anyone with an email address: sending it emails the full quotation with a link to accept it online. Prices in USD, taxes included, like the shop.'
         }
         action={
           <Link
@@ -197,6 +211,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
               unitPrice: l.unitPrice,
               discountPercent: l.discountPercent || '0',
               isCustom: l.isCustom,
+              ...(l.sizeX || l.sizeY || l.sizeZ
+                ? { sizeXcm: l.sizeX, sizeYcm: l.sizeY, sizeZcm: l.sizeZ }
+                : {}),
             })),
           )}
         />
@@ -204,7 +221,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           <Panel title="Customer">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Field
-                label="Customer account email"
+                label="Customer email"
+                hint="No account needed: they get it by email"
+                autoComplete="off"
                 name="customerEmail"
                 type="email"
                 required
@@ -339,6 +358,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                   <label className="flex items-center gap-1">
                     <input
                       type="checkbox"
+                      name={`line-${i}-custom`}
                       checked={l.isCustom}
                       onChange={(e) =>
                         set(i, { isCustom: e.currentTarget.checked })
@@ -360,6 +380,29 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                     </Button>
                   )}
                 </div>
+                <fieldset className="grid grid-cols-3 gap-2 sm:col-span-full sm:max-w-md">
+                  <legend className="mb-1 text-sm font-medium">
+                    Printed size, cm (optional: all three)
+                  </legend>
+                  {(
+                    [
+                      ['sizeX', 'Width'],
+                      ['sizeY', 'Depth'],
+                      ['sizeZ', 'Height'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <Field
+                      key={key}
+                      label={label}
+                      name={`line-${i}-${key}`}
+                      inputMode="decimal"
+                      placeholder="cm"
+                      autoComplete="off"
+                      value={l[key]}
+                      onChange={(e) => set(i, { [key]: e.currentTarget.value })}
+                    />
+                  ))}
+                </fieldset>
               </div>
             ))}
             {Object.entries(errors)
@@ -383,6 +426,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                       unitPrice: '',
                       discountPercent: '0',
                       isCustom: false,
+                      sizeX: '',
+                      sizeY: '',
+                      sizeZ: '',
                     },
                   ])
                 }
@@ -410,12 +456,18 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           </div>
         )}
       </fetcher.Form>
-      {q && <QuotationActions quotation={q} />}
+      {q && <QuotationActions quotation={q} mayManage={mayManage} />}
     </>
   );
 }
 
-function QuotationActions({ quotation: q }: { quotation: QuotationDetail }) {
+function QuotationActions({
+  quotation: q,
+  mayManage,
+}: {
+  quotation: QuotationDetail;
+  mayManage: boolean;
+}) {
   const fetcher = useFetcher<ActionResult>();
   const open =
     q.status === QuotationStatus.DRAFT || q.status === QuotationStatus.SENT;
@@ -426,7 +478,13 @@ function QuotationActions({ quotation: q }: { quotation: QuotationDetail }) {
           Order {fetcher.data.order.orderNumber} created; it is in Orders.
         </p>
       )}
-      {open ? (
+      {open && !mayManage ? (
+        <p className="text-sm text-text-muted">
+          {q.status === QuotationStatus.SENT
+            ? 'Sent to the customer.'
+            : 'Draft.'}
+        </p>
+      ) : open ? (
         <fetcher.Form method="post" className="flex flex-wrap gap-3">
           <Button
             type="submit"

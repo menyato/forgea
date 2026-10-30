@@ -1,34 +1,56 @@
 import type { LeadListItem, LeadStageView, Page } from '@forgea/types';
 import { SaveLeadDto } from '@forgea/validation';
-import { Link, redirect, useFetcher, useSearchParams } from 'react-router';
+import { Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { Field, TextAreaField } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import {
+  type SaveResult,
+  save,
+  staffContext,
+  text,
+} from '~/features/admin/staff.server';
+import { ViewTabs } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
-const STATES = [
-  ['open', 'Open'],
-  ['won', 'Won'],
-  ['lost', 'Lost'],
+/**
+ * The tabs: new leads nobody has opened yet, the ones assigned to me, the whole pipeline as
+ * a board by stage, and the closed ones.
+ */
+const TABS = [
+  { key: 'new', label: 'New', state: 'open' },
+  { key: 'mine', label: 'Assigned to me', state: 'open' },
+  { key: 'open', label: 'Pipeline', state: 'open' },
+  { key: 'won', label: 'Won', state: 'won' },
+  { key: 'lost', label: 'Lost', state: 'lost' },
 ] as const;
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const state = url.searchParams.get('state') ?? 'open';
-  const query = new URLSearchParams({ limit: '100', state });
+  // "?state=" was the old address of these tabs; it still works.
+  const key =
+    url.searchParams.get('tab') ?? url.searchParams.get('state') ?? 'open';
+  const tab = TABS.find((t) => t.key === key) ?? TABS[2];
+  const query = new URLSearchParams({ limit: '100', state: tab.state });
+  if (tab.key === 'new') query.set('unopened', 'true');
+  if (tab.key === 'mine')
+    query.set('assignedToId', context.get(staffContext).id);
   const q = url.searchParams.get('q');
   if (q) query.set('q', q);
-  const [leads, stages] = await Promise.all([
+  const [leads, stages, counts] = await Promise.all([
     api.get<Page<LeadListItem>>(`/leads?${query}`),
     api.get<LeadStageView[]>('/lead-stages'),
+    api.get<{ unopened: number }>('/leads/counts'),
   ]);
   if (!leads.ok) throw new Response(leads.message, { status: leads.status });
   return {
-    state,
+    tab: tab.key,
+    state: tab.state,
     leads: leads.data.items,
+    unopened: counts.ok ? counts.data.unopened : 0,
     stages: stages.ok ? stages.data.filter((s) => s.active) : [],
   };
 }
@@ -60,8 +82,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Leads({ loaderData }: Route.ComponentProps) {
-  const { state, leads, stages } = loaderData;
-  const [params] = useSearchParams();
+  const { tab, leads, stages, unopened } = loaderData;
+  const mayWork = useCan()('leads.manage');
   const total = leads.reduce((s, l) => s + Number(l.proratedRevenue ?? 0), 0);
   return (
     <>
@@ -77,32 +99,22 @@ export default function Leads({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
-      <nav
-        aria-label="Lead state"
-        className="mb-6 flex flex-wrap items-center gap-2"
-      >
-        {STATES.map(([value, label]) => (
-          <Link
-            key={value}
-            to={`?state=${value}`}
-            aria-current={state === value ? 'page' : undefined}
-            className={`rounded-pill border px-3 py-1 text-sm ${
-              state === value
-                ? 'border-accent bg-accent text-on-accent'
-                : 'border-border text-text-muted hover:text-text'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-        {state === 'open' && leads.length > 0 && (
-          <span className="ml-auto text-sm text-text-muted">
-            Weighted pipeline: <Money amount={total.toFixed(2)} />
-          </span>
-        )}
-      </nav>
+      <ViewTabs
+        label="Lead groups"
+        current={tab}
+        tabs={TABS.map((t) => ({
+          key: t.key,
+          label: t.label,
+          ...(t.key === 'new' ? { count: unopened } : {}),
+        }))}
+      />
+      {tab === 'open' && leads.length > 0 && (
+        <p className="mb-4 text-right text-sm text-text-muted">
+          Weighted pipeline: <Money amount={total.toFixed(2)} />
+        </p>
+      )}
 
-      {state === 'open' ? (
+      {tab === 'open' ? (
         <div className="mb-8 grid gap-4 overflow-x-auto lg:grid-flow-col lg:auto-cols-[minmax(15rem,1fr)]">
           {stages
             .filter((s) => !s.isWon)
@@ -129,15 +141,21 @@ export default function Leads({ loaderData }: Route.ComponentProps) {
         </div>
       ) : (
         <div className="mb-8 grid gap-3">
-          {leads.length === 0 && <p className="text-text-muted">None yet.</p>}
+          {leads.length === 0 && (
+            <p className="text-text-muted">
+              {tab === 'new'
+                ? 'No new leads: every one has been opened.'
+                : tab === 'mine'
+                  ? 'No open leads are assigned to you.'
+                  : 'None yet.'}
+            </p>
+          )}
           {leads.map((l) => (
             <LeadCard key={l.id} lead={l} />
           ))}
         </div>
       )}
-      {params.get('state') !== 'won' && params.get('state') !== 'lost' && (
-        <NewLead />
-      )}
+      {mayWork && tab !== 'won' && tab !== 'lost' && <NewLead />}
     </>
   );
 }
@@ -149,7 +167,14 @@ function LeadCard({ lead: l }: { lead: LeadListItem }) {
       to={`/admin/leads/${l.id}`}
       className="grid gap-1 rounded-lg border border-border bg-surface p-3 text-sm hover:border-accent"
     >
-      <span className="font-semibold">{l.name}</span>
+      <span className="flex items-center justify-between gap-2 font-semibold">
+        {l.name}
+        {l.isNew && (
+          <span className="rounded-pill bg-accent px-2 text-xs text-on-accent">
+            New
+          </span>
+        )}
+      </span>
       <span className="text-text-muted">{l.messagePreview.slice(0, 90)}</span>
       <span className="flex flex-wrap gap-x-3 text-xs text-text-muted">
         {l.expectedRevenue && (

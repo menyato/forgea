@@ -1,7 +1,6 @@
 import {
   CUSTOM_REQUEST_STATUS_LABELS,
   CustomRequestStatus,
-  Role,
   type StaffCustomRequest,
 } from '@forgea/types';
 import {
@@ -12,6 +11,7 @@ import { data, Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { Field, TextAreaField } from '~/components/ui/field';
+import { can } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   type SaveResult,
@@ -32,9 +32,13 @@ export async function loader({ params, context }: Route.LoaderArgs) {
       `/custom-requests/${encodeURIComponent(params.id)}`,
     );
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  // Designers design; quoting is for staff and admins (the API checks it too).
-  const canQuote = context.get(staffContext).role !== Role.DESIGNER;
-  return { request: r.data, canQuote };
+  // Only what their permissions allow is offered (the API checks it too).
+  const staff = context.get(staffContext);
+  return {
+    request: r.data,
+    canQuote: can(staff, 'requests.quote'),
+    canDesign: can(staff, 'requests.design'),
+  };
 }
 
 /** design (upload) | quote | cancel */
@@ -68,7 +72,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
-  const { request: r, canQuote } = loaderData;
+  const { request: r, canQuote, canDesign } = loaderData;
   const open =
     r.status === CustomRequestStatus.SUBMITTED ||
     r.status === CustomRequestStatus.QUOTED;
@@ -115,7 +119,7 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
                 No design yet. The customer sees it next to the quote.
               </p>
             )}
-            {open && <DesignUpload />}
+            {open && canDesign && <DesignUpload />}
           </Panel>
         </div>
 

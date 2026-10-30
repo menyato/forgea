@@ -14,8 +14,7 @@ import type { CatalogFile, CatalogImportReport } from '@forgea/types';
 import type { Response } from 'express';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import { CatalogExporter } from './catalog-exporter.service.js';
 import {
   CatalogImporter,
@@ -27,7 +26,7 @@ const MB = 1024 * 1024;
 const CATALOG_FILE_MAX = 300 * MB;
 
 /** Moving the catalog between installations (e.g. from local to the deployed site). Admin only. */
-@Roles(Role.ADMIN)
+@RequirePermission('catalog.transfer')
 @Controller('catalog-transfer')
 export class CatalogTransferController {
   constructor(

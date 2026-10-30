@@ -3,6 +3,7 @@ import { Form, Link, useSearchParams } from 'react-router';
 import { Money } from '~/components/money';
 import { buttonClass } from '~/components/ui/button';
 import { Field } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import { AdminHeader } from '~/features/admin/admin-ui';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -27,6 +28,7 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 export default function Products({ loaderData }: Route.ComponentProps) {
   const { products } = loaderData;
   const [params] = useSearchParams();
+  const mayAdd = useCan()('catalog.manage');
   const next = new URLSearchParams(params);
   if (products.nextCursor) next.set('cursor', products.nextCursor);
   return (
@@ -35,9 +37,11 @@ export default function Products({ loaderData }: Route.ComponentProps) {
         title="Products"
         intro="Everything in the shop. Prices come from the materials, the pricing settings and each product's options."
         action={
-          <Link to="/admin/products/new" className={buttonClass()}>
-            Add a product
-          </Link>
+          mayAdd ? (
+            <Link to="/admin/products/new" className={buttonClass()}>
+              Add a product
+            </Link>
+          ) : undefined
         }
       />
       <Form method="get" role="search" className="mb-4 flex items-end gap-2">
@@ -53,11 +57,16 @@ export default function Products({ loaderData }: Route.ComponentProps) {
       </Form>
       {products.items.length === 0 ? (
         <p className="text-text-muted">
-          No products yet.{' '}
-          <Link to="/admin/products/new" className="underline">
-            Add the first one
-          </Link>
-          .
+          No products yet.
+          {mayAdd && (
+            <>
+              {' '}
+              <Link to="/admin/products/new" className="underline">
+                Add the first one
+              </Link>
+              .
+            </>
+          )}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">

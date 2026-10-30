@@ -30,6 +30,8 @@ export type LeadState = 'open' | 'won' | 'lost';
 
 export interface LeadListItem {
   id: string;
+  /** Nobody in the team has opened it yet. */
+  isNew: boolean;
   name: string;
   email: string;
   phone: string | null;
@@ -92,13 +94,16 @@ export interface QuotationLineView {
   /** quantity × unit price, less the discount. */
   lineTotal: Money;
   isCustom: boolean;
+  /** The printed size in cm, e.g. { x: "12.5", y: "8", z: "4.2" }, or null when not given. */
+  size: { x: string; y: string; z: string } | null;
 }
 
 export interface QuotationListItem {
   id: string;
   number: string;
   status: QuotationStatus;
-  customer: { id: string; email: string; name: string | null };
+  /** `id` is null while they have no account: the quotation reaches them by email. */
+  customer: { id: string | null; email: string; name: string | null };
   total: Money;
   validUntil: string;
   expired: boolean;

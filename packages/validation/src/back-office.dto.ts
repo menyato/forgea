@@ -31,7 +31,7 @@ import {
   PERCENT_PATTERN,
   PHONE_PATTERN,
 } from './constants.js';
-import { NormalizeEmail, Trim } from './email.js';
+import { NormalizeEmail, QueryBoolean, Trim } from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
 
 const money = { message: 'Enter an amount, e.g. 12.50' };
@@ -168,6 +168,12 @@ export class LeadListQuery extends CursorPageQuery {
   @IsIn(LEAD_STATES)
   state: (typeof LEAD_STATES)[number] = 'open';
 
+  /** Only leads nobody in the team has opened yet (the "New" tab). */
+  @IsOptional()
+  @QueryBoolean()
+  @IsBoolean()
+  unopened?: boolean;
+
   @IsOptional()
   @IsUUID()
   assignedToId?: string;
@@ -181,6 +187,10 @@ export class LeadListQuery extends CursorPageQuery {
 }
 
 // Sales -------------------------------------------------------------------
+
+/** 0.1 to 9999.9 cm, one decimal at most. */
+const SIZE_CM = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
+const sizeMessage = { message: 'A size in cm, e.g. 12.5' };
 
 export class QuotationLineDto {
   @IsOptional()
@@ -208,12 +218,25 @@ export class QuotationLineDto {
 
   @IsBoolean()
   isCustom: boolean = false;
+
+  /** The printed size in cm (width × depth × height): all three, or none. */
+  @IsOptional()
+  @Matches(SIZE_CM, sizeMessage)
+  sizeXcm?: string;
+
+  @IsOptional()
+  @Matches(SIZE_CM, sizeMessage)
+  sizeYcm?: string;
+
+  @IsOptional()
+  @Matches(SIZE_CM, sizeMessage)
+  sizeZcm?: string;
 }
 
 export class SaveQuotationDto {
-  /** The customer's account (they need one to order). */
+  /** Who it is for: an account is not needed, the quotation is emailed to this address. */
   @NormalizeEmail()
-  @IsEmail({}, { message: 'Enter the email of the customer account' })
+  @IsEmail({}, { message: 'Enter the email of the customer' })
   @MaxLength(EMAIL_MAX_LENGTH)
   customerEmail!: string;
 

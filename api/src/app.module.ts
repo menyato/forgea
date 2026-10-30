@@ -10,7 +10,7 @@ import { AuditInterceptor } from './audit-log/audit.interceptor.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { JwtAuthGuard } from './authorization/jwt-auth.guard.js';
-import { RolesGuard } from './authorization/roles.guard.js';
+import { PermissionsGuard } from './authorization/permissions.guard.js';
 import { CartModule } from './cart/cart.module.js';
 import { validateEnvironment } from './config/environment.js';
 import { HealthModule } from './health/health.module.js';
@@ -76,7 +76,7 @@ import { AccountingModule } from './accounting/accounting.module.js';
     { provide: APP_GUARD, useClass: ClientIpThrottlerGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_FILTER, useClass: PricingErrorFilter },
     { provide: APP_FILTER, useClass: PrismaErrorFilter },

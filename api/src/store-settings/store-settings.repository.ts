@@ -42,4 +42,17 @@ export class StoreSettingsRepository {
       data: { ...data, updatedByUserId },
     });
   }
+
+  updateQuotationEmail(
+    data: Pick<
+      StoreSettings,
+      'quotationEmailSubject' | 'quotationEmailIntro' | 'quotationEmailClosing'
+    >,
+    updatedByUserId: string,
+  ): Promise<StoreSettings> {
+    return this.prisma.storeSettings.update({
+      where: SINGLETON,
+      data: { ...data, updatedByUserId },
+    });
+  }
 }

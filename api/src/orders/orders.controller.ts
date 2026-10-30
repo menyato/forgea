@@ -16,6 +16,7 @@ import type {
   CustomerOrder,
   OrderListItem,
   Page,
+  Permission,
   StaffOrder,
 } from '@forgea/types';
 import {
@@ -25,11 +26,15 @@ import {
   OrderListQuery,
 } from '@forgea/validation';
 import type { Request, Response } from 'express';
+import type { OrderStatus } from '../generated/prisma/enums.js';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Roles } from '../authorization/decorators.js';
+import {
+  CallerPermissions,
+  CurrentUser,
+  RequirePermission,
+} from '../authorization/decorators.js';
 import { CartCookie } from '../cart/cart-cookie.js';
-import { Role } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { CheckoutService } from './checkout.service.js';
 import { CustomerOrdersService } from './customer-orders.service.js';
@@ -50,7 +55,7 @@ export class OrdersController {
   ) {}
 
   /** The order pipeline for staff and admins. */
-  @Roles(Role.STAFF)
+  @RequirePermission('orders.view')
   @Get()
   list(@Query() query: OrderListQuery): Promise<Page<OrderListItem>> {
     return this.orders.list(query);
@@ -66,14 +71,24 @@ export class OrdersController {
   }
 
   /** One order in full: customer, address, items with options, money, history. */
-  @Roles(Role.STAFF)
+  /** How many in each status, for the dashboard's tabs. */
+  @RequirePermission('orders.view')
+  @Get('counts')
+  counts(): Promise<Partial<Record<OrderStatus, number>>> {
+    return this.orders.counts();
+  }
+
+  @RequirePermission('orders.view')
   @Get(':id')
-  detail(@Param('id', ParseUUIDPipe) id: string): Promise<StaffOrder> {
-    return this.orders.detail(id);
+  detail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CallerPermissions() permissions: Permission[],
+  ): Promise<StaffOrder> {
+    return this.orders.detail(id, permissions.includes('invoices.view'));
   }
 
   /** Staff move an order along its status flow. Audit-logged; history written by the database. */
-  @Roles(Role.STAFF)
+  @RequirePermission('orders.manage')
   @Audit({ action: 'order.status.change', targetType: 'Order' })
   @Patch(':id/status')
   changeStatus(

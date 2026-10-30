@@ -15,12 +15,11 @@ import {
   UpdatePrintJobDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { RequirePermission } from '../authorization/decorators.js';
 import { PrintJobsService } from './print-jobs.service.js';
 
 /** The production planner, for staff and admins. Changes are audit-logged. */
-@Roles(Role.STAFF)
+@RequirePermission('production.manage')
 @Controller('print-jobs')
 export class PrintJobsController {
   constructor(private readonly jobs: PrintJobsService) {}

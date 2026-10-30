@@ -12,17 +12,20 @@ enum QuotationStatus {
 /// order, so every sale — shop, custom request, quotation — is fulfilled and invoiced the same
 /// way. `status` history is written by a database trigger, like orders.
 model Quotation {
-  id          String          @id @default(uuid(7)) @db.Uuid
+  id            String          @id @default(uuid(7)) @db.Uuid
   /// "Q-2026-0001", from a yearly sequence.
-  number      String          @unique
-  status      QuotationStatus @default(DRAFT)
-  customerId  String          @db.Uuid
-  customer    User            @relation("QuotationCustomer", fields: [customerId], references: [id], onDelete: Restrict)
-  leadId      String?         @db.Uuid
-  lead        Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  validUntil  DateTime        @db.Date
+  number        String          @unique
+  status        QuotationStatus @default(DRAFT)
+  /// Who it is for: sent there by email, with a link that needs no account. Lowercased.
+  customerEmail String
+  /// Their account, when they have one (linked when they accept with that address).
+  customerId    String?         @db.Uuid
+  customer      User?           @relation("QuotationCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  leadId        String?         @db.Uuid
+  lead          Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  validUntil    DateTime        @db.Date
   /// Shown to the customer under the lines.
-  note        String?
+  note          String?
 
   // How it will be delivered and paid once confirmed (the order's fields).
   customerName  String
@@ -33,20 +36,21 @@ model Quotation {
   addressLine   String?
 
   /// USD, a snapshot of the lines (after line discounts).
-  total       Decimal  @db.Decimal(12, 2)
-  orderId     String?  @unique @db.Uuid
-  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  createdById String   @db.Uuid
-  createdBy   User     @relation("QuotationAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  total       Decimal   @db.Decimal(12, 2)
+  orderId     String?   @unique @db.Uuid
+  order       Order?    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  createdById String    @db.Uuid
+  createdBy   User      @relation("QuotationAuthor", fields: [createdById], references: [id], onDelete: Restrict)
   sentAt      DateTime? @db.Timestamptz(3)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
 
   lines         QuotationLine[]
   statusHistory QuotationStatusHistory[]
 
   @@index([status, id])
   @@index([customerId])
+  @@index([customerEmail])
   @@map("quotations")
 }
 
@@ -64,6 +68,10 @@ model QuotationLine {
   discountPercent Decimal   @default(0) @db.Decimal(5, 2)
   /// Made to order: counts toward the deposit once confirmed.
   isCustom        Boolean   @default(false)
+  /// The printed size in cm (width × depth × height); all three or none (CHECK constraint).
+  sizeXcm         Decimal?  @db.Decimal(7, 1)
+  sizeYcm         Decimal?  @db.Decimal(7, 1)
+  sizeZcm         Decimal?  @db.Decimal(7, 1)
 
   @@index([quotationId])
   @@map("quotation_lines")

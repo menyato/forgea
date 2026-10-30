@@ -200,6 +200,10 @@ export class CustomRequestsService {
     });
   }
 
+  counts(): Promise<Partial<Record<CustomRequestStatus, number>>> {
+    return this.requests.countByStatus();
+  }
+
   async list(
     query: CustomRequestListQuery,
   ): Promise<Page<CustomRequestListItem>> {

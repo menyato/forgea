@@ -226,6 +226,7 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
             <input
               type="number"
               name="quantity"
+              autoComplete="off"
               min={1}
               max={CART_QUANTITY_MAX}
               value={quantity}

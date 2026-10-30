@@ -21,11 +21,15 @@ import {
   QuotationListQuery,
   SaveQuotationDto,
 } from '@forgea/validation';
+import type { QuotationStatus } from '../generated/prisma/enums.js';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Roles } from '../authorization/decorators.js';
+import {
+  CurrentUser,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
 import { ParsePatternPipe } from '../custom-requests/parse-pattern.pipe.js';
-import { Role } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { QuotationsService } from './quotations.service.js';
 
@@ -34,6 +38,12 @@ const QuotationNumber = () =>
     'number',
     new ParsePatternPipe(/^Q-\d{4}-\d{4,}$/, 'Quotation not found'),
   );
+
+/** A signed link token: three base64url parts, of a sane length. */
+const LinkToken = new ParsePatternPipe(
+  /^[\w-]{10,200}\.[\w-]{10,1000}\.[\w-]{10,200}$/,
+  'This link is not valid any more. Ask the studio to send the quotation again.',
+);
 
 /** Staff write and confirm quotations; the customer sees and accepts their own online. */
 @Controller('quotations')
@@ -58,19 +68,45 @@ export class QuotationsController {
     return this.quotations.accept(user.id, number);
   }
 
-  @Roles(Role.STAFF)
+  /** Public: the link in the quotation email opens it without an account. */
+  @Public()
+  @Throttle(THROTTLE.quote)
+  @Get('link/:token')
+  byLink(@Param('token', LinkToken) token: string): Promise<QuotationDetail> {
+    return this.quotations.byLink(token);
+  }
+
+  /** Accepting from the email: signed in with the address it was sent to. */
+  @Throttle(THROTTLE.checkout)
+  @HttpCode(200)
+  @Post('link/:token/accept')
+  acceptByLink(
+    @Param('token', LinkToken) token: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CheckoutResult> {
+    return this.quotations.acceptByLink(token, user.id);
+  }
+
+  @RequirePermission('quotations.view')
   @Get()
   list(@Query() query: QuotationListQuery): Promise<Page<QuotationListItem>> {
     return this.quotations.list(query);
   }
 
-  @Roles(Role.STAFF)
+  /** How many in each status, for the dashboard's tabs. */
+  @RequirePermission('quotations.view')
+  @Get('counts')
+  counts(): Promise<Partial<Record<QuotationStatus, number>>> {
+    return this.quotations.counts();
+  }
+
+  @RequirePermission('quotations.view')
   @Get(':id')
   detail(@Param('id', ParseUUIDPipe) id: string): Promise<QuotationDetail> {
     return this.quotations.detail(id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('quotations.manage')
   @Audit({ action: 'quotation.create', targetType: 'Quotation' })
   @Post()
   create(
@@ -80,7 +116,7 @@ export class QuotationsController {
     return this.quotations.create(dto, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('quotations.manage')
   @Audit({ action: 'quotation.update', targetType: 'Quotation' })
   @Put(':id')
   update(
@@ -90,7 +126,7 @@ export class QuotationsController {
     return this.quotations.update(id, dto);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('quotations.manage')
   @Audit({ action: 'quotation.send', targetType: 'Quotation' })
   @HttpCode(200)
   @Post(':id/send')
@@ -101,7 +137,7 @@ export class QuotationsController {
     return this.quotations.send(id, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('quotations.manage')
   @Audit({ action: 'quotation.confirm', targetType: 'Quotation' })
   @HttpCode(200)
   @Post(':id/confirm')
@@ -112,7 +148,7 @@ export class QuotationsController {
     return this.quotations.confirm(id, user.id);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('quotations.manage')
   @Audit({ action: 'quotation.cancel', targetType: 'Quotation' })
   @HttpCode(200)
   @Post(':id/cancel')

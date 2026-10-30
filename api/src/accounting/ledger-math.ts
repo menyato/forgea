@@ -43,21 +43,6 @@ export function paymentState(
   return D(residual).gte(total) ? 'not_paid' : 'partial';
 }
 
-export type AgeBucket =
-  'notDue' | 'days1to30' | 'days31to60' | 'days61to90' | 'older';
-
-const DAY_MS = 86_400_000;
-
-/** Which ageing column an open amount falls in, from its due date. */
-export function ageBucket(dueDate: Date, asOf: Date): AgeBucket {
-  const days = Math.floor((asOf.getTime() - dueDate.getTime()) / DAY_MS);
-  if (days <= 0) return 'notDue';
-  if (days <= 30) return 'days1to30';
-  if (days <= 60) return 'days31to60';
-  if (days <= 90) return 'days61to90';
-  return 'older';
-}
-
 /** "INV/2026/00001": the journal (or "R" + it for credit notes), the year, the count. */
 export function entryNumber(prefix: string, year: number, n: number): string {
   return `${prefix}/${year}/${String(n).padStart(5, '0')}`;

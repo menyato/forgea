@@ -147,6 +147,8 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
                 <input
                   type="number"
                   min={2}
+                  name={`tier-${i}-quantity`}
+                  autoComplete="off"
                   value={t.minQuantity}
                   onChange={(e) => {
                     const v = e.currentTarget.value;
@@ -163,6 +165,8 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
                 <span>Discount (%)</span>
                 <input
                   inputMode="decimal"
+                  name={`tier-${i}-percent`}
+                  autoComplete="off"
                   value={t.percent}
                   onChange={(e) => {
                     const v = e.currentTarget.value;

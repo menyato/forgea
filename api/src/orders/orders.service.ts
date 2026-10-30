@@ -7,6 +7,7 @@ import {
   type StaffOrder,
 } from '@forgea/types';
 import type { OrderListQuery } from '@forgea/validation';
+import type { OrderStatus } from '../generated/prisma/enums.js';
 import { toPage } from '../common/pagination/keyset.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { OrdersRepository, type StaffOrderRow } from './orders.repository.js';
@@ -17,6 +18,10 @@ export class OrdersService {
     private readonly orders: OrdersRepository,
     private readonly invoicing: Invoicing,
   ) {}
+
+  counts(): Promise<Partial<Record<OrderStatus, number>>> {
+    return this.orders.countByStatus();
+  }
 
   async list(query: OrderListQuery): Promise<Page<OrderListItem>> {
     return toPage(await this.orders.list(query), (o) => ({
@@ -33,10 +38,14 @@ export class OrdersService {
     }));
   }
 
-  async detail(id: string): Promise<StaffOrder> {
+  /** `withInvoices`: the caller may see invoices; otherwise they are left out, not just hidden. */
+  async detail(id: string, withInvoices: boolean): Promise<StaffOrder> {
     const o = await this.orders.findForStaff(id);
     if (!o) throw new NotFoundException('Order not found');
-    return { ...toStaffOrder(o), invoices: await this.invoicing.forOrder(id) };
+    return {
+      ...toStaffOrder(o),
+      invoices: withInvoices ? await this.invoicing.forOrder(id) : null,
+    };
   }
 }
 

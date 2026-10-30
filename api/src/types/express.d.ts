@@ -1,3 +1,4 @@
+import type { Permission } from '@forgea/types';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 
 declare global {
@@ -11,6 +12,8 @@ declare global {
       clientIp: string;
       /** Set by JwtAuthGuard from a valid access cookie. */
       user?: User;
+      /** Set by PermissionsGuard on routes that need a permission: what the caller may do. */
+      permissions?: Permission[];
       /** Verified Google ID-token claims, set by GoogleAuthGuard on the OAuth callback only. */
       googleClaims?: unknown;
     }

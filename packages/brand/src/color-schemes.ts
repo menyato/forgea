@@ -9,7 +9,8 @@ export function colorSchemes(p: Palette): {
     light: {
       background: p.paper,
       surface: p.white,
-      surfaceRaised: p.white,
+      // Hover and highlighted panels: one step further from the page, like dark mode's.
+      surfaceRaised: p.ash,
       text: p.ink,
       textMuted: p.graphite,
       border: p.ash,

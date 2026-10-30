@@ -9,13 +9,15 @@ import { signInFor } from '~/features/auth/sign-in-links.server';
 import type { ApiResult } from '~/lib/api-client.server';
 import { type FieldErrors, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
+import { mayOpen, pageAccess } from './access';
 
 /** The signed-in staff member or admin, set by `staffMiddleware` for every dashboard route. */
 export const staffContext = createContext<Profile>();
 
 /**
- * Runs before any dashboard loader or action: visitors go to sign-in, customers are refused.
- * The API checks every call again; this only keeps the dashboard from rendering for them.
+ * Runs before any dashboard loader or action: visitors go to sign-in, customers are refused,
+ * and so is a team member opening a page their permissions don't cover (`PAGES`), even by
+ * typing its address. The API checks every call again; this keeps the page from rendering.
  */
 export const staffMiddleware: MiddlewareFunction<Response> = async (
   { url, context },
@@ -23,10 +25,13 @@ export const staffMiddleware: MiddlewareFunction<Response> = async (
 ) => {
   const api = context.get(apiContext);
   if (!api.hasSession) throw redirect(signInFor(url));
-  const me = await api.get<Profile>('/auth/me');
+  const me = await api.me();
   if (me.status === 401) throw redirect(signInFor(url));
   if (!me.ok || me.data.role === Role.CUSTOMER) {
     throw new Response('The dashboard is for the Forgea team', { status: 403 });
+  }
+  if (!mayOpen(me.data, pageAccess(url.pathname))) {
+    throw new Response('You do not have access to this page', { status: 403 });
   }
   context.set(staffContext, me.data);
   return next();

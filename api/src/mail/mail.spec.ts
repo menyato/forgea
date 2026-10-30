@@ -103,6 +103,49 @@ describe('MailTemplates', () => {
       'https://forgea-lab.com/verify-email?token=a.b%2Bc',
     );
   });
+
+  it('lays out a quotation with sizes, in the owner words, and escapes whatever was typed', () => {
+    const email = templates.quotationSent({
+      to: 'n@example.com',
+      name: 'Nour <b>',
+      number: 'Q-2026-0001',
+      total: '90.00',
+      validUntil: new Date('2099-12-31'),
+      lines: [
+        {
+          id: 'l1',
+          productId: null,
+          description: '<img src=x onerror=alert(1)> stand',
+          quantity: 2,
+          unitPrice: '25.00',
+          discountPercent: '10',
+          lineTotal: '45.00',
+          isCustom: true,
+          size: { x: '30', y: '12.5', z: '18' },
+        },
+      ],
+      note: 'Matte "black"',
+      delivery: false,
+      token: 'a.b-c',
+      wording: {
+        subject: 'For {name}: {number}',
+        intro: null,
+        closing: 'Bye {name}',
+      },
+      whatsappPhone: '+961 70 000 000',
+    });
+    expect(email.subject).toBe('For Nour <b>: Q-2026-0001');
+    expect(email.text).toContain('Dear Nour <b>,');
+    expect(email.text).toContain(
+      '30 × 12.5 × 18 cm: 2 × $25.00 less 10% = $45.00',
+    );
+    expect(email.text).toContain('https://forgea-lab.com/q/a.b-c');
+    expect(email.text).toContain('Bye Nour <b>');
+    expect(email.html).toContain('&lt;img src=x onerror=alert(1)&gt; stand');
+    expect(email.html).not.toContain('<img');
+    expect(email.html).not.toContain('Nour <b>');
+    expect(email.html).toContain('Size 30 × 12.5 × 18 cm');
+  });
 });
 
 describe('Notifications', () => {

@@ -25,8 +25,7 @@ import {
   SetHomePlateDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { Public, Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { Public, RequirePermission } from '../authorization/decorators.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { ProductsService } from './products.service.js';
 
@@ -41,7 +40,7 @@ export class ProductsController {
   }
 
   /** Dashboard: every product, hidden ones included. Declared before ":slug". */
-  @Roles(Role.DESIGNER)
+  @RequirePermission('catalog.view')
   @Get('manage')
   manageList(
     @Query() query: ProductListQuery,
@@ -49,7 +48,7 @@ export class ProductsController {
     return this.products.manageList(query);
   }
 
-  @Roles(Role.DESIGNER)
+  @RequirePermission('catalog.view')
   @Get('manage/:id')
   manageOne(@Param('id', ParseUUIDPipe) id: string): Promise<AdminProduct> {
     return this.products.manageOne(id);
@@ -63,7 +62,7 @@ export class ProductsController {
   }
 
   /** Designers and admins choose the bed's line-up (up to five, the first in the centre). */
-  @Roles(Role.DESIGNER)
+  @RequirePermission('homebed.manage')
   @Audit({
     action: 'product.plate.set',
     targetType: 'HomePlate',
@@ -92,14 +91,14 @@ export class ProductsController {
     return this.products.price(slug, dto.options);
   }
 
-  @Roles(Role.DESIGNER)
+  @RequirePermission('catalog.manage')
   @Audit({ action: 'product.create', targetType: 'Product' })
   @Post()
   create(@Body() dto: SaveProductDto): Promise<AdminProduct> {
     return this.products.create(dto);
   }
 
-  @Roles(Role.DESIGNER)
+  @RequirePermission('catalog.manage')
   @Audit({ action: 'product.update', targetType: 'Product' })
   @Put(':id')
   update(

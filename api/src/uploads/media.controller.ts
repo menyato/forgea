@@ -6,11 +6,13 @@ import {
   Res,
   StreamableFile,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { isMediaKey } from '@forgea/validation';
 import type { Response } from 'express';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import { OptionalUser, Public } from '../authorization/decorators.js';
 import { Role } from '../generated/prisma/enums.js';
+import { THROTTLE } from '../security/throttle-policies.js';
 import { UploadsService } from './uploads.service.js';
 
 /**
@@ -18,6 +20,7 @@ import { UploadsService } from './uploads.service.js';
  * them to browsers. The access rules live here, never in a public URL.
  */
 @Public()
+@Throttle(THROTTLE.media)
 @Controller('media')
 export class MediaController {
   constructor(private readonly uploads: UploadsService) {}

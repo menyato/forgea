@@ -120,3 +120,43 @@ Replaces the earlier Google Cloud plan (why: docs/SECURITY.md, first section).
 
 Written, not yet run: Docker is not installed on the development machine yet, so the images
 and the stack are verified the first time CI builds them and the first deploy runs.
+
+## Phase 14 — Team permissions and saved themes
+
+Started 2026-10-29, modelled on the owner's LRC-401 project (a permission list in code, roles
+as editable data, per-person grants and denials, checked on every request) without its gaps
+(anyone managing roles or invites could raise their own access there).
+
+- **Permissions:** 27 permissions in 6 groups (`@forgea/types`), each API route needs one;
+  "Roles & permissions" edits what staff and designers may do, a person's page on the Team
+  page allows or denies single permissions with a live preview. Read from the database on
+  every call, so a change applies on the next click. Managing the team and permissions stays
+  admin-only.
+- **Dashboard:** pages, menu entries, buttons and forms follow the permissions; a page someone
+  may not open is refused even when its address is typed in.
+- **Saved themes:** palettes kept under a name and switched to in one click; "back to the
+  original colours" now resets the editor too.
+- **Tests:** every API route checked for the right permission (customer, without it, with
+  only it), changes applying at once, escalation attempts refused, and browser tests typing
+  refused addresses.
+- **Quotations by email (2026-10-29):** for anyone with an address, no account needed to read:
+  the email is the full quotation (owner-worded introduction and closing, lines with printed
+  size X × Y × Z cm, total, validity, note) with a button to accept online; accepting creates
+  the account link, staff confirming creates the account.
+- **Dashboard layout:** the menu folds into groups like apps; orders, custom requests,
+  quotations, leads and invoices split into tabs by what needs doing (with counts), with a
+  board view; leads nobody has opened yet show as "New".
+- **Browser audit:** every page is checked for DevTools issues, console errors and form fields
+  without a name or autocomplete value.
+- **Speed (2026-10-30, from the performance review):** aged receivables as one SQL aggregate
+  (only open lines; a match counts from the day it was made, which also fixes past dates);
+  newest-first lists page by id (indexed) instead of sorting by date; a journal index; model
+  files get their own rate limit and an exact lookup of their original; one "who am I" per
+  request and no shell reload on plain navigation; the production planner asks only for the
+  orders in production; daily clean-up of expired sessions and visitors' 30-day-old carts.
+- **Dashboard frame:** the side menu folds to a strip (remembered) or opens over the page on
+  phones; the current page and its group stand out. Light-mode panels are a shade below the
+  page so boxes show, like dark mode.
+- Not done from the review: a cache for rarely-changing settings (only safe with one API
+  process), a per-account monthly balance table for the reports, and order search indexes
+  (pg_trgm) — none matters at today's size.

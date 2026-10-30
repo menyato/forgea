@@ -1,10 +1,26 @@
-import { Body, Controller, Delete, Get, Put } from '@nestjs/common';
-import type { SiteTheme } from '@forgea/brand';
-import { SaveSiteThemeDto } from '@forgea/validation';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
+import type { SavedThemeView, SiteTheme } from '@forgea/brand';
+import {
+  ApplyThemeDto,
+  SaveNamedThemeDto,
+  SaveSiteThemeDto,
+} from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
-import { CurrentUser, Public, Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import {
+  CurrentUser,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
 import { SiteThemeService } from './site-theme.service.js';
 
 @Controller('site-theme')
@@ -19,7 +35,7 @@ export class SiteThemeController {
   }
 
   /** Admin only, audit-logged. Refused when a colour pair is not readable enough. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('theme.manage')
   @Audit({
     action: 'site-theme.update',
     targetType: 'SiteTheme',
@@ -34,7 +50,7 @@ export class SiteThemeController {
   }
 
   /** Admin only, audit-logged: back to the default palette. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('theme.manage')
   @Audit({
     action: 'site-theme.reset',
     targetType: 'SiteTheme',
@@ -43,5 +59,45 @@ export class SiteThemeController {
   @Delete()
   reset(): Promise<{ theme: SiteTheme | null }> {
     return this.themes.reset();
+  }
+
+  @RequirePermission('theme.manage')
+  @Get('saved')
+  saved(): Promise<SavedThemeView[]> {
+    return this.themes.saved();
+  }
+
+  /** Keeps a palette under a name (the same name replaces it); the site does not change. */
+  @RequirePermission('theme.manage')
+  @Audit({
+    action: 'site-theme.saved.keep',
+    targetType: 'SavedTheme',
+    targetId: 'new',
+  })
+  @Post('saved')
+  keep(
+    @Body() dto: SaveNamedThemeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<SavedThemeView[]> {
+    return this.themes.keep(dto, user.id);
+  }
+
+  /** Every page, for everyone, uses this saved theme from the next page they open. */
+  @RequirePermission('theme.manage')
+  @Audit({ action: 'site-theme.saved.apply', targetType: 'SavedTheme' })
+  @Post('saved/:id/apply')
+  apply(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApplyThemeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ theme: SiteTheme | null }> {
+    return this.themes.apply(id, dto, user.id);
+  }
+
+  @RequirePermission('theme.manage')
+  @Audit({ action: 'site-theme.saved.delete', targetType: 'SavedTheme' })
+  @Delete('saved/:id')
+  forget(@Param('id', ParseUUIDPipe) id: string): Promise<SavedThemeView[]> {
+    return this.themes.forget(id);
   }
 }

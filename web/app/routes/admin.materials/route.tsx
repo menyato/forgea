@@ -3,7 +3,13 @@ import { SaveMaterialDto } from '@forgea/validation';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CheckboxField, Field } from '~/components/ui/field';
-import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
+import { useCan } from '~/features/admin/access';
+import {
+  AdminHeader,
+  Panel,
+  SaveStatus,
+  ViewOnly,
+} from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
@@ -43,18 +49,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Materials({ loaderData }: Route.ComponentProps) {
+  const editable = useCan()('materials.manage');
   return (
     <>
       <AdminHeader
         title="Materials"
         intro="Filament and resin: what a gram costs you, and how dense and fast it prints — used to price products and to estimate grams and hours from a 3D model."
       />
-      <div className="grid gap-4">
-        {loaderData.materials.map((m) => (
-          <MaterialForm key={m.id} material={m} />
-        ))}
-        <MaterialForm key="new" />
-      </div>
+      <ViewOnly editable={editable}>
+        <div className="grid gap-4">
+          {loaderData.materials.map((m) => (
+            <MaterialForm key={m.id} material={m} />
+          ))}
+          {editable && <MaterialForm key="new" />}
+        </div>
+      </ViewOnly>
     </>
   );
 }

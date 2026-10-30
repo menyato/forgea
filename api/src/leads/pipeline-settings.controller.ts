@@ -10,8 +10,7 @@ import {
 import type { LeadStageView, LostReasonView } from '@forgea/types';
 import { SaveLeadStageDto, SaveLostReasonDto } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { Roles } from '../authorization/decorators.js';
-import { Role } from '../generated/prisma/enums.js';
+import { RequirePermission } from '../authorization/decorators.js';
 import { LeadsService } from './leads.service.js';
 
 /** The pipeline's stages and lost reasons: staff read them, admins change them. */
@@ -19,13 +18,13 @@ import { LeadsService } from './leads.service.js';
 export class PipelineSettingsController {
   constructor(private readonly leads: LeadsService) {}
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.view')
   @Get('lead-stages')
   stages(): Promise<LeadStageView[]> {
     return this.leads.stages();
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('pipeline.manage')
   @Audit({
     action: 'lead-stage.create',
     targetType: 'LeadStage',
@@ -36,7 +35,7 @@ export class PipelineSettingsController {
     return this.leads.saveStage(null, dto);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('pipeline.manage')
   @Audit({ action: 'lead-stage.update', targetType: 'LeadStage' })
   @Put('lead-stages/:id')
   updateStage(
@@ -46,13 +45,13 @@ export class PipelineSettingsController {
     return this.leads.saveStage(id, dto);
   }
 
-  @Roles(Role.STAFF)
+  @RequirePermission('leads.view')
   @Get('lost-reasons')
   lostReasons(): Promise<LostReasonView[]> {
     return this.leads.lostReasons();
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('pipeline.manage')
   @Audit({
     action: 'lost-reason.create',
     targetType: 'LostReason',
@@ -63,7 +62,7 @@ export class PipelineSettingsController {
     return this.leads.saveLostReason(null, dto);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('pipeline.manage')
   @Audit({ action: 'lost-reason.update', targetType: 'LostReason' })
   @Put('lost-reasons/:id')
   updateReason(

@@ -1,5 +1,10 @@
-import type { StoreSettings } from '@forgea/types';
 import {
+  QUOTATION_EMAIL_DEFAULTS,
+  type QuotationEmailSettings,
+  type StoreSettings,
+} from '@forgea/types';
+import {
+  UpdateQuotationEmailDto,
   UpdateRequestSettingsDto,
   UpdateStoreSettingsDto,
 } from '@forgea/validation';
@@ -18,13 +23,34 @@ import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 export async function loader({ context }: Route.LoaderArgs) {
-  const r = await context.get(apiContext).get<StoreSettings>('/store-settings');
+  const api = context.get(apiContext);
+  const [r, email] = await Promise.all([
+    api.get<StoreSettings>('/store-settings'),
+    api.get<QuotationEmailSettings>('/store-settings/quotation-email'),
+  ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { settings: r.data };
+  return {
+    settings: r.data,
+    email: email.ok
+      ? email.data
+      : { subject: null, intro: null, closing: null },
+  };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
+  if (form.get('intent') === 'email') {
+    return save(
+      UpdateQuotationEmailDto,
+      {
+        subject: text(form, 'subject'),
+        intro: text(form, 'intro'),
+        closing: text(form, 'closing'),
+      },
+      (dto) =>
+        context.get(apiContext).put('/store-settings/quotation-email', dto),
+    );
+  }
   if (form.get('intent') === 'requests') {
     return save(
       UpdateRequestSettingsDto,
@@ -57,8 +83,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
-        title="Payment & requests"
-        intro="Where customers send money and WhatsApp messages, and your rules for custom requests. Changes show on the site at once and are logged."
+        title="Payment, requests & emails"
+        intro="Where customers send money and WhatsApp messages, your rules for custom requests, and the words of the quotation email. Changes apply at once and are logged."
       />
       <Panel>
         <fetcher.Form method="post" className="grid max-w-xl gap-4">
@@ -103,6 +129,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </fetcher.Form>
       </Panel>
       <RequestRules settings={settings} />
+      <QuotationEmail email={loaderData.email} />
     </>
   );
 }
@@ -167,6 +194,58 @@ function RequestRules({ settings }: { settings: StoreSettings }) {
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={fetcher.state !== 'idle'}>
             Save the rules
+          </Button>
+          <SaveStatus state={fetcher.state} result={fetcher.data} />
+        </div>
+      </fetcher.Form>
+    </Panel>
+  );
+}
+
+/** The quotation email's own words; an empty box sends the standard wording. */
+function QuotationEmail({ email }: { email: QuotationEmailSettings }) {
+  const fetcher = useFetcher<SaveResult>();
+  const errors = fetcher.data?.errors ?? {};
+  return (
+    <Panel title="Quotation email" className="mt-6">
+      <p className="max-w-2xl text-sm text-text-muted">
+        What the customer reads around their quotation. The lines, sizes, total
+        and the button to accept it online are always added between the
+        introduction and the closing. You can write {'{name}'}, {'{number}'},{' '}
+        {'{total}'} and {'{validUntil}'}; leave a box empty for the standard
+        words shown in it.
+      </p>
+      <fetcher.Form method="post" className="grid max-w-2xl gap-4">
+        <input type="hidden" name="intent" value="email" />
+        <Field
+          label="Subject"
+          name="subject"
+          maxLength={150}
+          defaultValue={email.subject ?? ''}
+          placeholder={QUOTATION_EMAIL_DEFAULTS.subject}
+          error={errors['subject']}
+        />
+        <TextAreaField
+          label="Introduction"
+          name="intro"
+          rows={5}
+          maxLength={2000}
+          defaultValue={email.intro ?? ''}
+          placeholder={QUOTATION_EMAIL_DEFAULTS.intro}
+          error={errors['intro']}
+        />
+        <TextAreaField
+          label="Closing"
+          name="closing"
+          rows={5}
+          maxLength={2000}
+          defaultValue={email.closing ?? ''}
+          placeholder={QUOTATION_EMAIL_DEFAULTS.closing}
+          error={errors['closing']}
+        />
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={fetcher.state !== 'idle'}>
+            Save the email
           </Button>
           <SaveStatus state={fetcher.state} result={fetcher.data} />
         </div>

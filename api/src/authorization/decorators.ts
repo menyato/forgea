@@ -5,11 +5,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import type { Role } from '../generated/prisma/enums.js';
+import type { Permission } from '@forgea/types';
 import type { AuthenticatedUser } from './authenticated-user.js';
 
 export const IS_PUBLIC = 'forgea:isPublic';
-export const ROLES = 'forgea:roles';
+export const ACCESS = 'forgea:access';
+
+/** A permission from @forgea/types, or 'admin' for what only admins may do. */
+export type Access = Permission | 'admin';
 
 /**
  * Opens a route to anonymous visitors. Everything else requires a signed-in user,
@@ -18,10 +21,15 @@ export const ROLES = 'forgea:roles';
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
 /**
- * Restricts a route to these roles. ADMIN always passes (admins can do everything),
- * so `@Roles(Role.STAFF)` means "staff and admins".
+ * Restricts a route to team members holding this permission (PermissionsGuard). Admins hold
+ * every permission. On a method it replaces the class's, so a controller can be 'admin' with
+ * one route open to a permission.
  */
-export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
+export const RequirePermission = (permission: Permission) =>
+  SetMetadata(ACCESS, permission satisfies Access);
+
+/** Only admins: the team, permissions themselves. Never a permission anyone can be given. */
+export const AdminOnly = () => SetMetadata(ACCESS, 'admin' satisfies Access);
 
 /** The signed-in user. Throws on public routes when nobody is signed in. */
 export const CurrentUser = createParamDecorator(
@@ -36,4 +44,13 @@ export const CurrentUser = createParamDecorator(
 export const OptionalUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthenticatedUser | undefined =>
     ctx.switchToHttp().getRequest<Request>().user,
+);
+
+/**
+ * What the caller may do, as PermissionsGuard just read it from the database. Only on routes
+ * that need a permission (elsewhere it is empty); for leaving out what they may not see.
+ */
+export const CallerPermissions = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): Permission[] =>
+    ctx.switchToHttp().getRequest<Request>().permissions ?? [],
 );

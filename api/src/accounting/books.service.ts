@@ -20,7 +20,7 @@ import type {
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { AccountType, EntryType } from '../generated/prisma/enums.js';
-import { ageBucket, type Amount } from './ledger-math.js';
+import type { Amount } from './ledger-math.js';
 import { Ledger } from './ledger.service.js';
 
 const D = (v: Amount) => new Prisma.Decimal(v);
@@ -258,64 +258,79 @@ export class Books {
     };
   }
 
-  /** What each customer still owes, by how late it is. */
+  /**
+   * What each customer still owes, by how late it is, in one query: the database adds up only
+   * receivable lines with something left after their matches (not every line ever written in
+   * the application), and a match counts only if it was made by the report's date, so a past
+   * date shows what was owed then. Owed amounts are positive (an invoice), unmatched payments
+   * negative (a credit). Buckets are days past due: none, 1–30, 31–60, 61–90, older.
+   */
   async agedReceivables(asOf: Date): Promise<AgedReceivables> {
-    const open = await this.prisma.journalLine.findMany({
-      where: {
-        account: { type: AccountType.RECEIVABLE },
-        entry: { state: 'POSTED', date: { lte: asOf } },
-        customerId: { not: null },
-      },
-      include: {
-        asDebit: true,
-        asCredit: true,
-        customer: { select: { id: true, email: true, name: true } },
-        entry: { select: { date: true } },
-      },
-    });
-    const rows = new Map<
-      string,
-      AgedReceivables['rows'][number] & { raw: Record<string, Prisma.Decimal> }
-    >();
-    for (const l of open) {
-      const matched = [...l.asDebit, ...l.asCredit].reduce(
-        (s, r) => s.plus(r.amount),
-        D(0),
-      );
-      // Owed amounts are positive (an invoice), unmatched payments negative (a credit).
-      const amount = l.debit
-        .minus(l.credit)
-        .minus(l.debit.gt(0) ? matched : matched.negated());
-      if (amount.isZero()) continue;
-      const bucket = ageBucket(l.dueDate ?? l.entry.date, asOf);
-      const row = rows.get(l.customer!.id) ?? {
-        customer: l.customer!,
-        notDue: '0',
-        days1to30: '0',
-        days31to60: '0',
-        days61to90: '0',
-        older: '0',
-        total: '0',
-        raw: {},
-      };
-      row.raw[bucket] = (row.raw[bucket] ?? D(0)).plus(amount);
-      row.raw['total'] = (row.raw['total'] ?? D(0)).plus(amount);
-      rows.set(l.customer!.id, row);
-    }
+    const asOfDay = day(asOf);
+    // Matches made before the end of that day.
+    const until = new Date(new Date(asOfDay).getTime() + 86_400_000);
+    const rows = await this.prisma.$queryRaw<
+      {
+        id: string;
+        email: string;
+        name: string | null;
+        notDue: Prisma.Decimal;
+        days1to30: Prisma.Decimal;
+        days31to60: Prisma.Decimal;
+        days61to90: Prisma.Decimal;
+        older: Prisma.Decimal;
+        total: Prisma.Decimal;
+      }[]
+    >`
+      WITH matched AS (
+        SELECT line_id, sum(amount) AS amount FROM (
+          SELECT "debitLineId" AS line_id, amount FROM reconciliations
+          WHERE "createdAt" < ${until}
+          UNION ALL
+          SELECT "creditLineId", amount FROM reconciliations
+          WHERE "createdAt" < ${until}
+        ) m
+        GROUP BY line_id
+      ),
+      open AS (
+        SELECT l."customerId" AS customer_id,
+               (l.debit - l.credit)
+                 - CASE WHEN l.debit > 0 THEN coalesce(m.amount, 0)
+                        ELSE -coalesce(m.amount, 0) END AS owed,
+               (${asOfDay}::date - coalesce(l."dueDate", e.date)) AS days
+        FROM journal_lines l
+        JOIN journal_entries e
+          ON e.id = l."entryId" AND e.state = 'POSTED' AND e.date <= ${asOfDay}::date
+        JOIN accounts a ON a.id = l."accountId" AND a.type = 'RECEIVABLE'
+        LEFT JOIN matched m ON m.line_id = l.id
+        WHERE l."customerId" IS NOT NULL
+      )
+      SELECT u.id, u.email, u.name,
+             coalesce(sum(owed) FILTER (WHERE days <= 0), 0) AS "notDue",
+             coalesce(sum(owed) FILTER (WHERE days BETWEEN 1 AND 30), 0) AS "days1to30",
+             coalesce(sum(owed) FILTER (WHERE days BETWEEN 31 AND 60), 0) AS "days31to60",
+             coalesce(sum(owed) FILTER (WHERE days BETWEEN 61 AND 90), 0) AS "days61to90",
+             coalesce(sum(owed) FILTER (WHERE days > 90), 0) AS older,
+             sum(owed) AS total
+      FROM open o
+      JOIN users u ON u.id = o.customer_id
+      WHERE owed <> 0
+      GROUP BY u.id, u.email, u.name
+      HAVING sum(owed) <> 0
+      ORDER BY total DESC
+    `;
+    const money = (v: Prisma.Decimal) => D(v).toFixed(2);
     return {
-      asOf: day(asOf),
-      rows: [...rows.values()]
-        .map(({ raw, ...row }) => ({
-          ...row,
-          notDue: (raw['notDue'] ?? D(0)).toFixed(2),
-          days1to30: (raw['days1to30'] ?? D(0)).toFixed(2),
-          days31to60: (raw['days31to60'] ?? D(0)).toFixed(2),
-          days61to90: (raw['days61to90'] ?? D(0)).toFixed(2),
-          older: (raw['older'] ?? D(0)).toFixed(2),
-          total: (raw['total'] ?? D(0)).toFixed(2),
-        }))
-        .filter((r) => !D(r.total).isZero())
-        .sort((a, b) => D(b.total).cmp(a.total)),
+      asOf: asOfDay,
+      rows: rows.map((r) => ({
+        customer: { id: r.id, email: r.email, name: r.name },
+        notDue: money(r.notDue),
+        days1to30: money(r.days1to30),
+        days31to60: money(r.days31to60),
+        days61to90: money(r.days61to90),
+        older: money(r.older),
+        total: money(r.total),
+      })),
     };
   }
 

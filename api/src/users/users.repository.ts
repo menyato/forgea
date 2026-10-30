@@ -164,6 +164,10 @@ export class UsersRepository {
         data: {
           role,
           disabledAt: active ? null : (current.disabledAt ?? new Date()),
+          // A new role starts from that role's permissions, without the old one's exceptions.
+          ...(role !== current.role
+            ? { grantedPermissions: [], deniedPermissions: [] }
+            : {}),
         },
       });
       if (!active || role !== current.role) {
@@ -174,6 +178,37 @@ export class UsersRepository {
       }
       return user;
     });
+  }
+
+  /** A team member's own permission changes on top of their role (checked by the service). */
+  setAccess(id: string, granted: string[], denied: string[]): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { grantedPermissions: granted, deniedPermissions: denied },
+    });
+  }
+
+  /** What one role may do; the next request of everyone with that role uses it. */
+  async setRolePermissions(
+    role: Role,
+    permissions: string[],
+    updatedById: string,
+  ): Promise<void> {
+    await this.prisma.rolePermissions.upsert({
+      where: { role },
+      create: { role, permissions, updatedById },
+      update: { permissions, updatedById },
+    });
+  }
+
+  /** Active team members per role, for the Roles & permissions page. */
+  async activeMembersByRole(): Promise<Map<Role, number>> {
+    const rows = await this.prisma.user.groupBy({
+      by: ['role'],
+      where: { disabledAt: null },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.role, r._count._all]));
   }
 
   markEmailVerified(id: string): Promise<User> {

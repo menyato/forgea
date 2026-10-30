@@ -43,3 +43,34 @@ export function whatsappUrl(phone: string, message: string): string {
   }
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
+
+/** The quotation email as the owner wrote it (empty: the standard wording below). */
+export interface QuotationEmailSettings {
+  subject: string | null;
+  intro: string | null;
+  closing: string | null;
+}
+
+/** Forgea's standard quotation email; the owner can change each part in the dashboard. */
+export const QUOTATION_EMAIL_DEFAULTS = {
+  subject: 'Your quotation {number} from Forgea',
+  intro:
+    'Dear {name},\n\nThank you for thinking of Forgea. As promised, here is our quotation for your project. Every piece is printed to order in our studio, to the sizes listed below.',
+  closing:
+    'You can accept it online in one click, and we start as soon as you confirm. To change a size, a colour or a quantity, simply reply to this email or message us on WhatsApp.\n\nKind regards,\nThe Forgea team',
+} as const;
+
+/** Fills {name}, {number}, {total} and {validUntil}; anything else in braces stays as typed. */
+export function fillQuotationText(
+  text: string,
+  values: Record<'name' | 'number' | 'total' | 'validUntil', string>,
+): string {
+  return text.replace(
+    /\{(name|number|total|validUntil)\}/g,
+    (_, key: keyof typeof values) => values[key],
+  );
+}
+
+/** "12.5 × 8 × 4.2 cm": a printed size, width × depth × height. */
+export const formatSizeCm = (size: { x: string; y: string; z: string }) =>
+  `${size.x} × ${size.y} × ${size.z} cm`;
