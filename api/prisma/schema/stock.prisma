@@ -1,0 +1,65 @@
+/// Filament on the shelf, per material and colour: spools are bought that way. Its stock is
+/// the sum of its movements (never a number someone types in); `materials.stockGrams` is the
+/// material's total, kept by a database trigger. Every limit here is the owner's to edit.
+model StockItem {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  materialId    String   @db.Uuid
+  material      Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  /// The colour as the shop names it (an option value with a swatch); "" when none was chosen.
+  colour        String   @default("")
+  /// Restock when what is left (after open orders) is at or below this.
+  lowStockGrams Int
+  /// What one spool holds: suggestions are in whole spools.
+  spoolGrams    Int      @default(1000)
+  /// How many days a new delivery takes to arrive.
+  leadTimeDays  Int      @default(7)
+  /// How many days of use a delivery should cover beyond the lead time.
+  coverDays     Int      @default(30)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  movements StockMovement[]
+
+  @@unique([materialId, colour])
+  @@map("stock_items")
+}
+
+enum StockMovementKind {
+  /// The stock there was when tracking started.
+  OPENING
+  /// A delivery of new spools.
+  RECEIVED
+  /// An order went into production: its products' grams (size and options included).
+  ORDER
+  /// A print that failed: the filament it used is lost.
+  FAILED_PRINT
+  /// Used for something else (custom work, tests, samples), recorded by the team.
+  USED
+  /// Stock counted or weighed: the difference, either way.
+  CORRECTION
+}
+
+/// Append-only (a trigger refuses changes): every gram in or out, with why and who.
+/// `grams` is signed: + in, − out (CHECK constraint per kind).
+model StockMovement {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  stockItemId String            @db.Uuid
+  stockItem   StockItem         @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  kind        StockMovementKind
+  grams       Int
+  /// ORDER: the order line it was used for (once per line: unique index).
+  orderItemId String?           @db.Uuid
+  orderItem   OrderItem?        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  printJobId  String?           @db.Uuid
+  printJob    PrintJob?         @relation(fields: [printJobId], references: [id], onDelete: Restrict)
+  note        String?
+  createdById String?           @db.Uuid
+  createdBy   User?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([stockItemId, createdAt])
+  @@index([createdAt])
+  @@index([orderItemId])
+  @@map("stock_movements")
+}

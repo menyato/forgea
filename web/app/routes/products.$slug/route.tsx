@@ -126,8 +126,13 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
     .find(
       (c) => c.swatchHex && Object.values(choices).includes(c.id),
     )?.swatchHex;
+  // "Added" only while the choices are the ones that went in: another size or colour is a new line.
+  const [addedFor, setAddedFor] = useState<string | null>(null);
   const added =
-    cart.state === 'idle' && cart.data !== undefined && !cart.data.error;
+    cart.state === 'idle' &&
+    cart.data !== undefined &&
+    !cart.data.error &&
+    addedFor === optionsJson;
 
   return (
     <main
@@ -224,6 +229,7 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
           method="post"
           action="/cart"
           className="flex flex-wrap items-end gap-3"
+          onSubmit={() => setAddedFor(optionsJson)}
         >
           <input type="hidden" name="intent" value="add" />
           <input type="hidden" name="productId" value={product.id} />

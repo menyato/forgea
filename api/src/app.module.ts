@@ -38,6 +38,8 @@ import { CatalogTransferModule } from './catalog-transfer/catalog-transfer.modul
 import { MailModule } from './mail/mail.module.js';
 import { QuotationsModule } from './quotations/quotations.module.js';
 import { AccountingModule } from './accounting/accounting.module.js';
+import { StockModule } from './stock/stock.module.js';
+import { InsightsModule } from './insights/insights.module.js';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { AccountingModule } from './accounting/accounting.module.js';
     MailModule,
     QuotationsModule,
     AccountingModule,
+    StockModule,
+    InsightsModule,
   ],
   providers: [
     // Global guards run in this order: rate limit → CSRF → who are you → may you.

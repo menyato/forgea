@@ -93,6 +93,8 @@ model OrderItem {
   /// renaming or removing an option later never rewrites old orders.
   options   Json     @default("[]")
 
+  stockMovements StockMovement[]
+
   @@index([orderId])
   @@map("order_items")
 }

@@ -8,6 +8,14 @@ const STATE_LABELS: Record<PaymentState, { label: string; tone: string }> = {
   reversed: { label: 'Credited', tone: 'text-text-muted' },
 };
 
+/** A credit note's open amount is money to give back, not money owed. */
+function stateOf(i: InvoiceListItem) {
+  if (i.type !== 'CREDIT_NOTE') return STATE_LABELS[i.paymentState];
+  return Number(i.residual) > 0
+    ? { label: 'To refund', tone: 'text-warning' }
+    : { label: 'Settled', tone: 'text-text-muted' };
+}
+
 /** Invoices and credit notes with what is still owed (the accounting page and an order). */
 export function InvoiceTable({
   invoices,
@@ -58,8 +66,13 @@ export function InvoiceTable({
               <td className="py-2 pr-4 text-right">
                 <Money amount={i.residual} />
               </td>
-              <td className={`py-2 ${STATE_LABELS[i.paymentState].tone}`}>
-                {STATE_LABELS[i.paymentState].label}
+              <td className={`py-2 ${stateOf(i).tone}`}>
+                {stateOf(i).label}
+                {i.creditedBy && (
+                  <span className="block text-xs text-text-muted">
+                    credited by {i.creditedBy}
+                  </span>
+                )}
               </td>
             </tr>
           ))}

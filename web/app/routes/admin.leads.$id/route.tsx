@@ -106,7 +106,7 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">
           <Panel title="Stage">
             {!mayWork ? (

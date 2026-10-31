@@ -91,7 +91,7 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">
           <Panel title="What they asked for">
             <p className="whitespace-pre-line">{r.description}</p>
@@ -235,7 +235,15 @@ function CancelForm() {
   const fetcher = useFetcher<SaveResult>();
   return (
     <Panel title="Can't make it?">
-      <fetcher.Form method="post" className="grid gap-3">
+      <fetcher.Form
+        method="post"
+        className="grid gap-3"
+        onSubmit={(e) => {
+          // Final: the customer is told and can no longer accept a quote.
+          if (!window.confirm('Cancel this request? The customer is told.'))
+            e.preventDefault();
+        }}
+      >
         <input type="hidden" name="intent" value="cancel" />
         <TextAreaField
           label="Why (the customer sees this)"

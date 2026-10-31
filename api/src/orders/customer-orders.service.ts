@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CustomerOrder, InvoiceListItem, Page } from '@forgea/types';
+import type {
+  ChosenOption,
+  CustomerOrder,
+  InvoiceListItem,
+  Page,
+} from '@forgea/types';
 import type { MyOrdersQuery } from '@forgea/validation';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { OrderStatus } from '../generated/prisma/enums.js';
@@ -35,12 +40,10 @@ export class CustomerOrdersService {
     query: MyOrdersQuery,
   ): Promise<Page<CustomerOrder>> {
     const page = await this.orders.listForUser(userId, query);
+    // One query for the whole page's invoices, not one per order.
+    const invoices = await this.invoicing.forOrders(page.rows.map((o) => o.id));
     return {
-      items: await Promise.all(
-        page.rows.map(async (o) =>
-          toCustomerOrder(o, await this.invoicing.forOrder(o.id)),
-        ),
-      ),
+      items: page.rows.map((o) => toCustomerOrder(o, invoices.get(o.id) ?? [])),
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
     };
@@ -98,6 +101,8 @@ function toCustomerOrder(
       name: i.name,
       quantity: i.quantity,
       lineTotal: i.lineTotal.toFixed(2),
+      // A snapshot written at checkout: [{ group, value }].
+      options: i.options as unknown as ChosenOption[],
     })),
     history: o.statusHistory.map((h) => ({
       status: h.status,

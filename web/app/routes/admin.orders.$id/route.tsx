@@ -37,6 +37,17 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       ? data<SaveResult>({ ok: true })
       : data<SaveResult>({ error: r.message }, { status: r.status });
   }
+  if (intent === 'credit-note') {
+    const invoiceId = text(form, 'invoiceId') ?? '';
+    if (!/^[0-9a-f-]{36}$/.test(invoiceId))
+      return data<SaveResult>({ error: 'Choose an invoice' }, { status: 400 });
+    const r = await api.post(
+      `/accounting/invoices/${encodeURIComponent(invoiceId)}/credit-note`,
+    );
+    return r.ok
+      ? data<SaveResult>({ ok: true })
+      : data<SaveResult>({ error: r.message }, { status: r.status });
+  }
   if (intent === 'payment') {
     return save(
       RecordPaymentDto,
@@ -90,7 +101,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">
           <Panel title="Items">
             <ul className="grid gap-3">
@@ -127,7 +138,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                 </li>
               ))}
             </ul>
-            <dl className="grid grid-cols-[1fr_auto] gap-1 border-t border-border pt-3 text-sm">
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-1 border-t border-border pt-3 text-sm">
               {o.priceBreakdown.map((l) => (
                 <div key={l.label} className="contents">
                   <dt className="text-text-muted">{l.label}</dt>
@@ -207,7 +218,8 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                 Waiting for: {ORDER_STATUS_LABELS[o.nextStatuses[0]!].title}
               </p>
             ) : (
-              <fetcher.Form method="post" className="grid gap-3">
+              // Keyed by status: once a step is saved its note is cleared, never sent with the next.
+              <fetcher.Form key={o.status} method="post" className="grid gap-3">
                 <TextAreaField
                   label="Note for the customer (optional)"
                   name="note"

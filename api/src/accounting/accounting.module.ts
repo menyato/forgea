@@ -11,6 +11,7 @@ import { Ledger } from './ledger.service.js';
   controllers: [AccountingController],
   providers: [Ledger, Invoicing, Books],
   // Orders invoice themselves as they move along (deposit received, delivered).
-  exports: [Invoicing],
+  // The business page reuses the profit and loss.
+  exports: [Invoicing, Books],
 })
 export class AccountingModule {}

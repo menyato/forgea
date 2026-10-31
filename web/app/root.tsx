@@ -44,16 +44,19 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const [me, cart, store, siteTheme, theme] = await Promise.all([
     api.hasSession ? api.me() : Promise.resolve(null),
-    api.get<CartView>('/cart'),
-    api.get<StoreSettings>('/store-settings'),
-    api.get<{ theme: SiteTheme | null }>('/site-theme'),
+    // A first visit has no cart yet: nothing to ask.
+    api.hasSession || api.hasCart
+      ? api.get<CartView>('/cart')
+      : Promise.resolve(null),
+    api.shared<StoreSettings>('/store-settings'),
+    api.shared<{ theme: SiteTheme | null }>('/site-theme'),
     readTheme(request),
   ]);
   // The owner's palette (Theme page); checked again here because it goes into a <style>.
   const palette = siteTheme.ok ? siteTheme.data.theme?.palette : undefined;
   return {
     user: me?.ok ? me.data : null,
-    cartCount: cart.ok ? cart.data.itemCount : 0,
+    cartCount: cart?.ok ? cart.data.itemCount : 0,
     // The payment and WhatsApp numbers; pages work without them if the API is down.
     store: store.ok ? store.data : null,
     paletteCss: isPalette(palette) ? paletteCss(palette) : null,

@@ -58,6 +58,7 @@ model User {
   journalLines        JournalLine[]                @relation("LineCustomer")
   rolePermissionEdits RolePermissions[]
   savedThemes         SavedTheme[]
+  stockMovements      StockMovement[]
 
   @@map("users")
 }

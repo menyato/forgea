@@ -27,6 +27,13 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
   }
+  // Models and photos come already compressed: re-compressing megabytes on every request costs
+  // the server CPU for next to nothing, and would drop the length the browser shows progress by.
+  const cache = headers.get('cache-control');
+  headers.set(
+    'cache-control',
+    cache ? `${cache}, no-transform` : 'no-transform',
+  );
   headers.set('x-content-type-options', 'nosniff');
   return new Response(upstream.body, { headers });
 }

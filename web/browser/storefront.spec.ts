@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, newVisitor } from './fixtures';
 
 const uniqueEmail = () =>
   `shopper-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -132,7 +132,7 @@ test('the theme button cycles Auto → Light → Dark and is remembered', async 
 });
 
 test('the theme button works without JavaScript', async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false });
+  const context = await newVisitor(browser, { javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto('/shop');
   await (

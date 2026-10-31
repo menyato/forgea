@@ -349,10 +349,41 @@ describe('Back office (e2e)', () => {
     await as(admin.cookie)
       .post(`/accounting/invoices/${final.id}/credit-note`)
       .expect(409);
-    const settled = (
-      await s.get(`/accounting/orders/${order.id}/invoices`)
-    ).body.find((i: { id: string }) => i.id === final.id);
+    const listed = (await s.get(`/accounting/orders/${order.id}/invoices`))
+      .body as { id: string; residual: string; creditedBy: string | null }[];
+    const settled = listed.find((i) => i.id === final.id)!;
     expect(settled.residual).toBe('0.00');
+    expect(settled.creditedBy).toBe(note.body.number);
+
+    // The half already paid goes back to the customer: the refund is the credit note's payment.
+    const credit = listed.find((i) => i.id === note.body.id)!;
+    expect(credit.residual).toBe(half);
+    const refund = {
+      invoiceId: note.body.id,
+      method: 'CASH',
+      date: new Date().toISOString().slice(0, 10),
+    };
+    await s
+      .post('/accounting/payments', { ...refund, amount: '9999.00' })
+      .expect(400);
+    const refunded = await s
+      .post('/accounting/payments', { ...refund, amount: half })
+      .expect(201);
+    expect(refunded.body.residual).toBe('0.00');
+    // Money out of the cash journal: the customer's balance is back to zero.
+    const refundEntry = await prisma.journalEntry.findFirstOrThrow({
+      where: { label: `Refund for ${note.body.number}` },
+      include: { lines: true },
+    });
+    expect(refundEntry.state).toBe('POSTED');
+    expect(
+      refundEntry.lines.map((l) => [l.debit.toFixed(2), l.credit.toFixed(2)]),
+    ).toEqual(
+      expect.arrayContaining([
+        [half, '0.00'],
+        ['0.00', half],
+      ]),
+    );
   });
 
   it('a double click never invoices or collects twice; the database refuses over-matching', async () => {

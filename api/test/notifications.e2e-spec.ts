@@ -153,8 +153,9 @@ describe('Emails and the production planner (e2e)', () => {
     const after = await prisma.material.findUniqueOrThrow({
       where: { id: pla.id },
     });
-    // 60.4 g rounds up to 61 g taken out of stock.
-    expect(after.stockGrams).toBe(pla.stockGrams - 61);
+    // A finished print leaves stock as it is: its order took the filament when it went into
+    // production (failed prints are covered in stock.e2e-spec.ts).
+    expect(after.stockGrams).toBe(pla.stockGrams);
     await as(staff.cookie)
       .patch(`/print-jobs/${id}`, { status: 'QUEUED' })
       .expect(400);

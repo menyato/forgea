@@ -52,7 +52,7 @@ export default function MyRequests({ loaderData }: Route.ComponentProps) {
             <li key={r.requestNumber}>
               <Link
                 to={`/requests/${r.requestNumber}`}
-                className="grid gap-1 rounded-lg bg-surface p-5 hover:bg-surface-raised sm:grid-cols-[1fr_auto] sm:items-center"
+                className="grid gap-1 rounded-lg bg-surface p-5 hover:bg-surface-raised sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
               >
                 <span className="grid gap-0.5">
                   <span className="font-display text-xl font-bold">

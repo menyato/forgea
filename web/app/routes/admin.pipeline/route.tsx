@@ -83,7 +83,7 @@ function StageForm({ stage }: { stage: LeadStageView | null }) {
     <fetcher.Form
       method="post"
       key={!stage && fetcher.data?.ok ? 'reset' : 'form'}
-      className="grid grid-cols-[1fr_5rem_6rem] items-end gap-2 border-b border-border pb-3"
+      className="grid grid-cols-[minmax(0,1fr)_5rem_6rem] items-end gap-2 border-b border-border pb-3"
     >
       {stage && <input type="hidden" name="id" value={stage.id} />}
       <Field

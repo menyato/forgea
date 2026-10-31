@@ -26,6 +26,7 @@ export {
 } from './order-pricer.js';
 export {
   configureUnit,
+  configuredUnitCost,
   configuredUnitPrice,
   type ConfiguredUnit,
   type OptionEffect,

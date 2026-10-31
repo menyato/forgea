@@ -68,7 +68,13 @@ export interface CustomerOrder {
   depositPaid: boolean;
   currencyCode: string;
   totalInCurrency: string;
-  items: { name: string; quantity: number; lineTotal: Money }[];
+  /** With the options as chosen (size, colour…), so two lines of one product tell apart. */
+  items: {
+    name: string;
+    quantity: number;
+    lineTotal: Money;
+    options: ChosenOption[];
+  }[];
   /** Oldest first. */
   history: OrderHistoryEntry[];
   /** Its invoices and credit notes, with what is still owed. */

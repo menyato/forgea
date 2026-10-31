@@ -167,7 +167,7 @@ export default function RequestPage({
             </figure>
           )}
           <p className="max-w-[65ch] whitespace-pre-line">{r.description}</p>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1 text-sm">
             <dt className="text-text-muted">How many</dt>
             <dd>{r.quantity}</dd>
             {r.material && (

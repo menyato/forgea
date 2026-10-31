@@ -94,6 +94,20 @@ export function configuredUnitPrice(
   return money(new Big(calculator.price(input).unitPrice).plus(extraPrice));
 }
 
+/**
+ * What making one configured unit costs the studio (the calculator's subtotal: material,
+ * machine, waste, failures, labour and packaging, before markup), and the grams it takes.
+ * Option add-ons are pure margin, so they never count as cost.
+ */
+export function configuredUnitCost(
+  calculator: UnitCostCalculator,
+  base: UnitCostInput,
+  effects: readonly OptionEffect[],
+): { cost: string; grams: string } {
+  const { input } = configureUnit(base, effects);
+  return { cost: calculator.price(input).subtotal, grams: input.grams };
+}
+
 function positive(value: DecimalInput, field: string): Big {
   const n = toBig(value, field);
   if (n.lte(0)) throw new PricingError(`${field} must be greater than 0`);

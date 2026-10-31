@@ -42,6 +42,9 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - Anyone can browse and fill a cart; ordering needs an account + phone. Pages that need an account redirect with `signInFor(url)`; sign-in returns via `?next=` (`safeNext`).
 - Store settings (transfer and WhatsApp numbers) come from the root loader (`store`); WhatsApp links only through `WhatsAppLink` / `whatsappUrl`.
 - Light/dark: `forgea_theme` cookie read on the server, `<html data-theme>`; colours only through the brand tokens' CSS variables, never hardcoded.
+- The shell's public reads (`/store-settings`, `/site-theme`) go through `api.shared()`: kept 10 s per web process, forgotten at once by any change sent through it. A visitor with neither a session nor a cart cookie costs no cart call.
+- Layout: grid tracks are `minmax(0,…fr)` and `Panel`s are `grid-cols-1`, so a canvas or a long email can't widen a page; `web/browser/layout-audit.spec.ts` checks every page on desktop and phone. Unknown addresses hit `routes/$` (a quiet 404).
+- `web/browser/personas.spec.ts` (five customers + the studio receiving them) and `studio.spec.ts` (every dashboard action, stage by stage) are the end-to-end journeys: each fails on any console error, crash, 5xx or slow page.
 
 ## Dashboard and catalog conventions
 
@@ -50,6 +53,8 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - Permissions (`PERMISSION_GROUPS` in `@forgea/types`) are the unit of access, not roles. Every team API route says `@RequirePermission('x.y')` or `@AdminOnly()`; `PermissionsGuard` reads the caller's role, permissions and `disabledAt` from the database on each call, so changes apply at once. Effective = role's permissions (Roles & permissions page) + the person's grants − denials, with `PERMISSION_INCLUDES` added; a denial always wins. ADMIN holds everything, CUSTOMER nothing; managing the team and permissions is admin-only and never a permission. Data someone may not see is left out by the API (`@CallerPermissions()`), not just hidden. A new signed-in route without a permission must be added to `CUSTOMER_ROUTES` in `api/test/permissions.e2e-spec.ts`, which checks every route.
 - Roles (defaults, editable): STAFF orders, production, request quotes, leads, quotations, invoices and payments; DESIGNER catalog, 3D uploads, request designs and the home page bed. Team members are Workspace accounts (Google only); `disabledAt` switches one off.
 - Status changes (orders and custom requests) go through guarded `updateMany` calls inside a transaction that first calls `setStatusActor` (`api/src/common/status-actor.ts`); database triggers write the history.
+- Business page (`/admin/insights`, `GET /insights`, `books.view`): revenue, expenses and net profit come only from `Books.profitAndLoss`; production cost is an estimate (invoiced order lines × `ProductionEstimator` → `configuredUnitCost`, today's settings) and is always labelled "estimated"; sums in SQL (`InsightsRepository`), money as Decimal. Periods via `PeriodQuery` (UTC days, ≤ 2 years). See docs/BACK_OFFICE.md.
+- Filament stock (`/admin/stock`, per material + colour): only through `StockRepository.record` (append-only `stock_movements`; a trigger keeps `materials.stockGrams`, never typed in). Orders take their grams when they go IN_PRODUCTION, inside the status change's transaction (`OrderStock`); failed print jobs take theirs. Restock limits are the owner's per line (`stock.manage`).
 - The home page bed shows products by `plateOrder` (1 = centre … 5), set in Dashboard → Home page bed (`PUT /products/plate`); with none set, the newest products with a model stand in. Model files are preloaded in the home route's `meta`, and printing starts only once every model has loaded.
 - The catalog moves between installations as one JSON file (docs/CATALOG_IMPORT.md); the importer reuses the catalog services and DTOs. The seed (`api/scripts/seed.ts`) loads `prisma/example-catalog.ts` through it.
 - Every catalog rule is data the owner edits (categories, materials, option groups and values with their price rules); never hard-code a colour, size, price or limit.
@@ -76,6 +81,7 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - Quotation status changes follow the order rule (guarded update + `setStatusActor`; a trigger writes the history).
 - Ledger entries only through `Ledger.post` (draft with lines, then posted with a number). Never update or delete a posted entry; the database refuses it. Corrections are new entries or credit notes.
 - Order invoices come from `Invoicing.onOrderStatus`; its failures are logged, never block the status change.
+- Credit notes are issued from the order's Invoices panel (`books.manage`, one per invoice, `creditedBy` on the invoice). A credit note's open amount is money owed back: the refund is a payment recorded against the credit note (`POST /accounting/payments`, money out of cash or bank, matched to it).
 - Prices include tax (`splitTaxIncluded`); the sales tax is an owner setting, never hard-coded.
 - Emails go through `NotificationsService.send(template, data)`; they never block or fail the action. Without the service account key they land in `MAIL_OUTBOX_DIR`.
 

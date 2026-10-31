@@ -123,7 +123,7 @@ export default function Requests({ loaderData }: Route.ComponentProps) {
                 <li key={r.id}>
                   <Link
                     to={`/admin/requests/${r.id}`}
-                    className="grid gap-1 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:grid-cols-[1fr_auto]"
+                    className="grid gap-1 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:grid-cols-[minmax(0,1fr)_auto]"
                   >
                     <span>
                       <span className="font-semibold">{r.title}</span>

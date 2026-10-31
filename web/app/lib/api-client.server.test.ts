@@ -215,4 +215,40 @@ describe('ApiClient', () => {
     ).get('/auth/me');
     expect(r.ok).toBe(true);
   });
+
+  it('shares the store settings between visitors for a while; a change sent through it forgets them', async () => {
+    const api = fakeApi(
+      json(200, { whatsappPhone: 'old' }),
+      json(200, { ok: true }),
+      json(200, { whatsappPhone: 'new' }),
+    );
+    const visitor = () => new ApiClient(browser({}), env, api.fetchImpl);
+    // Two visitors at once: one call.
+    const [a, b] = await Promise.all([
+      visitor().shared('/store-settings'),
+      visitor().shared('/store-settings'),
+    ]);
+    expect(a).toEqual(b);
+    expect(api.calls).toHaveLength(1);
+    // The owner saves: the next visitor sees the new numbers.
+    await visitor().put('/store-settings', { whatsappPhone: 'new' });
+    const after = await visitor().shared<{ whatsappPhone: string }>(
+      '/store-settings',
+    );
+    expect(after.ok && after.data.whatsappPhone).toBe('new');
+    expect(api.calls.map((c) => c.method)).toEqual(['GET', 'PUT', 'GET']);
+  });
+
+  it('never keeps a failed shared read', async () => {
+    const api = fakeApi(
+      json(503, { message: 'down' }),
+      json(200, { theme: null }),
+    );
+    const visitor = () => new ApiClient(browser({}), env, api.fetchImpl);
+    expect((await visitor().shared('/site-theme')).ok).toBe(false);
+    // Let the failure be dropped, then the next visitor asks again.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((await visitor().shared('/site-theme')).ok).toBe(true);
+    expect(api.calls).toHaveLength(2);
+  });
 });

@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures';
+import { expect, test, newVisitor } from './fixtures';
 import { signInAsAdmin } from './admin-session';
 
 test.skip(({ isMobile }) => isMobile, 'Back-office flow: one run is enough');
@@ -13,7 +13,7 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   const email = `lead-${tag}@example.com`;
 
   // The customer has an account (a quotation is always for an account).
-  const customer = await browser.newContext();
+  const customer = await newVisitor(browser);
   const shopper = await customer.newPage();
   await shopper.goto('/register');
   await shopper.getByLabel('Name (optional)').fill('Lina Lead');

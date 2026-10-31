@@ -21,6 +21,7 @@ model Material {
   printJobs    PrintJob[]
   optionValues   OptionValue[]
   customRequests CustomRequest[]
+  stockItems     StockItem[]
 
   @@map("materials")
 }

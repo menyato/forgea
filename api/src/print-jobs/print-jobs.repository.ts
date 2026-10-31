@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { PRINT_JOB_USES_MATERIAL } from '@forgea/types';
+import { PRINT_JOB_WASTES_MATERIAL } from '@forgea/types';
 import type { PrintJobListQuery } from '@forgea/validation';
 import { dateRange } from '../common/pagination/date-range.js';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import type { PrintJobStatus } from '../generated/prisma/enums.js';
+import {
+  type PrintJobStatus,
+  StockMovementKind,
+} from '../generated/prisma/enums.js';
+import { StockRepository } from '../stock/stock.repository.js';
 
 const withRefs = {
   order: { select: { orderNumber: true } },
@@ -28,7 +32,10 @@ export interface NewPrintJob {
 
 @Injectable()
 export class PrintJobsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stock: StockRepository,
+  ) {}
 
   list(query: PrintJobListQuery) {
     const scheduled = dateRange(query.scheduledFrom, query.scheduledTo);
@@ -69,8 +76,8 @@ export class PrintJobsRepository {
 
   /**
    * Applies a change if the job is still in `from` (two people moving the same card can't
-   * both win). Finishing or failing a print takes its grams out of the material's stock, in
-   * the same transaction. Null when the job changed meanwhile.
+   * both win). A failed print takes its grams out of stock (its material and colour), in the
+   * same transaction. Null when the job changed meanwhile.
    */
   update(
     id: string,
@@ -91,11 +98,19 @@ export class PrintJobsRepository {
         where: { id },
         include: withRefs,
       });
-      if (data.status && PRINT_JOB_USES_MATERIAL.includes(data.status)) {
-        // Rounded up (a started gram is a used gram), and never below 0: stock records that
-        // are behind must not stop a finished print from being recorded.
-        const used = Math.ceil(Number(job.grams));
-        await tx.$executeRaw`UPDATE "materials" SET "stockGrams" = GREATEST("stockGrams" - ${used}, 0) WHERE "id" = ${job.materialId}::uuid`;
+      if (data.status && PRINT_JOB_WASTES_MATERIAL.includes(data.status)) {
+        // Rounded up (a started gram is a used gram). A finished print changes nothing: its
+        // order took the filament out of stock when it went into production.
+        await this.stock.record(tx, [
+          {
+            materialId: job.materialId,
+            colour: job.color.trim(),
+            kind: StockMovementKind.FAILED_PRINT,
+            grams: -Math.ceil(Number(job.grams)),
+            printJobId: job.id,
+            note: `Failed print on ${job.machine} (order ${job.order.orderNumber})`,
+          },
+        ]);
       }
       return job;
     });

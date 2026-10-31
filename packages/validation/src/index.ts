@@ -83,3 +83,5 @@ export {
   SaveQuotationDto,
   UpdateAccountingSettingsDto,
 } from './back-office.dto.js';
+export { PeriodQuery } from './insights.dto.js';
+export { RecordStockMovementDto, SaveStockItemDto } from './stock.dto.js';

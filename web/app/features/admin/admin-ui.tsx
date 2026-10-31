@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { Busy } from '~/components/brand/busy';
 
 /** A dashboard page's title, one-line explanation and main action. */
@@ -32,11 +32,19 @@ export function Panel({
   children: ReactNode;
   className?: string;
 }) {
+  // Named by its title, so screen readers can jump between panels.
+  const id = useId();
   return (
     <section
-      className={`grid gap-4 rounded-lg border border-border bg-surface p-5 ${className}`}
+      aria-labelledby={title ? id : undefined}
+      // One shrinkable column: a wide child (a 3D canvas, a long email) can't push past the border.
+      className={`grid grid-cols-1 gap-4 rounded-lg border border-border bg-surface p-5 ${className}`}
     >
-      {title && <h2 className="font-display text-lg font-bold">{title}</h2>}
+      {title && (
+        <h2 id={id} className="font-display text-lg font-bold">
+          {title}
+        </h2>
+      )}
       {children}
     </section>
   );

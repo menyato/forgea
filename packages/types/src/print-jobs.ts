@@ -31,8 +31,10 @@ export const PRINT_JOB_STATUS_LABELS: Readonly<Record<PrintJobStatus, string>> =
     [PrintJobStatus.CANCELLED]: 'Cancelled',
   };
 
-/** A print uses its filament when it finishes or fails: that is when stock goes down. */
-export const PRINT_JOB_USES_MATERIAL: readonly PrintJobStatus[] = [
-  PrintJobStatus.DONE,
+/**
+ * A failed print loses the filament it used: stock goes down. A finished one doesn't change it:
+ * its order took the filament out of stock when it went into production.
+ */
+export const PRINT_JOB_WASTES_MATERIAL: readonly PrintJobStatus[] = [
   PrintJobStatus.FAILED,
 ];

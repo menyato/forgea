@@ -144,6 +144,8 @@ export interface InvoiceListItem {
   /** What is still owed on it. */
   residual: Money;
   paymentState: PaymentState;
+  /** On an invoice: the number of the credit note that reversed it. */
+  creditedBy: string | null;
   currencyCode: string;
 }
 

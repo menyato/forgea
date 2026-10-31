@@ -8,14 +8,33 @@ export { expect };
  */
 export const test = base.extend({
   context: async ({ context }, use) => {
-    const n = () => Math.floor(Math.random() * 254) + 1;
-    // 198.18.0.0/15 is reserved for benchmark tests: never a real visitor.
-    await context.setExtraHTTPHeaders({
-      'cf-connecting-ip': `198.18.${n()}.${n()}`,
-    });
+    await context.setExtraHTTPHeaders({ 'cf-connecting-ip': visitorIp() });
     await use(context);
   },
 });
+
+/** 198.18.0.0/15 is reserved for benchmark tests: never a real visitor. */
+function visitorIp(): string {
+  const n = () => Math.floor(Math.random() * 254) + 1;
+  return `198.18.${n()}.${n()}`;
+}
+
+/**
+ * Another person in their own browser (a second window in a test), with their own address
+ * like every test: windows opened plainly would all share one, and hit its rate limits.
+ */
+export function newVisitor(
+  browser: import('@playwright/test').Browser,
+  options: import('@playwright/test').BrowserContextOptions = {},
+) {
+  return browser.newContext({
+    ...options,
+    extraHTTPHeaders: {
+      ...options.extraHTTPHeaders,
+      'cf-connecting-ip': visitorIp(),
+    },
+  });
+}
 
 /**
  * The dashboard menu, opened first on a phone (there it starts closed, over the page; on a

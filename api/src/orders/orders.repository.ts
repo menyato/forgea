@@ -25,7 +25,10 @@ type OrderRow = Prisma.OrderGetPayload<{ include: typeof withCustomer }>;
 
 const withCustomerView = {
   user: { select: { email: true } },
-  items: { select: { name: true, quantity: true, lineTotal: true } },
+  items: {
+    select: { name: true, quantity: true, lineTotal: true, options: true },
+    orderBy: { id: 'asc' },
+  },
   statusHistory: {
     orderBy: { changedAt: 'asc' },
     select: { status: true, changedAt: true, note: true },
@@ -249,6 +252,8 @@ export class OrdersRepository {
     actorUserId: string,
     note: string | null,
     extra: Prisma.OrderUpdateManyMutationInput = {},
+    /** What must change with the status (stock taken for production), in the same transaction. */
+    alongside?: (tx: Prisma.TransactionClient) => Promise<void>,
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
       await setStatusActor(tx, actorUserId, note);
@@ -256,6 +261,7 @@ export class OrdersRepository {
         where: { id, status: from },
         data: { status: to, ...extra },
       });
+      if (count === 1 && alongside) await alongside(tx);
       return count === 1;
     });
   }

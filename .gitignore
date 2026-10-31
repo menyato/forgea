@@ -8,7 +8,7 @@ coverage/
 # Prisma client is generated from api/prisma/schema on install/build
 generated/
 
-# Local secrets — production secrets live in Google Secret Manager
+# Local secrets — the servers' own live only on the servers (deploy/README.md)
 .env
 .env.*
 !.env.example

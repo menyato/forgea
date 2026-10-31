@@ -74,7 +74,7 @@ export function OrderForm({
   return (
     <Form
       method="post"
-      className="grid gap-8 lg:grid-cols-[1fr_22rem]"
+      className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]"
       noValidate
     >
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />

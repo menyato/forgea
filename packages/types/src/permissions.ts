@@ -102,8 +102,12 @@ export const PERMISSION_GROUPS = [
       { key: 'materials.view', label: 'See materials and stock' },
       {
         key: 'materials.manage',
-        label: 'Change material costs and stock',
+        label: 'Change material prices and settings',
         sensitive: true,
+      },
+      {
+        key: 'stock.manage',
+        label: 'Record filament deliveries, use and counts; set restock limits',
       },
       {
         key: 'catalog.transfer',
@@ -169,6 +173,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<
     'invoices.create',
     'payments.record',
     'materials.view',
+    'stock.manage',
   ],
   [Role.DESIGNER]: [
     'requests.view',
@@ -201,6 +206,7 @@ export const PERMISSION_INCLUDES: Partial<
   'catalog.manage': ['catalog.view', 'materials.view'],
   'homebed.manage': ['catalog.view'],
   'materials.manage': ['materials.view'],
+  'stock.manage': ['materials.view'],
 };
 
 /**

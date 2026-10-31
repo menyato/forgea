@@ -170,7 +170,7 @@ function ThemeEditor({
         title="Theme"
         intro="The colours of the whole site and the logo, in light and dark mode. Start from a palette, change any colour, and check the preview. A palette is saved only when everything stays easy to read."
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_28rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="grid content-start gap-6">
           <Panel title="Start from">
             <div className="flex flex-wrap gap-2">

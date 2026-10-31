@@ -2,7 +2,7 @@ import { palettes } from '@forgea/brand';
 import type { Browser, Page } from '@playwright/test';
 import { cube } from '../../api/prisma/example-models';
 import { signInAsAdmin } from './admin-session';
-import { expect, test } from './fixtures';
+import { expect, test, newVisitor } from './fixtures';
 
 /** The dashboard's save confirmation (SaveStatus), not other text that says "Saved". */
 const saved = (page: Page) =>
@@ -51,7 +51,7 @@ test('a customer asks for something custom, the studio quotes it, the customer o
   const requestUrl = page.url();
 
   // 2. The studio sends the quote from the dashboard.
-  const studio = await browser.newContext();
+  const studio = await newVisitor(browser);
   await signInAsAdmin(studio, baseURL!);
   const admin = await studio.newPage();
   await admin.goto('/admin/requests?status=SUBMITTED');

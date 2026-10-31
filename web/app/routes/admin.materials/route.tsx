@@ -1,6 +1,6 @@
 import type { MaterialView } from '@forgea/types';
 import { SaveMaterialDto } from '@forgea/validation';
-import { useFetcher } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CheckboxField, Field } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
@@ -128,14 +128,32 @@ function MaterialForm({ material }: { material?: MaterialView }) {
           error={errors['gramsPerHour']}
           hint="Your printers' average"
         />
-        <Field
-          label="In stock (g)"
-          name="stockGrams"
-          type="number"
-          min={0}
-          defaultValue={material?.stockGrams ?? 0}
-          error={errors['stockGrams']}
-        />
+        {material ? (
+          // Stock moves only by recorded movements (deliveries, orders, counts).
+          <div className="grid content-start gap-1.5 text-sm">
+            <input
+              type="hidden"
+              name="stockGrams"
+              value={material.stockGrams}
+            />
+            <span className="font-medium">In stock</span>
+            <span>
+              {material.stockGrams} g ·{' '}
+              <Link to="/admin/stock" className="underline">
+                deliveries and counts
+              </Link>
+            </span>
+          </div>
+        ) : (
+          <Field
+            label="Starting stock (g)"
+            name="stockGrams"
+            type="number"
+            min={0}
+            defaultValue={0}
+            error={errors['stockGrams']}
+          />
+        )}
         <Field
           label="Warn below (g)"
           name="lowStockThresholdGrams"

@@ -1,4 +1,5 @@
 import type { StaffOrder } from '@forgea/types';
+import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
@@ -25,7 +26,13 @@ export function InvoicesPanel({
   const invoices = all.filter((i) => i.type === 'INVOICE');
   const hasDeposit = invoices.some((i) => i.invoiceKind === 'DEPOSIT');
   const hasFinal = invoices.some((i) => i.invoiceKind === 'FINAL');
-  const open = invoices.filter((i) => Number(i.residual) > 0);
+  // Invoices still owed, and credit notes whose money still goes back (a refund is their payment).
+  const open = all.filter((i) => Number(i.residual) > 0);
+  // An invoice is credited once, in full; what the customer paid is then theirs to refund.
+  const creditable = invoices.filter((i) => !i.creditedBy);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  // The one chosen while it is still open; otherwise the first one open.
+  const chosen = open.find((i) => i.id === chosenId) ?? open[0]!;
   return (
     <Panel title="Invoices">
       <InvoiceTable invoices={all} showOrder={false} />
@@ -59,19 +66,29 @@ export function InvoicesPanel({
           className="grid gap-3 border-t border-border pt-4 sm:grid-cols-4 sm:items-end"
         >
           <input type="hidden" name="intent" value="payment" />
-          <SelectField label="Payment for" name="invoiceId">
+          <SelectField
+            label="Payment or refund for"
+            name="invoiceId"
+            value={chosen.id}
+            onChange={(e) => setChosenId(e.currentTarget.value)}
+          >
             {open.map((i) => (
               <option key={i.id} value={i.id}>
-                {i.number} (owes ${i.residual})
+                {i.number}{' '}
+                {i.type === 'CREDIT_NOTE'
+                  ? `(refund $${i.residual})`
+                  : `(owes $${i.residual})`}
               </option>
             ))}
           </SelectField>
+          {/* Keyed: choosing another one fills in what is open on it. */}
           <Field
+            key={`${chosen.id}-${chosen.residual}`}
             label="Amount (USD)"
             name="amount"
             inputMode="decimal"
             required
-            defaultValue={open[0]!.residual}
+            defaultValue={chosen.residual}
           />
           <SelectField label="How" name="method" defaultValue="BANK">
             <option value="BANK">Money transfer</option>
@@ -86,6 +103,32 @@ export function InvoicesPanel({
           />
           <Button type="submit" className="sm:col-span-4 sm:justify-self-start">
             Record the payment
+          </Button>
+        </fetcher.Form>
+      )}
+      {creditable.length > 0 && can('books.manage') && (
+        <fetcher.Form
+          method="post"
+          className="flex flex-wrap items-end gap-3 border-t border-border pt-4"
+          onSubmit={(e) => {
+            if (
+              !window.confirm(
+                'Issue a credit note? It cancels the whole invoice in the books and cannot be undone.',
+              )
+            )
+              e.preventDefault();
+          }}
+        >
+          <input type="hidden" name="intent" value="credit-note" />
+          <SelectField label="Credit note for" name="invoiceId">
+            {creditable.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.number} (${i.total})
+              </option>
+            ))}
+          </SelectField>
+          <Button type="submit" variant="secondary">
+            Issue a credit note
           </Button>
         </fetcher.Form>
       )}

@@ -9,7 +9,7 @@ export function SiteFooter({ store }: { store: StoreSettings | null }) {
   return (
     <footer className="mt-16 border-t border-border">
       <div
-        className={`${PAGE_WIDTH} grid gap-8 py-10 text-sm text-text-muted sm:grid-cols-[1fr_auto_auto] sm:gap-16`}
+        className={`${PAGE_WIDTH} grid gap-8 py-10 text-sm text-text-muted sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-16`}
       >
         <div className="grid content-start gap-3">
           <PrintingLogo variant="compact" className="w-28" />

@@ -80,7 +80,7 @@ export default function HomePlatePage({ loaderData }: Route.ComponentProps) {
         title="Home page bed"
         intro="Choose what stands on the 3D print bed at the top of the home page: up to five products with a 3D model. The centre prints first, then the corners."
       />
-      <div className="grid gap-6 xl:grid-cols-[24rem_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
         <Panel title="On the bed">
           {!plate.chosen && (
             <p className="text-sm text-text-muted">

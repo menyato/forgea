@@ -8,6 +8,7 @@ import { canChangeOrderStatus, ORDER_STATUS_FLOW } from '@forgea/types';
 import { OrderStatus } from '../generated/prisma/enums.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
+import { OrderStock } from '../stock/order-stock.service.js';
 import { OrdersRepository } from './orders.repository.js';
 
 export interface StatusChange {
@@ -26,6 +27,7 @@ export class OrderStatusService {
     private readonly orders: OrdersRepository,
     private readonly notifications: Notifications,
     private readonly invoicing: Invoicing,
+    private readonly stock: OrderStock,
   ) {}
 
   async change(
@@ -51,6 +53,11 @@ export class OrderStatusService {
         ? { depositPaid: true }
         : {};
 
+    // Going into production takes the order's filament out of stock, with the status change.
+    const stock =
+      to === OrderStatus.IN_PRODUCTION
+        ? await this.stock.plan(orderId, actorUserId)
+        : null;
     const changed = await this.orders.changeStatus(
       orderId,
       order.status,
@@ -58,6 +65,7 @@ export class OrderStatusService {
       actorUserId,
       note ?? null,
       extra,
+      stock ? (tx) => this.stock.apply(tx, stock) : undefined,
     );
     if (!changed)
       throw new ConflictException(

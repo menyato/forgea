@@ -73,6 +73,12 @@ export const PAGES: readonly {
     group: 'Orders',
   },
   {
+    path: '/admin/insights',
+    access: 'books.view',
+    label: 'Business',
+    group: 'Accounting',
+  },
+  {
     path: '/admin/accounting',
     access: 'invoices.view',
     label: 'Invoices',
@@ -113,6 +119,12 @@ export const PAGES: readonly {
     path: '/admin/materials',
     access: 'materials.view',
     label: 'Materials',
+    group: 'Catalog',
+  },
+  {
+    path: '/admin/stock',
+    access: 'materials.view',
+    label: 'Filament stock',
     group: 'Catalog',
   },
   {

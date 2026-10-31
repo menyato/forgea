@@ -203,7 +203,7 @@ function AccountForm() {
     <fetcher.Form
       method="post"
       key={fetcher.data?.ok ? 'reset' : 'form'}
-      className="grid gap-3 border-t border-border pt-4 sm:grid-cols-[6rem_1fr_12rem_auto] sm:items-end"
+      className="grid gap-3 border-t border-border pt-4 sm:grid-cols-[6rem_minmax(0,1fr)_12rem_auto] sm:items-end"
     >
       <input type="hidden" name="intent" value="account" />
       <Field label="Code" name="code" required error={errors['code']} />
@@ -247,8 +247,10 @@ function ManualEntry({ accounts }: { accounts: AccountView[] }) {
   const [lines, setLines] = useState<Line[]>([blank(), blank()]);
   const set = (i: number, change: Partial<Line>) =>
     setLines((all) => all.map((l, j) => (j === i ? { ...l, ...change } : l)));
-  const debits = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
-  const credits = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  // In cents: 10.10 + 20.20 must equal 30.30 (as decimals it is 30.299999…).
+  const cents = (v: string) => Math.round((Number(v) || 0) * 100);
+  const debits = lines.reduce((s, l) => s + cents(l.debit), 0) / 100;
+  const credits = lines.reduce((s, l) => s + cents(l.credit), 0) / 100;
   return (
     <Panel title="Manual entry">
       <p className="text-sm text-text-muted">
@@ -272,7 +274,7 @@ function ManualEntry({ accounts }: { accounts: AccountView[] }) {
             })),
           )}
         />
-        <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
+        <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
           <Field
             label="Date"
             name="date"
@@ -289,7 +291,10 @@ function ManualEntry({ accounts }: { accounts: AccountView[] }) {
           />
         </div>
         {lines.map((l, i) => (
-          <div key={i} className="grid grid-cols-[1fr_6rem_6rem] gap-2">
+          <div
+            key={i}
+            className="grid grid-cols-[minmax(0,1fr)_6rem_6rem] gap-2"
+          >
             <SelectField
               label="Account"
               name={`entry-${i}-account`}

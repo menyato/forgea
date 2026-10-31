@@ -102,3 +102,7 @@ export const CUSTOM_UPLOAD_CEILING_MB = 100;
 export const SIZE_CM_PATTERN = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
 /** Sizes a product can be sold in. */
 export const PRODUCT_SIZES_MAX = 10;
+
+/** Filament stock: a colour as the shop names it, and the most grams one movement may move. */
+export const STOCK_COLOUR_MAX_LENGTH = 40;
+export const STOCK_GRAMS_MAX = 1_000_000;

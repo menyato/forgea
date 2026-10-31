@@ -113,7 +113,7 @@ export default function Cart({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[1fr_22rem]">
+    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <section
         aria-labelledby="cart-heading"
         className="grid content-start gap-4"

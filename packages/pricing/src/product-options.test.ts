@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PricingError } from './errors.js';
 import {
+  configuredUnitCost,
   configuredUnitPrice,
   configureUnit,
   type OptionEffect,
@@ -96,5 +97,24 @@ describe('configuredUnitPrice', () => {
   it('prices the configured print, then adds the fixed add-ons after markup', () => {
     // 100 g × 1.8 × $0.05 = $9 → ×2 markup = $18, + $2.50 silk = $20.50
     expect(configuredUnitPrice(calculator, base, [large, silk])).toBe('20.50');
+  });
+});
+
+describe('configuredUnitCost', () => {
+  const calculator = new UnitCostCalculator({
+    machineRatePerHour: 1,
+    purgeWastePercent: 10,
+    failureAllowancePercent: 10,
+    laborCostPerUnit: '0.5',
+    packagingCostPerUnit: '0.5',
+    markupMultiplier: 2,
+  });
+
+  it('is the cost before markup, without the add-ons, with the grams it takes', () => {
+    // 180 g × $0.05 = $9 + 6 h × $1 = $15; +10% waste +10% failures = $18; + $1 = $19.
+    expect(configuredUnitCost(calculator, base, [large, silk])).toEqual({
+      cost: '19.00',
+      grams: '180',
+    });
   });
 });

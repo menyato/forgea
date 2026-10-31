@@ -293,7 +293,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
             {lines.map((l, i) => (
               <div
                 key={i}
-                className="grid gap-2 border-b border-border pb-3 sm:grid-cols-[12rem_1fr_5rem_7rem_6rem_auto] sm:items-end"
+                className="grid gap-2 border-b border-border pb-3 sm:grid-cols-[12rem_minmax(0,1fr)_5rem_7rem_6rem_auto] sm:items-end"
               >
                 <SelectField
                   label="Product"
@@ -511,6 +511,11 @@ function QuotationActions({
             value="cancel"
             variant="quiet"
             disabled={fetcher.state !== 'idle'}
+            onClick={(e) => {
+              // Cancelled is final (the customer's link stops working): ask first.
+              if (!window.confirm(`Cancel quotation ${q.number}?`))
+                e.preventDefault();
+            }}
           >
             Cancel the quotation
           </Button>

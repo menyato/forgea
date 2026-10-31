@@ -122,7 +122,7 @@ function AddMember() {
       <fetcher.Form
         method="post"
         key={fetcher.data?.ok ? 'reset' : 'form'}
-        className="grid gap-4 sm:grid-cols-[2fr_1fr_2fr_auto] sm:items-end"
+        className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-end"
       >
         <Field
           label="Workspace email"

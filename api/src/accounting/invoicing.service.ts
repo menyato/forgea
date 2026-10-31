@@ -22,6 +22,8 @@ import { Ledger, type NewLine } from './ledger.service.js';
 const withLines = {
   customer: { select: { id: true, email: true, name: true } },
   order: { select: { orderNumber: true } },
+  // The credit note that reversed this invoice, if any.
+  reversal: { select: { number: true } },
   lines: {
     include: {
       account: { select: { type: true } },
@@ -129,6 +131,29 @@ export class Invoicing {
       include: withLines,
     });
     return entries.map(toInvoiceItem);
+  }
+
+  /** Several orders' invoices in one query, by order id (oldest first in each). */
+  async forOrders(
+    orderIds: readonly string[],
+  ): Promise<Map<string, InvoiceListItem[]>> {
+    const byOrder = new Map<string, InvoiceListItem[]>();
+    if (orderIds.length === 0) return byOrder;
+    const entries = await this.prisma.journalEntry.findMany({
+      where: {
+        orderId: { in: [...orderIds] },
+        type: { in: [EntryType.INVOICE, EntryType.CREDIT_NOTE] },
+      },
+      orderBy: { createdAt: 'asc' },
+      include: withLines,
+    });
+    for (const e of entries) {
+      if (!e.orderId) continue;
+      const list = byOrder.get(e.orderId) ?? [];
+      list.push(toInvoiceItem(e));
+      byOrder.set(e.orderId, list);
+    }
+    return byOrder;
   }
 
   async list(take = 100): Promise<InvoiceListItem[]> {
@@ -318,42 +343,60 @@ export class Invoicing {
         where: { id: dto.invoiceId },
         include: withLines,
       });
-      if (!invoice || invoice.type !== EntryType.INVOICE)
+      // A credit note's "payment" is the refund: the money goes back out to the customer.
+      const refund = invoice?.type === EntryType.CREDIT_NOTE;
+      if (!invoice || (invoice.type !== EntryType.INVOICE && !refund))
         throw new NotFoundException('Invoice not found');
       const open = toInvoiceItem(invoice);
       if (D(dto.amount).gt(open.residual)) {
         throw new BadRequestException(
-          `Only ${open.residual} is still owed on ${invoice.number}`,
+          refund
+            ? `Only ${open.residual} is still to refund on ${invoice.number}`
+            : `Only ${open.residual} is still owed on ${invoice.number}`,
         );
       }
+      const money = {
+        accountId: journal.defaultAccountId,
+        label: `${refund ? 'To' : 'From'} ${invoice.customer?.email ?? 'customer'}`,
+      };
+      const receivable = {
+        accountId: settings.receivableAccountId,
+        label: `For ${invoice.number}`,
+        customerId: invoice.customerId,
+      };
       const payment = await this.ledger.post(
         {
           type: EntryType.PAYMENT,
           journalId,
           date: new Date(dto.date),
-          label: `Payment for ${invoice.number}`,
+          label: `${refund ? 'Refund' : 'Payment'} for ${invoice.number}`,
           customerId: invoice.customerId,
           orderId: invoice.orderId,
           currencyCode: invoice.currencyCode,
           exchangeRate: invoice.exchangeRate,
-          lines: [
-            {
-              accountId: journal.defaultAccountId,
-              label: `From ${invoice.customer?.email ?? 'customer'}`,
-              debit: dto.amount,
-            },
-            {
-              accountId: settings.receivableAccountId,
-              label: `For ${invoice.number}`,
-              credit: dto.amount,
-              customerId: invoice.customerId,
-            },
-          ],
+          lines: refund
+            ? [
+                { ...receivable, debit: dto.amount },
+                { ...money, credit: dto.amount },
+              ]
+            : [
+                { ...money, debit: dto.amount },
+                { ...receivable, credit: dto.amount },
+              ],
         },
         actorId,
         tx,
       );
-      await this.match(invoice, payment.id, settings.receivableAccountId, tx);
+      if (refund) {
+        await this.matchRefund(
+          invoice,
+          payment.id,
+          settings.receivableAccountId,
+          tx,
+        );
+      } else {
+        await this.match(invoice, payment.id, settings.receivableAccountId, tx);
+      }
     });
     return this.invoice(dto.invoiceId);
   }
@@ -365,7 +408,7 @@ export class Invoicing {
   ): Promise<InvoiceListItem> {
     const invoice = await this.prisma.journalEntry.findUnique({
       where: { id: invoiceId },
-      include: { ...withLines, reversal: { select: { id: true } } },
+      include: withLines,
     });
     if (!invoice || invoice.type !== EntryType.INVOICE)
       throw new NotFoundException('Invoice not found');
@@ -427,6 +470,27 @@ export class Invoicing {
     });
     for (const debit of invoice.lines.filter(
       (l) => l.accountId === receivableAccountId && l.debit.gt(0),
+    )) {
+      await this.ledger.reconcile(debit.id, credit.id, tx);
+    }
+  }
+
+  /** Matches a credit note's open receivable credit with the refund's receivable debit. */
+  private async matchRefund(
+    note: EntryRow,
+    refundId: string,
+    receivableAccountId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const debit = await tx.journalLine.findFirstOrThrow({
+      where: {
+        entryId: refundId,
+        accountId: receivableAccountId,
+        debit: { gt: 0 },
+      },
+    });
+    for (const credit of note.lines.filter(
+      (l) => l.accountId === receivableAccountId && l.credit.gt(0),
     )) {
       await this.ledger.reconcile(debit.id, credit.id, tx);
     }
@@ -531,6 +595,7 @@ function toInvoiceItem(e: EntryRow): InvoiceListItem {
     orderNumber: e.order?.orderNumber ?? null,
     total: total.toFixed(2),
     residual: residual.toFixed(2),
+    creditedBy: e.reversal?.number ?? null,
     paymentState: isInvoice
       ? paymentState(total, residual, byCreditNoteOnly)
       : residual.gt(0)

@@ -234,6 +234,14 @@ describe('Sizes and My orders (e2e)', () => {
     ).toMatchObject({
       canCancel: true,
       invoices: [],
+      // Each item says which size (and options) it was, as the customer chose it.
+      items: [
+        {
+          options: expect.arrayContaining([
+            { group: 'Size', value: expect.stringMatching(/ cm$/) },
+          ]) as unknown,
+        },
+      ],
     });
 
     const stranger = await signedInAs(app, Role.CUSTOMER);

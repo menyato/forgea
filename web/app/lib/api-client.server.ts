@@ -14,6 +14,25 @@ export type ApiResult<T> =
 
 type Body = { json: unknown } | { form: FormData } | undefined;
 
+/**
+ * Public reads that are the same for every visitor and that every page's shell makes: kept for
+ * a few seconds in this server, so a busy minute costs the API one call each, not one per page.
+ * A change this server sends to one forgets it at once (the owner sees their save on the next
+ * page); another server process would see it within the TTL.
+ */
+export type SharedPath = '/store-settings' | '/site-theme';
+const SHARED_TTL_MS = 10_000;
+const shared = new Map<
+  SharedPath,
+  { expires: number; result: Promise<ApiResult<unknown>> }
+>();
+
+function forgetShared(path: string): void {
+  for (const key of shared.keys()) {
+    if (path === key || path.startsWith(`${key}/`)) shared.delete(key);
+  }
+}
+
 /** Their 401 means "wrong credentials" or "session over", never "token expired, renew it". */
 const NO_RENEWAL = new Set([
   '/auth/login',
@@ -60,6 +79,25 @@ export class ApiClient {
   me(): Promise<ApiResult<Profile>> {
     this.profile ??= this.get<Profile>('/auth/me');
     return this.profile;
+  }
+
+  /** Whether the browser holds a cart (a visitor without one has nothing to count). */
+  get hasCart(): boolean {
+    return this.jar.has(HTTP.CART_COOKIE);
+  }
+
+  /** A public read shared by every visitor for a few seconds (see `SharedPath`). */
+  shared<T>(path: SharedPath): Promise<ApiResult<T>> {
+    const now = Date.now();
+    const hit = shared.get(path);
+    if (hit && hit.expires > now) return hit.result as Promise<ApiResult<T>>;
+    const result = this.get<T>(path);
+    // Shared while in flight too: a burst of first visits makes one call, not one each.
+    shared.set(path, { expires: now + SHARED_TTL_MS, result });
+    void result.then((r) => {
+      if (!r.ok && shared.get(path)?.result === result) shared.delete(path);
+    });
+    return result;
   }
 
   get<T>(path: string): Promise<ApiResult<T>> {
@@ -120,7 +158,10 @@ export class ApiClient {
     body: Body,
     isRetry = false,
   ): Promise<ApiResult<T>> {
-    if (method !== 'GET') this.profile = undefined;
+    if (method !== 'GET') {
+      this.profile = undefined;
+      forgetShared(path);
+    }
     const response = await this.fetchImpl(new URL(path, this.env.API_URL), {
       method,
       headers: this.requestHeaders(body),

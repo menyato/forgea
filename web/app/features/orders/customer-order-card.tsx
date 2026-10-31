@@ -18,7 +18,7 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
   return (
     <article
       aria-labelledby={`order-${order.orderNumber}`}
-      className="grid gap-5 rounded-lg border border-border bg-surface p-5 md:grid-cols-[1fr_16rem]"
+      className="grid gap-5 rounded-lg border border-border bg-surface p-5 md:grid-cols-[minmax(0,1fr)_16rem]"
     >
       <div className="grid content-start gap-4">
         <header className="flex flex-wrap items-baseline justify-between gap-2">
@@ -38,10 +38,17 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
           </span>
         </p>
         <ul className="grid gap-1 text-sm">
-          {order.items.map((item) => (
-            <li key={item.name} className="flex justify-between gap-4">
-              <span>
+          {order.items.map((item, n) => (
+            <li key={n} className="flex justify-between gap-4">
+              <span className="min-w-0">
                 {item.quantity} × {item.name}
+                {item.options.length > 0 && (
+                  <span className="block text-text-muted">
+                    {item.options
+                      .map((o) => `${o.group}: ${o.value}`)
+                      .join(' · ')}
+                  </span>
+                )}
               </span>
               <Money amount={item.lineTotal} />
             </li>
@@ -87,7 +94,16 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
                 </span>
                 <span>
                   <Money amount={i.total} />{' '}
-                  {i.paid ? (
+                  {i.kind === 'credit note' ? (
+                    // Money owed back to the customer, not by them.
+                    Number(i.residual) > 0 ? (
+                      <span className="text-warning">
+                        <Money amount={i.residual} /> coming back to you
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">settled</span>
+                    )
+                  ) : i.paid ? (
                     <span className="text-success">paid</span>
                   ) : (
                     <span className="text-warning">

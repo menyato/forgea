@@ -14,6 +14,7 @@ export {
   PaymentMethod,
   PrintJobStatus,
   Role,
+  StockMovementKind,
 } from './generated/prisma/enums.js';
 export type * from './lists.js';
 export type * from './commerce.js';
@@ -48,7 +49,7 @@ export { safeNext } from './safe-next.js';
 export {
   PRINT_JOB_FLOW,
   PRINT_JOB_STATUS_LABELS,
-  PRINT_JOB_USES_MATERIAL,
+  PRINT_JOB_WASTES_MATERIAL,
 } from './print-jobs.js';
 export {
   DEFAULT_ROLE_PERMISSIONS,
@@ -62,3 +63,35 @@ export {
 export type { Permission, PermissionRole } from './permissions.js';
 export { PRODUCT_SIZE_GROUP_ID } from './catalog.js';
 export { scaledSize } from './sizes.js';
+export type {
+  BusinessInsights,
+  DateRange,
+  InsightsGranularity,
+  InsightsMaterial,
+  InsightsProduct,
+  InsightsSeriesPoint,
+  InsightsTotals,
+  PeriodPreset,
+} from './insights.js';
+export {
+  bucketStarts,
+  daysIn,
+  granularityFor,
+  INSIGHTS_MAX_DAYS,
+  isCalendarDay,
+  percentChange,
+  PERIOD_PRESET_LABELS,
+  PERIOD_PRESETS,
+  periodError,
+  presetOf,
+  presetRange,
+  previousRange,
+} from './insights.js';
+export type {
+  ManualStockMovement,
+  ProductFilamentUse,
+  StockItemView,
+  StockMovementView,
+  StockOverview,
+} from './stock.js';
+export { MANUAL_STOCK_MOVEMENTS, STOCK_MOVEMENT_LABELS } from './stock.js';

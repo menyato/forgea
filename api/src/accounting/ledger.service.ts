@@ -139,10 +139,9 @@ export class Ledger {
     creditLineId: string,
     tx: Prisma.TransactionClient,
   ): Promise<Prisma.Decimal> {
-    const [debit, credit] = await Promise.all([
-      this.openAmount(debitLineId, 'debit', tx),
-      this.openAmount(creditLineId, 'credit', tx),
-    ]);
+    // One after the other: a transaction is one connection, which runs one query at a time.
+    const debit = await this.openAmount(debitLineId, 'debit', tx);
+    const credit = await this.openAmount(creditLineId, 'credit', tx);
     const amount = Prisma.Decimal.min(debit, credit);
     if (amount.lte(0)) return new Prisma.Decimal(0);
     await tx.reconciliation.create({

@@ -61,6 +61,49 @@ shop, custom request, quotation — is one kind of order.
 - Lock date: nothing dated on or before it can be posted or reversed into.
 - Reports from posted lines only: profit and loss, balance sheet, aged receivables.
 
+## Business page and filament stock
+
+**Business (Dashboard → Accounting → Business, `/admin/insights`, `GET /insights?from=&to=`,
+`books.view`):** one period (this month by default; presets or any dates, two years at most),
+each figure next to the period of the same length just before. Days are UTC days, like the
+books (an entry's date is the UTC day it was posted).
+
+- **Revenue, expenses, net profit** are the profit and loss report itself (`Books.profitAndLoss`):
+  income accounts net of credit notes, taxes excluded. **Tax** is the tax lines of final invoices
+  (less their credit notes), so revenue + tax = what customers paid for what was delivered.
+  **Net profit** is the books' (revenue − expense accounts): it is all revenue until expenses
+  are recorded.
+- **Production cost (estimated):** no cost is stored with orders, so it is worked out from the
+  invoiced order lines — the lines of orders whose final invoice is dated in the period, less
+  those whose final invoice was credited in it — with **today's** pricing settings and catalog:
+  the chosen size's grams and hours (else the product's), each option's multipliers and material,
+  then the pricing engine's cost before markup (`configuredUnitCost`: material, machine time,
+  waste, failures, labour, packaging; option add-ons are margin, not cost). Lines without a
+  catalog product (custom requests, free quotation lines) have no estimate: shown as "custom
+  work with no estimate". **Gross profit** = revenue − that estimate.
+- **Orders** (placed in the period, cancelled left out), average order (tax and delivery
+  included), **cash collected** (payment entries into cash and transfer accounts), **still owed**
+  (receivable balance at the end of the period).
+- Best sellers and categories: invoiced products by revenue (the tax split out at today's rate),
+  units and estimated margin. What customers choose: choice-group values and sizes on orders
+  placed (typed texts never). Funnel: orders by status and cancellation rate; new vs returning
+  customers (first order ever in the period); delivery/pickup, cash/transfer, rush; custom
+  requests sent → quoted → accepted, quotations written → sent → confirmed, leads in, won and
+  lost (with reasons). Everything is added up by the database (`InsightsRepository`).
+
+**Filament stock (Dashboard → Catalog → Filament stock, `/admin/stock`, `materials.view`;
+recording and limits need `stock.manage`):** stock per material **and colour** (spools are bought
+that way; a colour is an option value with a swatch), kept as an append-only list of movements
+(`stock_movements`; the database refuses changes, and keeps `materials.stockGrams` as the
+material's total): opening stock, deliveries, orders, failed prints, other use, count
+corrections. An order takes its filament **when it goes into production** (in the status
+change's transaction, once per order line): cancelling before that takes nothing; cancelling
+after keeps it spent (correct by hand if nothing was printed). A finished print job changes
+nothing (its order took the filament); a failed one takes its grams. Restock advice per line:
+available = stock − what open orders will take; daily use = the busier of the last 30 and 90
+days; reorder at the owner's low level + daily use × delivery days; buy enough for the cover
+days on top, in whole spools. All four limits are the owner's, per filament.
+
 **Left out (Odoo features a one-studio shop doesn't need now):** lead scoring, teams and
 assignment rules, pricelists, multi-company, fiscal positions, cash-basis taxes, bank statement
 import, exchange-difference entries (rates are fixed per document), analytic accounting.
