@@ -13,6 +13,7 @@ import type { MyOrdersQuery } from '@forgea/validation';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { OrderStatus } from '../generated/prisma/enums.js';
 import { Notifications } from '../mail/notifications.service.js';
+import type { Measurement } from '../text-studio/text-studio.service.js';
 import { OrderStatusService } from './order-status.service.js';
 import {
   OrdersRepository,
@@ -103,6 +104,7 @@ function toCustomerOrder(
       lineTotal: i.lineTotal.toFixed(2),
       // A snapshot written at checkout: [{ group, value }].
       options: i.options as unknown as ChosenOption[],
+      design: (i.design as Measurement | null)?.summary ?? null,
     })),
     history: o.statusHistory.map((h) => ({
       status: h.status,

@@ -13,7 +13,7 @@ export {
   VerifyEmailDto,
 } from './auth.dto.js';
 export { CreateLeadDto } from './leads.dto.js';
-export { SetExchangeRateDto } from './currency.dto.js';
+export { AddCurrencyDto, SetExchangeRateDto } from './currency.dto.js';
 export {
   AuditLogListQuery,
   CursorPageQuery,
@@ -53,6 +53,7 @@ export {
 } from './dashboard.dto.js';
 export {
   OptionSelectionDto,
+  PricePreviewDto,
   ProductOptionConfigDto,
   ProductPriceDto,
   ProductSizeDto,
@@ -66,6 +67,7 @@ export {
   AddActivityDto,
   AddNoteDto,
   EntryListQuery,
+  InvoiceListQuery,
   LEAD_STATES,
   LeadListQuery,
   LoseLeadDto,
@@ -84,4 +86,21 @@ export {
   UpdateAccountingSettingsDto,
 } from './back-office.dto.js';
 export { PeriodQuery } from './insights.dto.js';
-export { RecordStockMovementDto, SaveStockItemDto } from './stock.dto.js';
+export {
+  PURCHASE_PAID_FROM,
+  type PurchasePaidFrom,
+  ReceiveSpoolsDto,
+  RecordStockMovementDto,
+  SaveStockItemDto,
+  StockCountDto,
+  StockMovementListQuery,
+  StudioPrintDto,
+} from './stock.dto.js';
+export {
+  DesignLetterDto,
+  ProductTextDto,
+  SaveFontDto,
+  TEXT_MAX_CHARS,
+  TextDesignDto,
+  UpdateFontDto,
+} from './text-studio.dto.js';

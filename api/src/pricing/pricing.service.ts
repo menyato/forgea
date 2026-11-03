@@ -5,6 +5,10 @@ import {
   type OrderQuote,
   OrderPricer,
   type OrderSettings,
+  type PrinterCosts,
+  PricingError,
+  printerHourlyRate,
+  type ProfitRule,
   type UnitCostInput,
   type UnitPriceBreakdown,
   UnitCostCalculator,
@@ -41,15 +45,20 @@ export class PricingService {
         'Two bulk discounts start at the same quantity',
       );
     }
+    const printer = printerOf(dto);
     const next: PricingSettingsSnapshot = {
       cost: {
-        machineRatePerHour: dto.machineRatePerHour,
+        // With the printer's details, its hourly cost is worked out from them.
+        machineRatePerHour: printer
+          ? printerHourlyRate(printer)
+          : dto.machineRatePerHour,
         purgeWastePercent: dto.purgeWastePercent,
         failureAllowancePercent: dto.failureAllowancePercent,
         laborCostPerUnit: dto.laborCostPerUnit,
         packagingCostPerUnit: dto.packagingCostPerUnit,
-        markupMultiplier: dto.markupMultiplier,
+        profit: { kind: dto.profitKind, value: dto.profitValue },
       },
+      printer,
       order: {
         rushFeePercent: dto.rushFeePercent,
         deliveryFee: dto.deliveryFee,
@@ -61,8 +70,14 @@ export class PricingService {
       },
     };
     // The engine checks the numbers make sense before anything is stored.
-    new UnitCostCalculator(next.cost);
-    new OrderPricer(next.order);
+    try {
+      new UnitCostCalculator(next.cost);
+      new OrderPricer(next.order);
+    } catch (error) {
+      if (error instanceof PricingError)
+        throw new BadRequestException(error.message);
+      throw error;
+    }
     await this.stored.save(next, adminId);
     return next;
   }
@@ -73,8 +88,11 @@ export class PricingService {
   }
 
   /** Server-only: the unit price of a print, with its full cost breakdown. */
-  async unitPrice(input: UnitCostInput): Promise<UnitPriceBreakdown> {
-    return (await this.costCalculator()).price(input);
+  async unitPrice(
+    input: UnitCostInput,
+    profit?: ProfitRule | null,
+  ): Promise<UnitPriceBreakdown> {
+    return (await this.costCalculator()).price(input, profit);
   }
 
   /** One calculator for pricing many items with a single settings read (e.g. a product list). */
@@ -94,4 +112,26 @@ export class PricingService {
       bulkDiscounts ? order : { ...order, bulkDiscountTiers: [] },
     ).quote(lines, options);
   }
+}
+
+/** The printer's four details, all or none ("fill in all four, or clear them"). */
+function printerOf(dto: UpdatePricingSettingsDto): PrinterCosts | null {
+  const parts = [
+    dto.printerPrice,
+    dto.printerLifeHours,
+    dto.printerWatts,
+    dto.electricityPerKwh,
+  ];
+  if (parts.every((p) => p === undefined)) return null;
+  if (parts.some((p) => p === undefined)) {
+    throw new BadRequestException(
+      'Fill in all four printer details (price, life, watts, electricity), or clear them to type the hourly cost yourself',
+    );
+  }
+  return {
+    printerPrice: dto.printerPrice!,
+    lifeHours: dto.printerLifeHours!,
+    watts: dto.printerWatts!,
+    electricityPerKwh: dto.electricityPerKwh!,
+  };
 }

@@ -15,17 +15,24 @@ import type {
   AdminProductListItem,
   HomePlate,
   Page,
+  Permission,
+  PricePreview,
   ProductDetail,
   ProductListItem,
 } from '@forgea/types';
 import {
+  PricePreviewDto,
   ProductListQuery,
   ProductPriceDto,
   SaveProductDto,
   SetHomePlateDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { Public, RequirePermission } from '../authorization/decorators.js';
+import {
+  CallerPermissions,
+  Public,
+  RequirePermission,
+} from '../authorization/decorators.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { ProductsService } from './products.service.js';
 
@@ -81,21 +88,38 @@ export class ProductsController {
 
   /** The price for the shopper's current choices; the product page calls it as they choose. */
   @Public()
-  @Throttle(THROTTLE.quote)
+  @Throttle(THROTTLE.livePrice)
   @HttpCode(200)
   @Post(':slug/price')
   price(
     @Param('slug') slug: string,
     @Body() dto: ProductPriceDto,
   ): Promise<{ unitPrice: string }> {
-    return this.products.price(slug, dto.options);
+    return this.products.price(slug, dto.options, dto.design);
   }
 
   @RequirePermission('catalog.manage')
   @Audit({ action: 'product.create', targetType: 'Product' })
   @Post()
-  create(@Body() dto: SaveProductDto): Promise<AdminProduct> {
-    return this.products.create(dto);
+  create(
+    @Body() dto: SaveProductDto,
+    @CallerPermissions() permissions: Permission[],
+  ): Promise<AdminProduct> {
+    return this.products.create(dto, permissions.includes('pricing.manage'));
+  }
+
+  /** The price of a product being edited; its costs only for whoever manages pricing. */
+  @RequirePermission('catalog.manage')
+  @HttpCode(200)
+  @Post('price-preview')
+  pricePreview(
+    @Body() dto: PricePreviewDto,
+    @CallerPermissions() permissions: Permission[],
+  ): Promise<PricePreview> {
+    return this.products.pricePreview(
+      dto,
+      permissions.includes('pricing.manage'),
+    );
   }
 
   @RequirePermission('catalog.manage')
@@ -104,7 +128,12 @@ export class ProductsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SaveProductDto,
+    @CallerPermissions() permissions: Permission[],
   ): Promise<AdminProduct> {
-    return this.products.update(id, dto);
+    return this.products.update(
+      id,
+      dto,
+      permissions.includes('pricing.manage'),
+    );
   }
 }

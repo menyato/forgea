@@ -2,11 +2,13 @@ import { ORDER_STATUS_LABELS, type CustomerOrder } from '@forgea/types';
 import { Form, useNavigation } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
+import { DesignLines } from '~/features/text-studio/design-lines';
 import { OrderTimeline } from './order-timeline';
+import { STUDIO_TIME_ZONE } from '~/lib/studio-time';
 
 const placed = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'long',
-  timeZone: 'Asia/Beirut',
+  timeZone: STUDIO_TIME_ZONE,
 });
 
 /** One order with its items, totals and status history — used by "My orders" and "Track". */
@@ -42,6 +44,7 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
             <li key={n} className="flex justify-between gap-4">
               <span className="min-w-0">
                 {item.quantity} × {item.name}
+                {item.design && <DesignLines design={item.design} />}
                 {item.options.length > 0 && (
                   <span className="block text-text-muted">
                     {item.options

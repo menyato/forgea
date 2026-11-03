@@ -9,14 +9,17 @@ import type {
   AgedReceivables,
   BalanceSheet,
   JournalEntryView,
+  Page,
   ProfitAndLoss,
   ReportLine,
 } from '@forgea/types';
 import type {
+  EntryListQuery,
   ManualEntryDto,
   SaveAccountDto,
   UpdateAccountingSettingsDto,
 } from '@forgea/validation';
+import { keysetPage, toPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { AccountType, EntryType } from '../generated/prisma/enums.js';
@@ -177,17 +180,43 @@ export class Books {
     return this.entry(id);
   }
 
-  async entries(
-    type: EntryType | undefined,
-    take = 100,
-  ): Promise<JournalEntryView[]> {
-    const rows = await this.prisma.journalEntry.findMany({
-      where: { state: 'POSTED', ...(type ? { type } : {}) },
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      take,
-      include: entryInclude,
-    });
-    return rows.map(toEntryView);
+  /** Posted entries, newest date first by default, searchable and paged. */
+  async entries(query: EntryListQuery): Promise<Page<JournalEntryView>> {
+    const has = { contains: query.q ?? '', mode: 'insensitive' } as const;
+    const where: Prisma.JournalEntryWhereInput = {
+      state: 'POSTED',
+      ...(query.type ? { type: query.type } : {}),
+      ...(query.orderId ? { orderId: query.orderId } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { number: has },
+              { label: has },
+              { order: { orderNumber: has } },
+              { customer: { email: has } },
+              { journal: { name: has } },
+            ],
+          }
+        : {}),
+    };
+    const page = await keysetPage<EntryRow>(
+      {
+        sortField: query.sort,
+        kind: query.sort === 'date' ? 'date' : 'string',
+        order: query.order,
+        limit: query.limit,
+        cursor: query.cursor,
+        valueOf: (e) => (query.sort === 'date' ? e.date : (e.number ?? '')),
+      },
+      ({ after, orderBy, take }) =>
+        this.prisma.journalEntry.findMany({
+          where: { AND: [where, after as Prisma.JournalEntryWhereInput] },
+          orderBy: orderBy as Prisma.JournalEntryOrderByWithRelationInput[],
+          take,
+          include: entryInclude,
+        }),
+    );
+    return toPage(page, toEntryView);
   }
 
   async entry(id: string): Promise<JournalEntryView> {
@@ -369,10 +398,9 @@ const entryInclude = {
   reversedEntry: { select: { number: true } },
   lines: { include: { account: { select: { code: true, name: true } } } },
 } as const satisfies Prisma.JournalEntryInclude;
+type EntryRow = Prisma.JournalEntryGetPayload<{ include: typeof entryInclude }>;
 
-function toEntryView(
-  e: Prisma.JournalEntryGetPayload<{ include: typeof entryInclude }>,
-): JournalEntryView {
+function toEntryView(e: EntryRow): JournalEntryView {
   return {
     id: e.id,
     number: e.number ?? '',

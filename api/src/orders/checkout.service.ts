@@ -104,7 +104,13 @@ export class CheckoutService {
     return this.place(dto, userId, {
       cartId,
       lines: orderLinesFromCart(lines),
-      sources: lines,
+      // Each personalised piece goes with its design as made, for the studio to print.
+      sources: lines.map((l) => ({
+        id: l.id,
+        productId: l.productId,
+        options: l.options,
+        design: l.measurement,
+      })),
       rush: dto.rush,
     });
   }

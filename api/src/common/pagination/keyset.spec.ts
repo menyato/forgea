@@ -133,6 +133,11 @@ describe('cursor validation', () => {
     );
   });
 
+  it('reads whole numbers back as numbers (Int columns refuse strings)', () => {
+    const grams = encodeCursor({ s: 'grams', o: 'asc', v: '-600', id: id(1) });
+    expect(decodeCursor(grams, 'grams', 'asc', 'int').value).toBe(-600);
+  });
+
   it.each([
     ['another sort field', valid, 'name', 'desc', 'string'],
     ['another direction', valid, 'createdAt', 'asc', 'date'],
@@ -150,6 +155,13 @@ describe('cursor validation', () => {
       'total',
       'desc',
       'decimal',
+    ],
+    [
+      'a fraction where whole numbers sort',
+      encodeCursor({ s: 'grams', o: 'desc', v: '1.5', id: id(1) }),
+      'grams',
+      'desc',
+      'int',
     ],
     [
       'a bad id',

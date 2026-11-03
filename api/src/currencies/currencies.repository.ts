@@ -41,6 +41,21 @@ export class CurrenciesRepository {
     });
   }
 
+  /** A new currency and its first rate, together. */
+  create(
+    currency: {
+      code: string;
+      name: string;
+      decimals: number;
+      roundingStep: string;
+    },
+    rate: { rate: string; setByUserId: string },
+  ): Promise<Currency> {
+    return this.prisma.currency.create({
+      data: { ...currency, rates: { create: rate } },
+    });
+  }
+
   /** Appends a rate; history is never rewritten. */
   addRate(data: {
     currencyCode: string;

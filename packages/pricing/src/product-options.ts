@@ -7,6 +7,7 @@ import {
   toBig,
 } from './money.js';
 import type {
+  ProfitRule,
   UnitCostCalculator,
   UnitCostInput,
 } from './unit-cost-calculator.js';
@@ -84,14 +85,20 @@ export function configureUnit(
   };
 }
 
-/** The unit price of a configured product: the calculator's price plus the fixed add-ons. */
+/**
+ * The unit price of a configured product: the calculator's price (with the product's own
+ * profit rule, or the shop's) plus the fixed add-ons.
+ */
 export function configuredUnitPrice(
   calculator: UnitCostCalculator,
   base: UnitCostInput,
   effects: readonly OptionEffect[],
+  profit?: ProfitRule | null,
 ): string {
   const { input, extraPrice } = configureUnit(base, effects);
-  return money(new Big(calculator.price(input).unitPrice).plus(extraPrice));
+  return money(
+    new Big(calculator.price(input, profit).unitPrice).plus(extraPrice),
+  );
 }
 
 /**

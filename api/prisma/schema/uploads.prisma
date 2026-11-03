@@ -13,6 +13,8 @@ enum UploadPurpose {
   PRODUCT_MODEL
   /// A customer's 3D model or photo attached to a custom request.
   CUSTOM_REQUEST_FILE
+  /// A font for personalised text (TTF or OTF).
+  FONT
 }
 
 /// Every uploaded file. The type is sniffed from the bytes, never taken from the

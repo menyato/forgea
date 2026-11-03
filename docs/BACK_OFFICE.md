@@ -104,6 +104,27 @@ available = stock − what open orders will take; daily use = the busier of the 
 days; reorder at the owner's low level + daily use × delivery days; buy enough for the cover
 days on top, in whole spools. All four limits are the owner's, per filament.
 
+**Recording, with costs (`stock.manage`):** four plain actions on the Stock page (`?do=`), each
+saying back what it will record before it is saved:
+
+- *Spools received* (`POST /stock/receipts`): spools × spool weight, the price of one. The grams
+  go on the shelf with their cost; the price becomes the material's reel (its cost per gram,
+  unless the owner unticks it); paid from the cash box or a transfer it is booked through
+  `Purchases` (accounting) as an expense: debit the purchases account (accounting settings,
+  "5000 Filament and materials used" to start), credit that journal's account. The movement keeps
+  the entry (`journalEntryId`). Filament is expensed when bought (cash basis), so orders'
+  filament is never booked again; it is shown as cost on the Stock page only.
+- *Printed for the studio* (`POST /stock/studio-prints`, a USED movement) and *Failed print*
+  (`POST /stock/failed-prints`, FAILED_PRINT with how far it got): a product, its size and
+  colour as the shop offers them, how many. Grams and cost come from the product through
+  `ProductionEstimator` (filament + machine time); nobody types grams.
+- *Weigh the spools* (`POST /stock/counts`): what is on the shelf now; the difference is recorded
+  under the material's stock lock.
+
+Each movement keeps its `cost` and `costPerGram` (orders: the material's cost per gram when
+they went out), so later price changes never rewrite the past. The page's period summary shows
+grams and cost bought, used by orders, printed for the studio and lost to failed prints.
+
 **Left out (Odoo features a one-studio shop doesn't need now):** lead scoring, teams and
 assignment rules, pricelists, multi-company, fiscal positions, cash-basis taxes, bank statement
 import, exchange-difference entries (rates are fixed per document), analytic accounting.

@@ -38,6 +38,7 @@ const line = (over: Partial<CartLine> = {}): CartLine => ({
   quantity: 2,
   isCustom: false,
   options: [],
+  design: null,
   ...over,
 });
 

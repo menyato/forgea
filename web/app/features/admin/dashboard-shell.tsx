@@ -1,6 +1,7 @@
 import type { Profile } from '@forgea/types';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
+import { useRememberAddresses } from './breadcrumbs';
 import { DashboardNav } from './dashboard-nav';
 
 const STORAGE_KEY = 'forgea_dashboard_sidebar';
@@ -47,6 +48,7 @@ export function DashboardShell({
   children: ReactNode;
 }) {
   const { pathname } = useLocation();
+  useRememberAddresses();
   const [folded, setFolded] = useState(false);
   const [drawer, setDrawer] = useState(false);
 

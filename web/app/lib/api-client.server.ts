@@ -174,6 +174,9 @@ export class ApiClient {
       redirect: 'manual',
     });
     this.absorbCookies(response);
+    // Again once it is done: a page that read the old value while the change was being saved
+    // must not keep it.
+    if (method !== 'GET') forgetShared(path);
 
     if (
       response.status === 401 &&

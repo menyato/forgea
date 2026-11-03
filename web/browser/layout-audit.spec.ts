@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { signInAsAdmin } from './admin-session';
+import { recordPages } from './record-pages';
 import { expect, test } from './fixtures';
 
 /**
@@ -72,6 +73,10 @@ const SHOP = [
   '/',
   '/shop',
   '/products/phone-stand',
+  '/products/name-keychain',
+  '/products/curved-initials',
+  '/products/baby-initial-name',
+  '/products/couple-names',
   '/products/twist-vase',
   '/custom',
   '/contact',
@@ -83,10 +88,13 @@ const SHOP = [
 const DASHBOARD = [
   '/admin',
   '/admin/orders',
-  '/admin/orders?view=board',
+  '/admin/orders?view=kanban',
   '/admin/production',
   '/admin/requests',
   '/admin/leads',
+  '/admin/leads?view=list&group=stage',
+  '/admin/leads/new',
+  '/admin/orders?group=status',
   '/admin/quotations',
   '/admin/quotations/new',
   '/admin/accounting',
@@ -96,14 +104,42 @@ const DASHBOARD = [
   '/admin/insights?from=2026-01-01&to=2026-10-31',
   '/admin/products',
   '/admin/products/new',
+  '/admin/fonts',
   '/admin/home-plate',
   '/admin/categories',
   '/admin/options',
   '/admin/materials',
   '/admin/stock',
-  '/admin/pipeline',
+  '/admin/lead-stages',
+  '/admin/lead-stages/new',
+  '/admin/lost-reasons',
+  '/admin/lost-reasons/new',
+  '/admin/materials/new',
+  '/admin/materials?view=kanban',
+  '/admin/categories/new',
+  '/admin/categories?view=kanban',
+  '/admin/options/new',
+  '/admin/options?view=kanban',
+  '/admin/fonts/new',
+  '/admin/fonts?view=kanban',
+  '/admin/stock?view=kanban',
+  '/admin/stock/movements',
+  '/admin/stock/receive',
+  '/admin/stock/print',
+  '/admin/stock/failed',
+  '/admin/stock/weigh',
+  '/admin/production?view=list',
+  '/admin/production/new',
+  '/admin/production/calendar',
+  '/admin/accounting/books/entries/new',
+  '/admin/team/new',
+  '/admin/team?filter=customers',
+  '/admin/products?view=kanban',
+  '/admin/quotations?view=kanban',
+  '/admin/requests?view=kanban',
   '/admin/pricing',
   '/admin/currencies',
+  '/admin/currencies/new',
   '/admin/theme',
   '/admin/team',
   '/admin/permissions',
@@ -122,7 +158,7 @@ test('nothing on the dashboard pages spills out of its box', async ({
   context,
   baseURL,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   await signInAsAdmin(context, baseURL!);
   // An existing product shows the option and size set-up filled in.
   const paths = [...DASHBOARD];
@@ -132,5 +168,7 @@ test('nothing on the dashboard pages spills out of its box', async ({
     .first()
     .getAttribute('href');
   if (edit) paths.push(edit as (typeof DASHBOARD)[number]);
-  expect(await overflows(page, paths)).toEqual([]);
+  // And a record's form from every list.
+  const records = await recordPages(page);
+  expect(await overflows(page, [...paths, ...records])).toEqual([]);
 });

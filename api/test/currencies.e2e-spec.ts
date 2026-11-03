@@ -106,4 +106,70 @@ describe('Currencies (e2e)', () => {
       .send({ rate: '1' })
       .expect(401);
   });
+
+  it('lets an admin add a currency with its first rate; customers can pay in it at once', async () => {
+    const { user, cookie } = await cookieFor(Role.ADMIN);
+    const staff = await cookieFor(Role.STAFF);
+    // A code no real currency has, made fresh each run (the test database is kept).
+    const code = `Q${String.fromCharCode(65 + (Date.now() % 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`;
+    await prisma.exchangeRate.deleteMany({ where: { currencyCode: code } });
+    await prisma.currency.deleteMany({ where: { code } });
+    const add = (cookie: string, body: object) =>
+      request(app.getHttpServer())
+        .post('/currencies')
+        .set(CSRF)
+        .set('Cookie', cookie)
+        .send(body);
+    const euro = {
+      code: code.toLowerCase(),
+      name: 'Test euro',
+      decimals: 2,
+      roundingStep: '0.01',
+      rate: '0.92',
+    };
+    await add(staff.cookie, euro).expect(403);
+    for (const bad of [
+      { ...euro, code: 'EU' },
+      { ...euro, decimals: 5 },
+      { ...euro, rate: '0' },
+      { ...euro, roundingStep: '-1' },
+    ])
+      await add(cookie, bad).expect(400);
+    try {
+      const res = await add(cookie, euro).expect(201);
+      expect(res.body).toMatchObject({ code, rate: '0.92', decimals: 2 });
+      await add(cookie, euro).expect(409);
+      const lbp = await app.get(CurrenciesService).converterFor(code);
+      expect(lbp.convert('10')).toBe('9.20');
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        // Asked as 'new', done as the code it was saved under.
+        where: { action: 'currency.add', actorUserId: user.id, targetId: code },
+      });
+      expect(audit.metadata).toMatchObject({ outcome: 'done' });
+      // The audit log finds the currency's entries and opens one; the team can't.
+      const mine = await request(app.getHttpServer())
+        .get(`/audit-log?targetType=Currency&targetId=${code}`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(mine.body.items.map((e: { id: string }) => e.id)).toContain(
+        audit.id,
+      );
+      const one = await request(app.getHttpServer())
+        .get(`/audit-log/${audit.id}`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(one.body).toMatchObject({
+        action: 'currency.add',
+        targetId: code,
+        metadata: { outcome: 'done' },
+      });
+      await request(app.getHttpServer())
+        .get(`/audit-log/${audit.id}`)
+        .set('Cookie', staff.cookie)
+        .expect(403);
+    } finally {
+      await prisma.exchangeRate.deleteMany({ where: { currencyCode: code } });
+      await prisma.currency.deleteMany({ where: { code } });
+    }
+  });
 });

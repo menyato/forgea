@@ -6,10 +6,14 @@ import {
   type OptionGroupView,
   type ProductOptionConfig,
   type ProductSizeView,
+  type ProductTextSettings,
+  type ProfitKind,
   type SizeCm,
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
+import { PricePanel } from './price-panel';
+import { TextSettingsPanel } from './text-settings';
 import type { loader as productLoader } from './route';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
@@ -20,6 +24,7 @@ import {
   TextAreaField,
 } from '~/components/ui/field';
 import { Panel, SaveStatus } from '~/features/admin/admin-ui';
+import type { ProfitValue } from '~/features/admin/profit-rule-field';
 import type { SaveResult } from '~/features/admin/staff.server';
 import { ImagesField } from './images-field';
 import { ModelField } from './model-field';
@@ -39,8 +44,11 @@ export function ProductForm({
   materials,
   groups,
   others,
+  shopProfit,
 }: {
   product: AdminProduct | null;
+  /** The shop's profit rule; null when the editor may not manage pricing. */
+  shopProfit: { kind: ProfitKind; value: string } | null;
   /** Other products, to copy their options from. */
   others: readonly { id: string; name: string }[];
   categories: readonly CategoryView[];
@@ -66,6 +74,14 @@ export function ProductForm({
   );
   const [measured, setMeasured] = useState<SizeCm>(product?.size ?? NO_SIZE);
   const [sizes, setSizes] = useState<ProductSizeView[]>(product?.sizes ?? []);
+  const [text, setText] = useState<ProductTextSettings | null>(
+    product?.text ?? null,
+  );
+  const [profit, setProfit] = useState<ProfitValue>(
+    product?.profit
+      ? { kind: product.profit.kind, value: product.profit.value }
+      : { kind: 'SHOP', value: '' },
+  );
   const suggest = useCallback(
     (e: { grams: string; printHours: string; size: SizeCm }) => {
       setGrams(e.grams);
@@ -233,10 +249,26 @@ export function ProductForm({
             name="active"
             defaultChecked={product?.active ?? true}
           />
-          {product && (
-            <p className="text-sm">
-              Price with default options: <Money amount={product.price} />
-            </p>
+          <PricePanel
+            materialId={materialId}
+            grams={grams}
+            printHours={hours}
+            profit={profit}
+            onProfit={setProfit}
+            shopProfit={shopProfit}
+            errors={errors}
+          />
+        </Panel>
+
+        <Panel title="Personalised text">
+          <TextSettingsPanel
+            value={text}
+            onChange={setText}
+            groups={groups}
+            errors={errors}
+          />
+          {text && (
+            <input type="hidden" name="text" value={JSON.stringify(text)} />
           )}
         </Panel>
 

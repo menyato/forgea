@@ -5,15 +5,17 @@ import type {
   MaterialView,
   OptionGroupView,
   Page,
+  PricePreview,
+  ProfitKind,
   UploadedFile,
 } from '@forgea/types';
-import { SaveProductDto } from '@forgea/validation';
+import { PricePreviewDto, SaveProductDto } from '@forgea/validation';
 import { data, Form, redirect } from 'react-router';
 import { buttonClass } from '~/components/ui/button';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, ViewOnly } from '~/features/admin/admin-ui';
 import { checked, save, text } from '~/features/admin/staff.server';
-import { jsonField } from '~/lib/forms.server';
+import { jsonField, validateForm } from '~/lib/forms.server';
 import type { ApiClient } from '~/lib/api-client.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -22,19 +24,24 @@ import { ProductForm } from './product-form';
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const isNew = params.id === 'new';
-  const [product, categories, materials, groups, list] = await Promise.all([
-    isNew
-      ? Promise.resolve(null)
-      : api.get<AdminProduct>(
-          `/products/manage/${encodeURIComponent(params.id)}`,
-        ),
-    api.get<CategoryView[]>('/categories/manage'),
-    api.get<MaterialView[]>('/materials'),
-    api.get<OptionGroupView[]>('/option-groups'),
-    api.get<Page<AdminProductListItem>>(
-      '/products/manage?limit=100&sort=name&order=asc',
-    ),
-  ]);
+  const [product, categories, materials, groups, list, pricing] =
+    await Promise.all([
+      isNew
+        ? Promise.resolve(null)
+        : api.get<AdminProduct>(
+            `/products/manage/${encodeURIComponent(params.id)}`,
+          ),
+      api.get<CategoryView[]>('/categories/manage'),
+      api.get<MaterialView[]>('/materials'),
+      api.get<OptionGroupView[]>('/option-groups'),
+      api.get<Page<AdminProductListItem>>(
+        '/products/manage?limit=100&sort=name&order=asc',
+      ),
+      // The shop's profit rule: only for whoever manages pricing (others get 403).
+      api.get<{ cost: { profit: { kind: ProfitKind; value: string } } }>(
+        '/pricing/settings',
+      ),
+    ]);
   if (product && !product.ok)
     throw new Response(product.message, { status: product.status });
   for (const r of [categories, materials, groups]) {
@@ -45,6 +52,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     categories: categories.ok ? categories.data : [],
     materials: materials.ok ? materials.data : [],
     groups: groups.ok ? groups.data : [],
+    shopProfit: pricing.ok ? pricing.data.cost.profit : null,
     others: list.ok
       ? list.data.items
           .filter((p) => p.id !== params.id)
@@ -64,6 +72,26 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const intent = form.get('intent');
 
   if (intent === 'duplicate') return duplicate(api, params.id);
+
+  // What the product would sell at, while it is being edited (the API prices it).
+  if (intent === 'preview') {
+    const parsed = validateForm(PricePreviewDto, {
+      materialId: text(form, 'materialId'),
+      grams: text(form, 'grams'),
+      printHours: text(form, 'printHours'),
+      ...(jsonField(form, 'text') ? { text: jsonField(form, 'text') } : {}),
+      profitKind: text(form, 'profitKind'),
+      profitValue: text(form, 'profitValue'),
+    });
+    if (!parsed.ok) return data({ preview: null }, { status: 400 });
+    const r = await api.post<PricePreview>(
+      '/products/price-preview',
+      parsed.value,
+    );
+    return r.ok
+      ? { preview: r.data }
+      : data({ preview: null }, { status: r.status });
+  }
 
   if (intent === 'upload-model' || intent === 'upload-image') {
     const file = form.get('file');
@@ -105,6 +133,8 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       sizeYcm: text(form, 'sizeYcm'),
       sizeZcm: text(form, 'sizeZcm'),
       sizes: jsonField(form, 'sizes') ?? [],
+      profitKind: text(form, 'profitKind'),
+      profitValue: text(form, 'profitValue'),
     },
     async (dto) => {
       const r = isNew
@@ -177,6 +207,7 @@ export default function EditProduct({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Products', to: '/admin/products' }]}
         title={product ? product.name : 'New product'}
         intro="Upload the model to see it in 3D and get suggested grams and print time, then its sizes and the options customers can pick."
         action={

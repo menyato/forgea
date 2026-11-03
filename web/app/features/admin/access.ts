@@ -33,6 +33,8 @@ export const PAGES: readonly {
   /** Shown in the dashboard menu, under its group, in this order. */
   label?: string;
   group?: MenuGroup;
+  /** Listed under the group's Configuration heading (the records the rest are built from). */
+  config?: true;
 }[] = [
   { path: '/admin', access: 'team', label: 'Overview' },
   {
@@ -41,6 +43,7 @@ export const PAGES: readonly {
     label: 'Leads',
     group: 'Sales',
   },
+  { path: '/admin/leads/new', access: 'leads.manage' },
   {
     path: '/admin/quotations',
     access: 'quotations.view',
@@ -48,11 +51,21 @@ export const PAGES: readonly {
     group: 'Sales',
   },
   { path: '/admin/quotations/new', access: 'quotations.manage' },
+  // The old address of the stages page: it now leads to Lead stages.
+  { path: '/admin/pipeline', access: 'pipeline.manage' },
   {
-    path: '/admin/pipeline',
+    path: '/admin/lead-stages',
     access: 'pipeline.manage',
-    label: 'Sales pipeline',
+    label: 'Lead stages',
     group: 'Sales',
+    config: true,
+  },
+  {
+    path: '/admin/lost-reasons',
+    access: 'pipeline.manage',
+    label: 'Lost reasons',
+    group: 'Sales',
+    config: true,
   },
   {
     path: '/admin/orders',
@@ -90,6 +103,7 @@ export const PAGES: readonly {
     label: 'Books',
     group: 'Accounting',
   },
+  { path: '/admin/accounting/books/entries/new', access: 'books.manage' },
   {
     path: '/admin/accounting/reports',
     access: 'books.view',
@@ -102,31 +116,50 @@ export const PAGES: readonly {
     label: 'Products',
     group: 'Catalog',
   },
+  {
+    path: '/admin/fonts',
+    access: 'catalog.view',
+    label: 'Fonts',
+    group: 'Catalog',
+    config: true,
+  },
+  { path: '/admin/fonts/new', access: 'catalog.manage' },
   { path: '/admin/products/new', access: 'catalog.manage' },
   {
     path: '/admin/categories',
     access: 'catalog.view',
     label: 'Categories',
     group: 'Catalog',
+    config: true,
   },
+  { path: '/admin/categories/new', access: 'catalog.manage' },
   {
     path: '/admin/options',
     access: 'catalog.view',
     label: 'Options',
     group: 'Catalog',
+    config: true,
   },
+  { path: '/admin/options/new', access: 'catalog.manage' },
   {
     path: '/admin/materials',
     access: 'materials.view',
     label: 'Materials',
     group: 'Catalog',
+    config: true,
   },
+  { path: '/admin/materials/new', access: 'materials.manage' },
   {
     path: '/admin/stock',
     access: 'materials.view',
     label: 'Filament stock',
     group: 'Catalog',
   },
+  // Recording a movement: every API call behind these pages needs stock.manage.
+  { path: '/admin/stock/receive', access: 'stock.manage' },
+  { path: '/admin/stock/print', access: 'stock.manage' },
+  { path: '/admin/stock/failed', access: 'stock.manage' },
+  { path: '/admin/stock/weigh', access: 'stock.manage' },
   {
     path: '/admin/home-plate',
     access: 'homebed.manage',
@@ -150,7 +183,8 @@ export const PAGES: readonly {
     path: '/admin/currencies',
     access: 'currencies.manage',
     label: 'Exchange rates',
-    group: 'Settings',
+    group: 'Accounting',
+    config: true,
   },
   {
     path: '/admin/settings',
@@ -165,6 +199,7 @@ export const PAGES: readonly {
     group: 'Settings',
   },
   { path: '/admin/team', access: 'admin', label: 'Team', group: 'Settings' },
+  { path: '/admin/team/new', access: 'admin' },
   {
     path: '/admin/permissions',
     access: 'admin',

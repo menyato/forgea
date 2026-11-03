@@ -27,6 +27,7 @@ import {
   text,
 } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
+import { StatusBar } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -173,6 +174,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Quotations', to: '/admin/quotations' }]}
         title={q ? q.number : 'New quotation'}
         intro={
           q
@@ -188,6 +190,23 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
+      {q && (
+        <StatusBar
+          steps={[
+            { key: 'DRAFT', label: 'Draft' },
+            { key: 'SENT', label: 'Sent' },
+            { key: 'CONFIRMED', label: 'Confirmed' },
+          ]}
+          current={q.status}
+          aside={
+            q.status === 'CANCELLED'
+              ? 'Cancelled'
+              : q.expired && q.status !== 'CONFIRMED'
+                ? 'Expired'
+                : undefined
+          }
+        />
+      )}
       <fetcher.Form method="post" className="grid gap-6">
         <input type="hidden" name="intent" value="save" />
         {prefill.leadId && (

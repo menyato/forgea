@@ -8,6 +8,7 @@ import {
 import {
   type Page,
   PRINT_JOB_FLOW,
+  type PrintJobCounts,
   type PrintJobListItem,
 } from '@forgea/types';
 import type {
@@ -41,6 +42,16 @@ export class PrintJobsService {
 
   async list(query: PrintJobListQuery): Promise<Page<PrintJobListItem>> {
     return toPage(await this.jobs.list(query), toItem);
+  }
+
+  async one(id: string): Promise<PrintJobListItem> {
+    const job = await this.jobs.findById(id);
+    if (!job) throw new NotFoundException('Print job not found');
+    return toItem(job);
+  }
+
+  counts(): Promise<PrintJobCounts> {
+    return this.jobs.counts();
   }
 
   async create(dto: CreatePrintJobDto): Promise<PrintJobListItem> {

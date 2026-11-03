@@ -163,12 +163,12 @@ export class LeadsRepository {
     };
     return keysetPage<LeadRow>(
       {
-        sortField: 'createdAt',
-        kind: 'date',
+        sortField: query.sort,
+        kind: query.sort === 'name' ? 'string' : 'date',
         order: query.order,
         limit: query.limit,
         cursor: query.cursor,
-        valueOf: (row) => row.createdAt,
+        valueOf: (row) => row[query.sort],
       },
       ({ after, orderBy, take }) =>
         this.prisma.lead.findMany({

@@ -203,15 +203,19 @@ export class CustomRequestsRepository {
     });
   }
 
-  private page(query: CursorPageQuery, where: Prisma.CustomRequestWhereInput) {
+  private page(
+    query: CursorPageQuery & { sort?: CustomRequestListQuery['sort'] },
+    where: Prisma.CustomRequestWhereInput,
+  ) {
+    const sort = query.sort ?? 'createdAt';
     return keysetPage<RequestRow>(
       {
-        sortField: 'createdAt',
-        kind: 'date',
+        sortField: sort,
+        kind: sort === 'title' ? 'string' : 'date',
         order: query.order,
         limit: query.limit,
         cursor: query.cursor,
-        valueOf: (row) => row.createdAt,
+        valueOf: (row) => row[sort],
       },
       ({ after, orderBy, take }) =>
         this.prisma.customRequest.findMany({

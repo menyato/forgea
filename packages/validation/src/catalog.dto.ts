@@ -1,4 +1,4 @@
-import { OptionKind } from '@forgea/types';
+import { OptionKind, ProfitKind } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -32,6 +32,7 @@ import {
   SIZE_CM_PATTERN,
 } from './constants.js';
 import { Trim } from './email.js';
+import { ProductTextDto, TextDesignDto } from './text-studio.dto.js';
 
 // Every rule for the catalog is configured in the dashboard; these DTOs only keep the data
 // well-formed. One "Save…" DTO serves both create (POST) and edit (PUT): the form always sends
@@ -84,10 +85,24 @@ export class SaveMaterialDto {
   @MaxLength(80)
   name!: string;
 
+  /** Typed directly only without a reel (a catalog file may carry just this). */
+  @ValidateIf((o: SaveMaterialDto) => o.reelPrice === undefined)
   @Matches(PRICE_PER_GRAM_PATTERN, {
     message: 'Enter a price per gram, e.g. 0.035',
   })
-  pricePerGram!: string;
+  pricePerGram?: string;
+
+  /** One reel as bought: with its weight, the price per gram is worked out from it. */
+  @IsOptional()
+  @Matches(MONEY_PATTERN, { message: 'Enter what a reel costs, e.g. 22.00' })
+  reelPrice?: string;
+
+  @ValidateIf((o: SaveMaterialDto) => o.reelPrice !== undefined)
+  @Type(() => Number)
+  @IsInt({ message: 'Enter the reel weight in grams, e.g. 1000' })
+  @Min(1, { message: 'Enter the reel weight in grams, e.g. 1000' })
+  @Max(100_000)
+  reelGrams?: number;
 
   @Matches(POSITIVE_DECIMAL, {
     message: 'Enter the density in g/cm³, e.g. 1.24',
@@ -246,6 +261,25 @@ export class SaveProductDto {
   })
   printHours!: string;
 
+  /** Personalised text: how its pieces are made; none = a regular product. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProductTextDto)
+  text?: ProductTextDto;
+
+  /** Its own profit rule; none = the shop's (Pricing page). */
+  @IsOptional()
+  @IsIn(Object.values(ProfitKind), {
+    message: 'Choose a percentage or a fixed amount',
+  })
+  profitKind?: ProfitKind;
+
+  @ValidateIf((o: SaveProductDto) => o.profitKind !== undefined)
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the profit, e.g. 120 (%) or 4.50 (USD)',
+  })
+  profitValue?: string;
+
   /** Made to order: needs the deposit at checkout. */
   @IsBoolean()
   isCustom!: boolean;
@@ -323,4 +357,38 @@ export class ProductPriceDto {
   @ValidateNested({ each: true })
   @Type(() => OptionSelectionDto)
   options: OptionSelectionDto[] = [];
+
+  /** A personalised product: the customer's design. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TextDesignDto)
+  design?: TextDesignDto;
+}
+
+/** POST /products/price-preview: the price a product would have while it is being edited. */
+export class PricePreviewDto {
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  @Matches(POSITIVE_DECIMAL, {
+    message: 'Enter the grams of material, e.g. 60',
+  })
+  grams!: string;
+
+  @Matches(DECIMAL_PATTERN, {
+    message: 'Enter the print time in hours, e.g. 3.5',
+  })
+  printHours!: string;
+
+  @IsOptional()
+  @IsIn(Object.values(ProfitKind), {
+    message: 'Choose a percentage or a fixed amount',
+  })
+  profitKind?: ProfitKind;
+
+  @ValidateIf((o: PricePreviewDto) => o.profitKind !== undefined)
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the profit, e.g. 120 (%) or 4.50 (USD)',
+  })
+  profitValue?: string;
 }

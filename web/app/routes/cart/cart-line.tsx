@@ -3,6 +3,7 @@ import type { CartLine } from '@forgea/types';
 import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
+import { DesignLines } from '~/features/text-studio/design-lines';
 
 /** One line with inline quantity change and removal (no page navigation). */
 export function CartLineRow({ line }: { line: CartLine }) {
@@ -25,6 +26,7 @@ export function CartLineRow({ line }: { line: CartLine }) {
             {line.options.map((o) => `${o.group}: ${o.value}`).join(' · ')}
           </p>
         )}
+        {line.design && <DesignLines design={line.design} />}
         <p className="text-sm text-text-muted">
           {line.materialCode} · <Money amount={line.unitPrice} /> each
           {line.isCustom && ' · made to order (50% deposit)'}

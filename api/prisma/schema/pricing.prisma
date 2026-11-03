@@ -5,12 +5,21 @@ model PricingSettings {
   id Int @id @default(1)
 
   // Cost model (UnitCostCalculator) — never exposed publicly.
-  machineRatePerHour      Decimal @db.Decimal(10, 2)
-  purgeWastePercent       Decimal @db.Decimal(5, 2)
-  failureAllowancePercent Decimal @db.Decimal(5, 2)
-  laborCostPerUnit        Decimal @db.Decimal(10, 2)
-  packagingCostPerUnit    Decimal @db.Decimal(10, 2)
-  markupMultiplier        Decimal @db.Decimal(6, 3)
+  machineRatePerHour      Decimal    @db.Decimal(10, 2)
+  purgeWastePercent       Decimal    @db.Decimal(5, 2)
+  failureAllowancePercent Decimal    @db.Decimal(5, 2)
+  laborCostPerUnit        Decimal    @db.Decimal(10, 2)
+  packagingCostPerUnit    Decimal    @db.Decimal(10, 2)
+  /// The shop's profit rule on top of cost; a product may set its own.
+  profitKind              ProfitKind @default(PERCENT)
+  profitValue             Decimal    @db.Decimal(10, 2)
+
+  // The printer, as bought: when all four are set, machineRatePerHour is worked out from them
+  // (price spread over its life + its electricity). Null: the owner types the rate directly.
+  printerPrice      Decimal? @db.Decimal(10, 2)
+  printerLifeHours  Int?
+  printerWatts      Int?
+  electricityPerKwh Decimal? @db.Decimal(8, 4)
 
   // Order level (OrderPricer) — customer-facing.
   rushFeePercent Decimal @db.Decimal(5, 2)
@@ -33,4 +42,10 @@ model BulkDiscountTier {
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("bulk_discount_tiers")
+}
+
+/// A percentage of the cost, or a fixed amount in USD (@forgea/pricing ProfitRule).
+enum ProfitKind {
+  PERCENT
+  FIXED
 }

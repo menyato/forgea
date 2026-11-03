@@ -1,5 +1,6 @@
 import type { OrderStatus, PaymentMethod } from './generated/prisma/enums.js';
 import type { ChosenOption } from './catalog.js';
+import type { DesignSummary } from './text-studio.js';
 import type { Money } from './lists.js';
 
 export interface CartLine {
@@ -15,6 +16,8 @@ export interface CartLine {
   /** Made to order: counts toward the 50% deposit. */
   isCustom: boolean;
   options: ChosenOption[];
+  /** A personalised piece: the customer's text, fonts and colours. */
+  design: DesignSummary | null;
 }
 
 /**
@@ -74,6 +77,7 @@ export interface CustomerOrder {
     quantity: number;
     lineTotal: Money;
     options: ChosenOption[];
+    design: DesignSummary | null;
   }[];
   /** Oldest first. */
   history: OrderHistoryEntry[];

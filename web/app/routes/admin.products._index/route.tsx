@@ -1,36 +1,84 @@
 import type { AdminProductListItem, Page } from '@forgea/types';
-import { Form, Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { Money } from '~/components/money';
 import { buttonClass } from '~/components/ui/button';
-import { Field } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader } from '~/features/admin/admin-ui';
+import { listState, pageQuery } from '~/features/admin/list-state';
+import {
+  ControlPanel,
+  KanbanView,
+  type ListColumn,
+  ListView,
+} from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
+const FILTERS = [
+  { key: 'shown', label: 'In the shop', only: 'active' },
+  { key: 'hidden', label: 'Hidden', only: 'active' },
+];
+
+const GROUPS = [
+  { key: 'category', label: 'Category' },
+  { key: 'material', label: 'Material' },
+];
+
+const DEFAULTS = { sorts: ['name'], order: 'asc' } as const;
+
 export async function loader({ url, context }: Route.LoaderArgs) {
-  const query = new URLSearchParams({
-    limit: '50',
-    sort: 'name',
-    order: 'asc',
-  });
-  for (const key of ['q', 'cursor'] as const) {
-    const value = url.searchParams.get(key);
-    if (value) query.set(key, value);
-  }
+  const state = listState(url.searchParams, DEFAULTS);
+  const query = pageQuery(state, state.view === 'kanban' ? 100 : 50);
+  if (state.filters.includes('shown')) query.set('active', 'true');
+  else if (state.filters.includes('hidden')) query.set('active', 'false');
   const r = await context
     .get(apiContext)
     .get<Page<AdminProductListItem>>(`/products/manage?${query}`);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { products: r.data };
+  return { state, products: r.data };
 }
 
+const category = (p: AdminProductListItem) => p.category ?? 'No category';
+
+const COLUMNS: ListColumn<AdminProductListItem>[] = [
+  { key: 'name', label: 'Product', sort: 'name', cell: (p) => p.name },
+  { key: 'category', label: 'Category', cell: (p) => p.category ?? '—' },
+  { key: 'material', label: 'Material', cell: (p) => p.material },
+  { key: 'model', label: '3D', cell: (p) => (p.hasModel ? 'Yes' : '—') },
+  {
+    key: 'price',
+    label: 'From',
+    align: 'right',
+    cell: (p) => <Money amount={p.price} />,
+  },
+  {
+    key: 'active',
+    label: 'In shop',
+    cell: (p) =>
+      p.active ? 'Visible' : <span className="text-text-muted">Hidden</span>,
+  },
+  {
+    key: 'changed',
+    label: 'Last changed',
+    cell: (p) => (
+      <span className="text-text-muted">
+        {new Date(p.updatedAt).toLocaleDateString('en-GB')}
+      </span>
+    ),
+  },
+];
+
+const href = (p: AdminProductListItem) => `/admin/products/${p.id}`;
+
 export default function Products({ loaderData }: Route.ComponentProps) {
-  const { products } = loaderData;
-  const [params] = useSearchParams();
+  const { state, products } = loaderData;
   const mayAdd = useCan()('catalog.manage');
-  const next = new URLSearchParams(params);
-  if (products.nextCursor) next.set('cursor', products.nextCursor);
+  const groupOf =
+    state.group === 'category'
+      ? category
+      : state.group === 'material'
+        ? (p: AdminProductListItem) => p.material
+        : undefined;
   return (
     <>
       <AdminHeader
@@ -39,96 +87,67 @@ export default function Products({ loaderData }: Route.ComponentProps) {
         action={
           mayAdd ? (
             <Link to="/admin/products/new" className={buttonClass()}>
-              Add a product
+              New product
             </Link>
           ) : undefined
         }
       />
-      <Form method="get" role="search" className="mb-4 flex items-end gap-2">
-        <Field
-          label="Find a product"
-          name="q"
-          type="search"
-          defaultValue={params.get('q') ?? ''}
-        />
-        <button type="submit" className={buttonClass('secondary')}>
-          Search
-        </button>
-      </Form>
-      {products.items.length === 0 ? (
-        <p className="text-text-muted">
-          No products yet.
-          {mayAdd && (
+      <ControlPanel
+        state={state}
+        search="Product name"
+        filters={FILTERS}
+        groups={GROUPS}
+        views={['list', 'kanban']}
+        {...(state.view === 'list'
+          ? {
+              page: {
+                shown: products.items.length,
+                nextCursor: products.nextCursor,
+              },
+            }
+          : {})}
+      />
+      {state.view === 'kanban' ? (
+        <KanbanView
+          href={href}
+          layout={groupOf ? 'columns' : 'grid'}
+          columns={
+            groupOf
+              ? [...new Set(products.items.map(groupOf))].map((g) => ({
+                  key: g,
+                  title: g,
+                  items: products.items.filter((p) => groupOf(p) === g),
+                }))
+              : [{ key: 'all', title: 'Products', items: products.items }]
+          }
+          title={(p) => p.name}
+          card={(p) => (
             <>
-              {' '}
-              <Link to="/admin/products/new" className="underline">
-                Add the first one
-              </Link>
-              .
+              <span className="text-text-muted">
+                {p.category ?? 'No category'} · {p.material}
+                {p.hasModel && ' · 3D'}
+              </span>
+              <span className="flex justify-between">
+                <Money amount={p.price} />
+                {!p.active && <span className="text-text-muted">Hidden</span>}
+              </span>
             </>
           )}
-        </p>
+        />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface text-text-muted">
-              <tr>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  Product
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  Category
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  Material
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  3D
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">
-                  From
-                </th>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  In shop
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.items.map((p) => (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/admin/products/${p.id}`}
-                      className="font-semibold hover:underline"
-                    >
-                      {p.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">{p.category ?? '—'}</td>
-                  <td className="px-4 py-3">{p.material}</td>
-                  <td className="px-4 py-3">{p.hasModel ? 'Yes' : '—'}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Money amount={p.price} />
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.active ? (
-                      'Visible'
-                    ) : (
-                      <span className="text-text-muted">Hidden</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {products.hasMore && (
-        <p className="mt-4">
-          <Link to={`?${next}`} className={buttonClass('secondary')}>
-            More products
-          </Link>
-        </p>
+        <ListView
+          label="Products"
+          rows={products.items}
+          columns={COLUMNS}
+          href={href}
+          state={state}
+          empty={
+            mayAdd
+              ? 'No products here. Add one with New product.'
+              : 'No products here.'
+          }
+          group={groupOf ? { of: groupOf } : undefined}
+        />
       )}
     </>
   );

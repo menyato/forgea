@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PricingError } from './errors.js';
 import {
   type CostSettings,
+  type ProfitRule,
   UnitCostCalculator,
 } from './unit-cost-calculator.js';
 
@@ -11,7 +12,7 @@ const settings: CostSettings = {
   failureAllowancePercent: '10',
   laborCostPerUnit: '5',
   packagingCostPerUnit: '3',
-  markupMultiplier: '1.6',
+  profit: { kind: 'PERCENT', value: '60' },
 };
 
 const zero: CostSettings = {
@@ -20,7 +21,7 @@ const zero: CostSettings = {
   failureAllowancePercent: 0,
   laborCostPerUnit: 0,
   packagingCostPerUnit: 0,
-  markupMultiplier: 1,
+  profit: { kind: 'PERCENT', value: 0 },
 };
 
 describe('UnitCostCalculator', () => {
@@ -41,7 +42,8 @@ describe('UnitCostCalculator', () => {
       laborCost: '5.00',
       packagingCost: '3.00',
       subtotal: '76.31',
-      markupMultiplier: '1.6',
+      profit: '45.79',
+      profitRule: { kind: 'PERCENT', value: '60' },
       unitPrice: '122.10',
     });
   });
@@ -69,14 +71,15 @@ describe('UnitCostCalculator', () => {
     // material 0.004 rounds to 0.00 on its own, but still counts toward the price.
     const result = new UnitCostCalculator({
       ...zero,
-      markupMultiplier: 1000,
+      profit: { kind: 'PERCENT', value: 1000 },
     }).price({
       grams: '1',
       printHours: '0',
       pricePerGram: '0.004',
     });
+    // 0.004 + 1000% of it = 0.044.
     expect(result.materialCost).toBe('0.00');
-    expect(result.unitPrice).toBe('4.00');
+    expect(result.unitPrice).toBe('0.04');
   });
 
   it('accepts numbers as well as decimal strings', () => {
@@ -86,9 +89,43 @@ describe('UnitCostCalculator', () => {
       failureAllowancePercent: 10,
       laborCostPerUnit: 5,
       packagingCostPerUnit: 3,
-      markupMultiplier: 1.6,
+      profit: { kind: 'PERCENT', value: 60 },
     }).price({ grams: 120, printHours: 4.5, pricePerGram: 0.12 });
     expect(fromNumbers.unitPrice).toBe('122.10');
+  });
+
+  it('adds a fixed profit, and a product rule wins over the shop default', () => {
+    const calc = new UnitCostCalculator(settings);
+    const input = { grams: 120, printHours: 4.5, pricePerGram: 0.12 };
+    // Cost 76.31 (as above): + $4 fixed.
+    const fixed = calc.price(input, { kind: 'FIXED', value: '4' });
+    expect(fixed).toMatchObject({
+      subtotal: '76.31',
+      profit: '4.00',
+      profitRule: { kind: 'FIXED', value: '4' },
+      unitPrice: '80.31',
+    });
+    // 25% instead of the shop's 60%.
+    expect(calc.price(input, { kind: 'PERCENT', value: 25 }).unitPrice).toBe(
+      '95.39',
+    );
+    // No product rule: the shop's.
+    expect(calc.price(input, null).unitPrice).toBe('122.10');
+  });
+
+  it.each([
+    [{ kind: 'PERCENT', value: '-1' }, /must not be negative/],
+    [{ kind: 'PERCENT', value: '1001' }, /at most 1000%/],
+    [{ kind: 'FIXED', value: 'x' }, /must be a decimal number/],
+    [{ kind: 'DOUBLE', value: '2' }, /percentage or a fixed amount/],
+  ] as const)('refuses the profit rule %o', (profit, message) => {
+    expect(
+      () =>
+        new UnitCostCalculator({
+          ...settings,
+          profit: profit as unknown as ProfitRule,
+        }),
+    ).toThrow(message);
   });
 
   describe('rejects invalid settings', () => {
@@ -110,7 +147,6 @@ describe('UnitCostCalculator', () => {
         Number.NaN,
         /packagingCostPerUnit must be a finite number/,
       ],
-      ['markupMultiplier', '0', /markupMultiplier must be greater than 0/],
     ] as const)('%s = %s', (field, value, message) => {
       expect(
         () => new UnitCostCalculator({ ...settings, [field]: value }),

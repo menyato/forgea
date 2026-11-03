@@ -384,6 +384,43 @@ describe('Back office (e2e)', () => {
         ['0.00', half],
       ]),
     );
+
+    // The invoice list finds them by order number, with the same sums as the order's panel,
+    // filters by what is owed, and pages through in any sort without losing one.
+    type Listed = { id: string; type: string; residual: string; total: string };
+    const page = async (query: string) =>
+      (await s.get(`/accounting/invoices?${query}`).expect(200)).body as {
+        items: Listed[];
+        nextCursor: string | null;
+      };
+    const panel = (
+      (await s.get(`/accounting/orders/${order.id}/invoices`)).body as Listed[]
+    ).map(({ id, residual, total }) => ({ id, residual, total }));
+    const found = await page(`q=${order.orderNumber}&limit=100`);
+    expect(
+      found.items.map(({ id, residual, total }) => ({ id, residual, total })),
+    ).toEqual(expect.arrayContaining(panel));
+    expect(found.items).toHaveLength(panel.length);
+    const credits = await page(`q=${order.orderNumber}&filters=credit`);
+    expect(credits.items.map((i) => i.id)).toEqual([note.body.id]);
+    const unpaid = await page(`q=${order.orderNumber}&filters=unpaid`);
+    expect(unpaid.items).toEqual([]);
+    for (const sort of ['date', 'number', 'total', 'residual']) {
+      const seen: string[] = [];
+      let cursor = '';
+      do {
+        const p = await page(
+          `q=${order.orderNumber}&sort=${sort}&order=asc&limit=1${cursor ? `&cursor=${cursor}` : ''}`,
+        );
+        seen.push(...p.items.map((i) => i.id));
+        cursor = p.nextCursor ?? '';
+      } while (cursor);
+      expect(seen.sort(), sort).toEqual(panel.map((i) => i.id).sort());
+    }
+    const counts = (await s.get('/accounting/invoices/counts').expect(200))
+      .body as { unpaid: number; paid: number; credit: number; owed: string };
+    expect(counts.credit).toBeGreaterThanOrEqual(1);
+    expect(counts.owed).toMatch(/^\d+\.\d{2}$/);
   });
 
   it('a double click never invoices or collects twice; the database refuses over-matching', async () => {

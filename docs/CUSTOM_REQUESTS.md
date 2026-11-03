@@ -92,4 +92,4 @@ its own.
 All four become dashboard settings (not constants in code), with these as their first values.
 Templates reuse the product options already built in Phase 8a: a template is a product with a
 text option (the name), colour and size options, and its own price rules — so new templates are
-made in the dashboard, not in code. The seeded "Custom name keychain" is the first example.
+made in the dashboard, not in code. The seeded "Name keychain" is the first example.

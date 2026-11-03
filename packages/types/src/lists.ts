@@ -21,6 +21,8 @@ export interface ProductListItem {
   price: Money;
   /** Options to choose on the product page before adding to the cart. */
   hasOptions: boolean;
+  /** Personalised: designed on its page (text, fonts, colours) before it can go in the cart. */
+  personalised: boolean;
   /** The 3D model shown on the card and the product page (an object key), if any. */
   modelKey: string | null;
   /** Colour to show the model in: the default (or first) colour option's swatch. */
@@ -63,6 +65,21 @@ export interface PrintJobListItem {
   createdAt: string;
 }
 
+/** How many print jobs are in each status and on each machine (the production filters). */
+export interface PrintJobCounts {
+  statuses: Partial<Record<PrintJobStatus, number>>;
+  machines: Record<string, number>;
+}
+
+/** A JSON value as stored (an audit entry's details). */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export interface AuditLogListItem {
   id: string;
   actor: { id: string; email: string } | null;
@@ -71,4 +88,9 @@ export interface AuditLogListItem {
   targetId: string;
   ipAddress: string | null;
   timestamp: string;
+}
+
+/** One audit entry with what it recorded: what was asked, or how it ended. */
+export interface AuditLogEntry extends AuditLogListItem {
+  metadata: JsonValue | null;
 }

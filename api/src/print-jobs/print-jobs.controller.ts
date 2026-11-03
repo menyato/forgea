@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import type { Page, PrintJobListItem } from '@forgea/types';
+import type { Page, PrintJobCounts, PrintJobListItem } from '@forgea/types';
 import {
   CreatePrintJobDto,
   PrintJobListQuery,
@@ -27,6 +27,16 @@ export class PrintJobsController {
   @Get()
   list(@Query() query: PrintJobListQuery): Promise<Page<PrintJobListItem>> {
     return this.jobs.list(query);
+  }
+
+  @Get('counts')
+  counts(): Promise<PrintJobCounts> {
+    return this.jobs.counts();
+  }
+
+  @Get(':id')
+  one(@Param('id', ParseUUIDPipe) id: string): Promise<PrintJobListItem> {
+    return this.jobs.one(id);
   }
 
   @Audit({ action: 'print-job.create', targetType: 'PrintJob' })

@@ -26,7 +26,13 @@ type OrderRow = Prisma.OrderGetPayload<{ include: typeof withCustomer }>;
 const withCustomerView = {
   user: { select: { email: true } },
   items: {
-    select: { name: true, quantity: true, lineTotal: true, options: true },
+    select: {
+      name: true,
+      quantity: true,
+      lineTotal: true,
+      options: true,
+      design: true,
+    },
     orderBy: { id: 'asc' },
   },
   statusHistory: {
@@ -56,6 +62,8 @@ export interface OrderLineSource {
   id: string;
   productId: string | null;
   options: readonly ChosenOption[];
+  /** A personalised piece: the design as made and priced (TextStudio Measurement). */
+  design?: object | null;
 }
 
 export interface NewOrder {
@@ -141,6 +149,11 @@ export class OrdersRepository {
                   productId: lineOf(o, l.id).productId,
                   options: lineOf(o, l.id)
                     .options as unknown as Prisma.InputJsonValue,
+                  ...(lineOf(o, l.id).design
+                    ? {
+                        design: lineOf(o, l.id).design as Prisma.InputJsonValue,
+                      }
+                    : {}),
                   name: l.name,
                   quantity: l.quantity,
                   unitPrice: l.unitPrice,
@@ -290,6 +303,7 @@ export class OrdersRepository {
             name: true,
             quantity: true,
             options: true,
+            design: true,
           },
         },
       },

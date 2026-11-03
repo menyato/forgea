@@ -1,5 +1,5 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import type { AuditLogListItem, Page } from '@forgea/types';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import type { AuditLogEntry, AuditLogListItem, Page } from '@forgea/types';
 import { AuditLogListQuery } from '@forgea/validation';
 import { RequirePermission } from '../authorization/decorators.js';
 import { AuditLogService } from './audit-log.service.js';
@@ -13,5 +13,11 @@ export class AuditLogController {
   @Get()
   list(@Query() query: AuditLogListQuery): Promise<Page<AuditLogListItem>> {
     return this.audit.list(query);
+  }
+
+  @RequirePermission('audit.view')
+  @Get(':id')
+  one(@Param('id', ParseUUIDPipe) id: string): Promise<AuditLogEntry> {
+    return this.audit.one(id);
   }
 }

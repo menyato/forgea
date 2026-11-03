@@ -343,6 +343,10 @@ test('Sara fills a cart as a guest, then signs in to her account: the cart comes
   // Removing a line leaves the other.
   await page.getByRole('button', { name: /^Remove Phone stand/ }).click();
   await expect(lines.filter({ hasText: 'Phone stand' })).toHaveCount(0);
+  // Removed on the server too (the row hides at once; the count follows the answer).
+  await expect(
+    page.getByRole('link', { name: /^Cart, 1 item$/ }),
+  ).toBeVisible();
   await page.reload();
   await expect(lines).toHaveCount(1);
   expect(faults).toEqual([]);

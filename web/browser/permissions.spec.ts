@@ -65,12 +65,19 @@ test('a designer sees only their pages; other addresses are refused even when ty
 
   // Materials: they may look (products need them), not change what they cost.
   await page.goto('/admin/materials');
+  await expect(page.getByRole('link', { name: 'New material' })).toBeHidden();
+  // Each material's form opens from the list, and stays locked.
+  await page
+    .getByRole('table')
+    .locator('tbody')
+    .getByRole('link')
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/admin\/materials\/[0-9a-f-]{36}$/);
   await expect(
     page.getByText('You can see this page but not change it'),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: /save/i }).first(),
-  ).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 });
 
 test('an admin gives one staff member the books and takes away orders; it applies on their next click', async ({
@@ -97,9 +104,9 @@ test('an admin gives one staff member the books and takes away orders; it applie
     );
 
     // The admin finds them on the Team page and changes two permissions.
-    await page.goto('/admin/team');
+    await page.goto(`/admin/team?q=${encodeURIComponent(member.email)}`);
     await page
-      .getByRole('link', { name: `Access for Test staff` })
+      .getByRole('link', { name: 'Test staff', exact: true })
       .first()
       .waitFor();
     await page.goto(`/admin/team/${member.id}`);

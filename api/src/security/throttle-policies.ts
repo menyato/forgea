@@ -31,6 +31,15 @@ export const THROTTLE = {
     default: { limit: 30, ttl: minutes(1) },
     hourly: { limit: 300, ttl: hours(1) },
   },
+  /**
+   * A product page's live price: asked again at each choice (a font, a colour, a size, a pause
+   * in typing), and customers on a mobile network often share one address. The work itself is
+   * bounded elsewhere (designs are made by a small worker pool with a queue cap and a cache).
+   */
+  livePrice: {
+    default: { limit: 60, ttl: minutes(1) },
+    hourly: { limit: 900, ttl: hours(1) },
+  },
   /** Placing an order: a person checks out a few times at most. */
   checkout: {
     default: { limit: 5, ttl: minutes(1) },

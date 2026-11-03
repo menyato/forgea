@@ -87,9 +87,9 @@ export function ProductCard({
           <Link
             to={`/products/${product.slug}`}
             className={buttonClass('secondary', 'w-full')}
-            aria-label={`Choose options for ${product.name}`}
+            aria-label={`${product.personalised ? 'Design your' : 'Choose options for'} ${product.name}`}
           >
-            Choose options
+            {product.personalised ? 'Design yours' : 'Choose options'}
           </Link>
         ) : (
           <AddToCart productId={product.id} name={product.name} />

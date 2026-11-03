@@ -7,7 +7,9 @@ import type { CatalogAsset, CatalogFile } from '@forgea/types';
 import { CategoriesService } from '../categories/categories.service.js';
 import { MaterialsService } from '../materials/materials.service.js';
 import { ProductOptionsService } from '../product-options/product-options.service.js';
+import { profitOf } from '../products/product-configurator.js';
 import { ProductsRepository } from '../products/products.repository.js';
+import { FontsService } from '../text-studio/fonts.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 
 /**
@@ -23,6 +25,7 @@ export class CatalogExporter {
     private readonly options: ProductOptionsService,
     private readonly products: ProductsRepository,
     private readonly uploads: UploadsService,
+    private readonly fonts: FontsService,
   ) {}
 
   async export(): Promise<CatalogFile> {
@@ -41,6 +44,10 @@ export class CatalogExporter {
         code: m.code,
         name: m.name,
         pricePerGram: m.pricePerGram,
+        reel:
+          m.reelPrice !== null && m.reelGrams !== null
+            ? { price: m.reelPrice, grams: m.reelGrams }
+            : null,
         densityGPerCm3: m.densityGPerCm3,
         gramsPerHour: m.gramsPerHour,
         active: m.active,
@@ -72,6 +79,14 @@ export class CatalogExporter {
           active: v.active,
         })),
       })),
+      fonts: await Promise.all(
+        (await this.fonts.list()).map(async (f) => ({
+          name: f.name,
+          active: f.active,
+          sortOrder: f.sortOrder,
+          file: await this.asset(f.fileKey, `font ${f.name}`),
+        })),
+      ),
       products: await Promise.all(
         products.map(async (p) => ({
           slug: p.slug,
@@ -84,9 +99,12 @@ export class CatalogExporter {
           isCustom: p.isCustom,
           designer: p.designer,
           active: p.active,
-          model: p.modelFileKey
-            ? await this.asset(p.modelFileKey, p.slug)
-            : null,
+          // A generated sample (personalised products) is made again where it is imported.
+          model:
+            p.modelFileKey &&
+            !(await this.products.isSampleModel(p.modelFileKey))
+              ? await this.asset(p.modelFileKey, p.slug)
+              : null,
           images: await Promise.all(
             p.imageKeys.map((k) => this.asset(k, p.slug)),
           ),
@@ -101,6 +119,34 @@ export class CatalogExporter {
               default: values.find((v) => v.isDefault)?.value.label ?? null,
             };
           }),
+          profit: profitOf(p),
+          text:
+            p.textStyle && p.textColourGroup
+              ? {
+                  style: p.textStyle,
+                  maxChars: p.textMaxChars!,
+                  letterHeightMm: p.textHeightMm!.toString(),
+                  letterDepthMm: p.textDepthMm!.toString(),
+                  baseDepthMm: p.textBaseMm!.toString(),
+                  maxWidthMm: p.textMaxWidthMm!.toString(),
+                  colourGroup: p.textColourGroup.name,
+                  extraColourPrice: p.textExtraColourPrice.toFixed(2),
+                  sizesMm: p.textSizesMm.map((d) => d.toString()),
+                  defaultColour:
+                    p.textColourGroup.values.find(
+                      (v) => v.id === p.textDefaultColourId,
+                    )?.label ?? null,
+                  defaultBaseColour:
+                    p.textColourGroup.values.find(
+                      (v) => v.id === p.textDefaultBaseId,
+                    )?.label ?? null,
+                  defaultAccentColour:
+                    p.textColourGroup.values.find(
+                      (v) => v.id === p.textDefaultAccentId,
+                    )?.label ?? null,
+                  decor: p.textDecor,
+                }
+              : null,
           size:
             p.sizeXcm && p.sizeYcm && p.sizeZcm
               ? {

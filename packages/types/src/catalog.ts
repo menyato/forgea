@@ -1,5 +1,6 @@
-import type { OptionKind } from './generated/prisma/enums.js';
+import type { OptionKind, ProfitKind } from './generated/prisma/enums.js';
 import type { Money, ProductListItem } from './lists.js';
+import type { ProductTextOffer, ProductTextSettings } from './text-studio.js';
 
 // Everything the dashboard configures about the catalog, and what the shop shows of it.
 // Decimal values travel as strings ("1.800"), exactly as the database stores them.
@@ -18,6 +19,9 @@ export interface MaterialView {
   code: string;
   name: string;
   pricePerGram: string;
+  /** One reel as bought; pricePerGram is its price ÷ its weight. */
+  reelPrice: string | null;
+  reelGrams: number | null;
   densityGPerCm3: string;
   gramsPerHour: string;
   stockGrams: number;
@@ -100,6 +104,8 @@ export interface ProductDetail extends ProductListItem {
   options: ProductOption[];
   /** Its printed size when it comes in one size only (with sizes, each choice says its own). */
   size: SizeCm | null;
+  /** Personalised: the customer designs their text (fonts, colours) and sees it in 3D. */
+  text: ProductTextOffer | null;
 }
 
 /** How a product offers one option group (dashboard). */
@@ -130,8 +136,31 @@ export interface AdminProduct {
   /** The printed size grams and printHours are for, measured from the model. */
   size: SizeCm | null;
   sizes: ProductSizeView[];
+  /** Personalised text: how its pieces are made; null = a regular product. */
+  text: ProductTextSettings | null;
+  /** Its own profit rule; null = the shop's (Pricing page). */
+  profit: { kind: ProfitKind; value: string } | null;
   /** Base price with default options, from the current pricing settings. */
   price: Money;
+}
+
+/**
+ * POST /products/price-preview: what a product would sell at, from its grams, hours, material
+ * and profit rule, while it is being edited. The breakdown only for whoever manages pricing.
+ */
+export interface PricePreview {
+  unitPrice: Money;
+  breakdown: {
+    material: Money;
+    printer: Money;
+    wasteAndFailures: Money;
+    labour: Money;
+    packaging: Money;
+    /** Everything above: what one piece costs to make. */
+    cost: Money;
+    profit: Money;
+    profitRule: { kind: ProfitKind; value: string };
+  } | null;
 }
 
 /** A size a product is sold in (dashboard): its measurements and what it takes to print. */

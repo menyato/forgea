@@ -11,7 +11,9 @@ import {
   SaveMaterialDto,
   SaveOptionGroupDto,
   SaveOptionValueDto,
+  SaveFontDto,
   SaveProductDto,
+  UpdateFontDto,
 } from '@forgea/validation';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -20,6 +22,7 @@ import { UploadPurpose, UploadStatus } from '../generated/prisma/enums.js';
 import { MaterialsService } from '../materials/materials.service.js';
 import { ProductOptionsService } from '../product-options/product-options.service.js';
 import { ProductsService } from '../products/products.service.js';
+import { FontsService } from '../text-studio/fonts.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 
 /** "add": create what is missing, leave everything else. "update": also overwrite matches. */
@@ -30,6 +33,7 @@ const KINDS = [
   'categories',
   'optionGroups',
   'optionValues',
+  'fonts',
   'products',
 ] as const;
 type Kind = (typeof KINDS)[number];
@@ -51,6 +55,7 @@ export class CatalogImporter {
     private readonly options: ProductOptionsService,
     private readonly products: ProductsService,
     private readonly uploads: UploadsService,
+    private readonly fonts: FontsService,
   ) {}
 
   async import(
@@ -85,6 +90,9 @@ export class CatalogImporter {
             'gramsPerHour',
             'active',
           ]),
+          ...(m.reel
+            ? { reelPrice: m.reel.price, reelGrams: m.reel.grams }
+            : {}),
           stockGrams: found?.stockGrams ?? 0,
           lowStockThresholdGrams: found?.lowStockThresholdGrams ?? 1000,
         });
@@ -171,6 +179,71 @@ export class CatalogImporter {
       });
     }
 
+    // Fonts: each file through the upload checks (once per content), read in the worker.
+    const fonts = new Map((await this.fonts.list()).map((f) => [f.name, f]));
+    for (const [i, f] of (catalog.fonts ?? []).entries()) {
+      await at(`fonts[${i}] "${f.name}"`, async () => {
+        const found = fonts.get(f.name);
+        if (found && mode === 'add') return void report.skipped++;
+        const dto = await valid(
+          UpdateFontDto,
+          pick(f, ['name', 'active', 'sortOrder']),
+        );
+        const saved = found
+          ? await this.fonts.update(found.id, dto)
+          : await this.fonts.update(
+              (
+                await this.fonts.create(
+                  await valid(SaveFontDto, {
+                    fileKey: await this.asset(
+                      f.file,
+                      UploadPurpose.FONT,
+                      actorId,
+                    ),
+                    name: f.name,
+                  }),
+                )
+              ).id,
+              dto,
+            );
+        fonts.set(saved.name, saved);
+        count('fonts', !!found);
+      });
+    }
+
+    const groupId = (name: string) => {
+      const g = groups.get(name);
+      if (!g) throw new BadRequestException(`unknown option group "${name}"`);
+      return g.id;
+    };
+
+    // A personalised product's starting colours, from their labels in its colour group.
+    const colourIds = (t: {
+      colourGroup: string;
+      defaultColour?: string | null;
+      defaultBaseColour?: string | null;
+      defaultAccentColour?: string | null;
+    }) => {
+      const values = groups.get(t.colourGroup)?.values ?? [];
+      const id = (label: string | null | undefined) => {
+        if (!label) return undefined;
+        const v = values.find((x) => x.label === label);
+        if (!v)
+          throw new BadRequestException(
+            `unknown colour "${label}" in "${t.colourGroup}"`,
+          );
+        return v.id;
+      };
+      const colour = id(t.defaultColour);
+      const base = id(t.defaultBaseColour);
+      const accent = id(t.defaultAccentColour);
+      return {
+        ...(colour ? { defaultColourId: colour } : {}),
+        ...(base ? { defaultBaseColourId: base } : {}),
+        ...(accent ? { defaultAccentColourId: accent } : {}),
+      };
+    };
+
     for (const [i, p] of catalog.products.entries()) {
       await at(`products[${i}] "${p.slug}"`, async () => {
         const found = await this.products.manageBySlug(p.slug);
@@ -208,6 +281,28 @@ export class CatalogImporter {
           ...(p.size
             ? { sizeXcm: p.size.x, sizeYcm: p.size.y, sizeZcm: p.size.z }
             : {}),
+          ...(p.profit
+            ? { profitKind: p.profit.kind, profitValue: p.profit.value }
+            : {}),
+          ...(p.text
+            ? {
+                text: {
+                  ...pick(p.text, [
+                    'style',
+                    'maxChars',
+                    'letterHeightMm',
+                    'letterDepthMm',
+                    'baseDepthMm',
+                    'maxWidthMm',
+                    'extraColourPrice',
+                  ]),
+                  colourGroupId: groupId(p.text.colourGroup),
+                  sizesMm: p.text.sizesMm ?? [],
+                  ...(p.text.decor ? { decor: p.text.decor } : {}),
+                  ...colourIds(p.text),
+                },
+              }
+            : {}),
           sizes: (p.sizes ?? []).map((s) => ({
             label: s.label,
             sizeXcm: s.size?.x,
@@ -218,8 +313,9 @@ export class CatalogImporter {
             isDefault: s.default === true,
           })),
         });
-        if (found) await this.products.update(found.id, dto);
-        else await this.products.create(dto);
+        // The owner's own catalog (importing needs catalog.transfer): its profit rules come along.
+        if (found) await this.products.update(found.id, dto, true);
+        else await this.products.create(dto, true);
         count('products', !!found);
       });
     }
@@ -272,6 +368,7 @@ function parseCatalogFile(input: unknown): CatalogFile {
     'materials',
     'categories',
     'optionGroups',
+    'fonts',
     'products',
   ] as const) {
     if (file[list] !== undefined && !Array.isArray(file[list])) {
@@ -284,6 +381,7 @@ function parseCatalogFile(input: unknown): CatalogFile {
     materials: file.materials ?? [],
     categories: file.categories ?? [],
     optionGroups: file.optionGroups ?? [],
+    fonts: file.fonts ?? [],
     products: file.products ?? [],
   };
 }

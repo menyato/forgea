@@ -167,12 +167,6 @@ export const EXAMPLE_MODELS = {
       ...prism([[8, 6], [14, 6], [40, 70], [34, 72]], 80, { plane: 'xz' }),
       ...prism(rect(52, 6, 6, 14), 80, { plane: 'xz' }),
     ]),
-  /** A flat 50 × 22 mm tag with rounded corners and a ring tab. */
-  'name-keychain': () =>
-    toStl([
-      ...prism(roundedRect(50, 22, 5), 3),
-      ...prism(roundedRect(12, 12, 6).map(([x, y]): Point => [x - 9, y + 5]), 3),
-    ]),
   /** A case for a Raspberry Pi 5: body and lid. */
   'pi-5-case': () =>
     toStl([

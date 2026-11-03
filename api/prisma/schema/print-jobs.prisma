@@ -9,21 +9,21 @@ enum PrintJobStatus {
 
 /// One print run on one machine. Powers the production planner (calendar + kanban).
 model PrintJob {
-  id            String         @id @default(uuid(7)) @db.Uuid
-  orderId       String         @db.Uuid
-  order         Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  materialId    String         @db.Uuid
-  material      Material       @relation(fields: [materialId], references: [id], onDelete: Restrict)
-  color         String
-  grams         Decimal        @db.Decimal(10, 2)
-  hours         Decimal        @db.Decimal(8, 2)
-  machine       String
-  scheduledDate DateTime?      @db.Timestamptz(3)
-  status        PrintJobStatus @default(QUEUED)
+  id              String         @id @default(uuid(7)) @db.Uuid
+  orderId         String         @db.Uuid
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  materialId      String         @db.Uuid
+  material        Material       @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  color           String
+  grams           Decimal        @db.Decimal(10, 2)
+  hours           Decimal        @db.Decimal(8, 2)
+  machine         String
+  scheduledDate   DateTime?      @db.Timestamptz(3)
+  status          PrintJobStatus @default(QUEUED)
   /// The event on the studio's Google Calendar while the job is scheduled (Phase 9).
   calendarEventId String?
-  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
 
   stockMovements StockMovement[]
 

@@ -215,6 +215,10 @@ export class UploadsService {
             active: true,
             OR: [{ modelFileKey: key }, { imageKeys: { has: key } }],
           },
+        })) > 0 ||
+        // A font customers write in: the live preview loads it.
+        (await this.prisma.font.count({
+          where: { active: true, fileKey: key },
         })) > 0);
     if (!upload || !visible) throw new NotFoundException('File not found');
     if (!copy) {

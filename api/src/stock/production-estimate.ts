@@ -47,6 +47,8 @@ export interface ItemEstimate {
   materialId: string;
   /** The chosen colour (a value with a swatch); "" when none. */
   colour: string;
+  /** A multi-colour piece (personalised text): the grams each colour takes. */
+  colours?: { colour: string; gramsPerUnit: string }[];
 }
 
 export const valueKey = (group: string, value: string) =>

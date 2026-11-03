@@ -21,6 +21,7 @@ import { apiContext } from '~/lib/request.server';
 import type { loader as rootLoader } from '~/root';
 import type { Route } from './+types/route';
 import { type Choices, OptionPicker } from './option-picker';
+import { TextDesigner } from './text-designer';
 
 export function meta({ loaderData: d }: Route.MetaArgs) {
   return d
@@ -52,8 +53,10 @@ export async function loader({ params, context }: Route.LoaderArgs) {
 /** The live price for the current choices (the API prices; the browser never does). */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
+  const design = jsonField(form, 'design');
   const parsed = validateForm(ProductPriceDto, {
     options: jsonField(form, 'options') ?? [],
+    ...(design ? { design } : {}),
   });
   if (!parsed.ok) return data({ error: 'Check your choices' }, { status: 400 });
   const r = await context.get(apiContext).post<{
@@ -83,7 +86,22 @@ const toSelections = (product: ProductDetail, choices: Choices) =>
   });
 
 export default function ProductPage({ loaderData }: Route.ComponentProps) {
-  const { product, lbp, depositPercent } = loaderData;
+  // Personalised: the customer designs their piece and sees it in 3D.
+  if (loaderData.product.text)
+    return (
+      <TextDesigner
+        product={loaderData.product}
+        offer={loaderData.product.text}
+      />
+    );
+  return <CatalogProduct {...loaderData} />;
+}
+
+function CatalogProduct({
+  product,
+  lbp,
+  depositPercent,
+}: Route.ComponentProps['loaderData']) {
   const store = useRouteLoaderData<typeof rootLoader>('root')?.store ?? null;
   const [choices, setChoices] = useState<Choices>(() =>
     initialChoices(product),

@@ -99,7 +99,7 @@ function Glb({ src, paintable, color, spin, onMeasured }: SceneProps) {
 }
 
 /** Reflections from a generated studio, so materials read as plastic. */
-function StudioLight() {
+export function StudioLight() {
   const { gl, scene, invalidate } = useThree();
   useEffect(() => {
     scene.environment = studioEnvironment(gl);
@@ -110,7 +110,7 @@ function StudioLight() {
 }
 
 /** The print plate the model stands on, in the theme's plate colour. */
-function Plate({ radius, y }: { radius: number; y: number }) {
+export function Plate({ radius, y }: { radius: number; y: number }) {
   const { plate } = useSceneColors();
   return (
     <mesh position={[0, y - radius * 0.02, 0]}>

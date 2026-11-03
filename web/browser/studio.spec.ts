@@ -33,6 +33,7 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await expect(page.getByText('Saved')).toBeVisible();
 
   await page.goto('/admin/leads');
+  await page.getByRole('link', { name: 'New lead' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Nour Walk-in');
   await page.getByLabel('Email').fill(email);
   await page
@@ -171,7 +172,7 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
 
   // The studio quotes $40.
   await signInAsAdmin(context, baseURL!);
-  await page.goto('/admin/requests?status=SUBMITTED');
+  await page.goto('/admin/requests?filter=new');
   await page.getByRole('link', { name: new RegExp(title) }).click();
   await page.getByLabel('Price (USD, for everything)').fill('40');
   await page.getByRole('button', { name: 'Send the quote' }).click();
@@ -265,7 +266,10 @@ test('the books take a manual entry whose cents add up; a new exchange rate reac
 }) => {
   await signInAsAdmin(context, baseURL!);
   await page.goto('/admin/accounting/books');
-  await page.getByLabel('What it is').fill(`Owner puts in cash ${tag()}`);
+  await page.getByRole('link', { name: 'New entry' }).click();
+  await expect(page).toHaveURL(/\/admin\/accounting\/books\/entries\/new$/);
+  const label = `Owner puts in cash ${tag()}`;
+  await page.getByLabel('What it is').fill(label);
   const accounts = page.getByLabel('Account');
   const options = await accounts.first().locator('option').allTextContents();
   await accounts.nth(0).selectOption({ label: options[0]! });
@@ -277,10 +281,24 @@ test('the books take a manual entry whose cents add up; a new exchange rate reac
   await page.getByLabel('Credit').nth(2).fill('20.20');
   await expect(page.getByText('Debits 30.30 · Credits 30.30')).toBeVisible();
   await page.getByRole('button', { name: 'Post' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  // Posted: its own read-only page, one debit and two credits adding up to 30.30.
+  await expect(page.getByText(label).first()).toBeVisible();
+  const lines = page.getByRole('table', { name: 'Journal lines' });
+  await expect(lines.getByRole('row')).toHaveCount(5);
+  await expect(lines.getByRole('row').last()).toHaveText(
+    /Total.*\$30\.30.*\$30\.30/,
+  );
+  // And it heads the books' list.
+  await page.goto('/admin/accounting/books');
+  await expect(
+    page
+      .getByRole('table', { name: 'Journal entries' })
+      .getByText(label)
+      .first(),
+  ).toBeVisible();
 
   // A new LBP rate shows on product pages at once.
-  await page.goto('/admin/currencies');
+  await page.goto('/admin/currencies/LBP');
   const lbp = page.getByRole('region', { name: /LBP/ });
   await lbp.getByLabel(/New rate/).fill('90000');
   await lbp.getByRole('button', { name: 'Set the rate' }).click();
@@ -296,7 +314,7 @@ test('the books take a manual entry whose cents add up; a new exchange rate reac
   // LBP rounds to 5,000: within one step of USD × 90,000.
   expect(Math.abs(shown - usd * 90_000)).toBeLessThanOrEqual(5_000);
   // Back to the usual rate.
-  await page.goto('/admin/currencies');
+  await page.goto('/admin/currencies/LBP');
   await page
     .getByRole('region', { name: /LBP/ })
     .getByLabel(/New rate/)
@@ -340,27 +358,48 @@ test('filament: a delivery comes in, an order going into production takes its gr
     (await c.locator('strong.font-mono').first().textContent()) ?? '';
   await shopper.close();
 
-  // The studio records three spools of that filament.
+  // The studio records three 1 kg spools of that filament at $20 each, paid in cash.
   await signInAsAdmin(context, baseURL!);
   await page.goto('/admin/stock');
-  const record = page.getByRole('region', {
-    name: 'Record filament in or out',
-  });
+  await page.getByRole('link', { name: 'Spools received' }).click();
+  await expect(page).toHaveURL(/\/admin\/stock\/receive/);
+  const record = page.getByRole('region', { name: 'Record' });
   await record.getByLabel('Material').selectOption({ label: 'PLA (PLA)' });
-  await record.getByLabel('Colour (optional)').fill('Forest green');
-  await record.getByLabel('What happened').selectOption('RECEIVED');
-  await record.getByLabel('Grams').fill('3000');
+  await record.getByLabel('Spools').fill('3');
+  await record.getByLabel('Each spool holds').selectOption('1000');
+  await record.getByRole('radio', { name: 'Forest green' }).click();
+  await record.getByLabel('Price of one spool (USD)').fill('20.00');
+  await record.getByRole('radio', { name: 'Cash box' }).click();
   await record.getByLabel('Note (optional)').fill(`3 spools ${order}`);
-  await record.getByRole('button', { name: 'Record' }).click();
+  // Said back before it is saved.
+  await expect(
+    record.getByText(
+      /\+3,000 g of PLA Forest green · \$60\.00 · \$0\.0200 a gram/,
+    ),
+  ).toBeVisible();
+  await record.getByRole('button', { name: 'Add to the shelf' }).click();
   await expect(record.getByText('Saved')).toBeVisible();
-  const moves = page.getByRole('region', { name: 'Latest movements' });
+  const moves = page.getByRole('table', { name: 'Latest movements' });
+  await page.goto('/admin/stock/movements');
   await expect(
     moves.getByRole('row', {
       name: new RegExp(
-        `Delivery received PLA Forest green \\+3,000 g 3 spools ${order}`,
+        String.raw`Delivery received PLA Forest green \+3,000 g \$60\.00 3 spools ${order} · Booked CSH`,
       ),
     }),
   ).toBeVisible();
+  // The line is in the list, and opens its own page.
+  await page.goto('/admin/stock?q=Forest');
+  await page.getByRole('link', { name: 'PLA · Forest green' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'PLA · Forest green', level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Restock limits' })
+      .getByLabel('Low level (g)'),
+  ).toBeVisible();
+  const line = page.url();
 
   // Into production: the order's grams go out of stock, once.
   await page.goto(`/admin/orders?q=${order}`);
@@ -369,30 +408,118 @@ test('filament: a delivery comes in, an order going into production takes its gr
     await page.getByRole('button', { name: step }).click();
     await expect(page.getByRole('button', { name: step })).toHaveCount(0);
   }
-  await page.goto('/admin/stock');
+  const orderId = page.url().split('/').pop()!;
+
+  // Its print run, planned in the studio's own time (Beirut, UTC+3 in summer), reads back
+  // at that time everywhere.
+  await page.goto(`/admin/production/new?order=${orderId}`);
+  await page.getByLabel('Colour').fill('Forest green');
+  await page.getByLabel('Grams').fill('40');
+  await page.getByLabel('Hours').fill('2');
+  await page
+    .getByLabel('When (optional, Beirut time)')
+    .fill('2026-07-01T09:30');
+  await page.getByRole('button', { name: 'Plan it' }).click();
+  await expect(page).toHaveURL(/\/admin\/production\/[0-9a-f-]{36}$/);
+  await expect(page.getByText(/Wednesday,? 1 July 2026.*09:30/)).toBeVisible();
+  await expect(page.getByLabel('When it prints (Beirut time)')).toHaveValue(
+    '2026-07-01T09:30',
+  );
+  await page.goto('/admin/production/calendar?week=2026-07-01');
+  await expect(
+    page
+      .getByRole('region', { name: 'Wednesday 1 July' })
+      .getByRole('link', { name: new RegExp(order) }),
+  ).toContainText('09:30');
+
+  await page.goto('/admin/stock/movements');
   await expect(
     moves.getByRole('row', {
       name: new RegExp(
-        `Order in production PLA Forest green −\\d+ g .*${order}`,
+        String.raw`Order in production PLA Forest green −\d+ g .*${order}`,
       ),
     }),
   ).toHaveCount(1);
 
-  // Picked up and paid: the Business page counts it.
+  // A phone stand printed for the shop window (from the line's page), then one that failed
+  // half way.
+  await page.goto(line);
+  await page
+    .getByRole('region', { name: 'Record' })
+    .getByRole('link', { name: 'Printed for the studio' })
+    .click();
+  await expect(
+    record.getByRole('button', { name: 'Take it off the shelf' }),
+  ).toBeVisible();
+  await record
+    .getByLabel('Product')
+    .selectOption({ label: 'Phone stand (PLA)' });
+  await record.getByRole('radio', { name: 'Forest green' }).click();
+  await record.getByRole('radio', { name: 'Display' }).click();
+  await record.getByRole('button', { name: 'Take it off the shelf' }).click();
+  await expect(record.getByText('Saved')).toBeVisible();
+  await page.goto('/admin/stock/movements');
+  await expect(
+    moves
+      .getByRole('row', {
+        name: /Printed for the studio PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Display/,
+      })
+      // Newest first; earlier runs on the same test database left theirs below.
+      .first(),
+  ).toBeVisible();
+  await page.goto('/admin/stock');
+  await page.getByRole('link', { name: 'Failed print' }).click();
+  await expect(
+    record.getByRole('button', { name: 'Record the failure' }),
+  ).toBeVisible();
+  await record
+    .getByLabel('Product')
+    .selectOption({ label: 'Phone stand (PLA)' });
+  await record.getByRole('radio', { name: 'Forest green' }).click();
+  await record.getByLabel(/How far it got/).fill('50');
+  await record.getByRole('button', { name: 'Record the failure' }).click();
+  await expect(record.getByText('Saved')).toBeVisible();
+  await page.goto('/admin/stock/movements');
+  await expect(
+    moves
+      .getByRole('row', {
+        name: /Failed print PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Failed at 50%/,
+      })
+      // Newest first; earlier runs on the same test database left theirs below.
+      .first(),
+  ).toBeVisible();
+  // The period's costs: bought, used by orders, printed for the studio, lost.
+  const costs = page.getByRole('region', { name: 'Filament and its cost' });
+  for (const tile of [
+    'Bought',
+    'Printed for the studio',
+    'Lost to failed prints',
+  ])
+    await expect(costs.getByText(tile, { exact: true })).toBeVisible();
+
+  // Picked up and paid: the Business page counts it. (Its best sellers are the top ten of a
+  // test database every run adds to, so the delivered count is what's compared; other tests
+  // running alongside only ever add to it.)
+  const delivered = async () => {
+    await page.goto('/admin/insights');
+    const line = page
+      .getByRole('region', { name: 'Orders placed' })
+      .getByRole('listitem')
+      .filter({ hasText: /^Delivered/ });
+    return Number(/\d+/.exec((await line.textContent()) ?? '')?.[0]);
+  };
+  const deliveredBefore = await delivered();
   await page.goto(`/admin/orders?q=${order}`);
   await page.getByRole('link', { name: order }).first().click();
   for (const step of ['Mark as ready', 'Mark as delivered']) {
     await page.getByRole('button', { name: step }).click();
     await expect(page.getByRole('button', { name: step })).toHaveCount(0);
   }
-  await page.goto('/admin/insights');
+  expect(await delivered()).toBeGreaterThan(deliveredBefore);
   await expect(
     page.getByRole('heading', { name: 'Business', level: 1 }),
   ).toBeVisible();
   await expect(
-    page
-      .getByRole('region', { name: 'Best sellers' })
-      .getByText('Phone stand')
-      .first(),
-  ).toBeVisible();
+    page.getByRole('region', { name: 'Best sellers' }).getByRole('row'),
+  ).not.toHaveCount(0);
 });

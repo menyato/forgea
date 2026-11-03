@@ -10,6 +10,8 @@ export interface InvoicedLine {
   bucket: string;
   productId: string | null;
   options: unknown;
+  /** A personalised piece's design as ordered (its own grams and hours). */
+  design: unknown;
   units: number;
   /** Tax included, as the order line says. */
   gross: Prisma.Decimal;
@@ -46,7 +48,7 @@ export class InsightsRepository {
   ): Promise<InvoicedLine[]> {
     return this.prisma.$queryRaw<InvoicedLine[]>`
       SELECT to_char(date_trunc(${unit}, e.date::timestamp), 'YYYY-MM-DD') AS bucket,
-             i."productId", i.options,
+             i."productId", i.options, i.design,
              sum(CASE WHEN e.type = 'INVOICE' THEN i.quantity ELSE -i.quantity END)::int AS units,
              sum(CASE WHEN e.type = 'INVOICE' THEN i."lineTotal" ELSE -i."lineTotal" END) AS gross
       FROM journal_entries e
@@ -54,7 +56,7 @@ export class InsightsRepository {
       WHERE e.state = 'POSTED' AND e."invoiceKind" = 'FINAL'
         AND e.type IN ('INVOICE', 'CREDIT_NOTE')
         AND e.date BETWEEN ${range.from}::date AND ${range.to}::date
-      GROUP BY 1, i."productId", i.options
+      GROUP BY 1, i."productId", i.options, i.design
     `;
   }
 

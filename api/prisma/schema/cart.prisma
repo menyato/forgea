@@ -25,6 +25,8 @@ model CartItem {
   options   Json     @default("[]")
   /// The same choices as a canonical string: one line per product configuration.
   configKey String   @default("")
+  /// A personalised product: the customer's design (@forgea/text3d TextDesign), validated by the API.
+  design    Json?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 

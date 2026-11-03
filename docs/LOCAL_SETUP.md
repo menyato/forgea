@@ -89,3 +89,37 @@ The browser tests use the Chrome installed on your machine; nothing is downloade
 2. `pnpm --filter @forgea/api exec prisma migrate dev --name <change>` — writes a new migration and applies it.
 3. `pnpm generate` — refreshes the API client and the shared enums in `@forgea/types`.
 4. Commit the migration folder. Never edit a migration that has already been applied anywhere.
+
+## Moving to another computer
+
+The code is portable: no path or setting in it names this machine. Four things live outside
+git, and the database is not in the folder at all.
+
+| What | Where | Bring it? |
+|---|---|---|
+| Code | the repository | `git clone` (or copy the folder) |
+| Settings and secrets | `api/.env`, `web/.env` | copy by hand (or start again from the `.env.example` files); keep them private |
+| Uploaded files (models, fonts, images) | `api/.uploads/` | copy it: the database only keeps their keys |
+| Products, orders, accounts, books | PostgreSQL (`forgea`; tests use `forgea_test`) | dump and restore, below |
+| Installed packages and builds | `node_modules/`, `dist/`, `build/` | **don't copy**: made for this machine; rebuilt below |
+
+On the old computer:
+
+```sh
+pg_dump -Fc -d forgea -f forgea.dump      # add -U/-h as in your DATABASE_URL
+```
+
+On the new one (Node 24+, pnpm 12.15, PostgreSQL 16+ installed):
+
+```sh
+git clone https://github.com/menyato/forgea.git && cd forgea   # or the copied folder, without node_modules
+# put back api/.env, web/.env and api/.uploads/
+# create the forgea_app role and the forgea database as in section 2, then:
+pg_restore -d forgea --no-owner --role=forgea_app forgea.dump
+pnpm install
+pnpm build
+pnpm --filter @forgea/api exec prisma migrate deploy   # anything newer than the dump
+```
+
+The test database needs no copying: create an empty `forgea_test` (section 2) and the tests
+migrate and seed it themselves. Only work that is committed and pushed comes with `git clone`.

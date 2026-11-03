@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { ChosenOption, ReorderResult } from '@forgea/types';
+import type {
+  ChosenOption,
+  ReorderResult,
+  TextDesignInput,
+} from '@forgea/types';
 import {
   type CartOwner,
   type CartResult,
@@ -38,6 +42,8 @@ export class ReorderService {
           item.productId,
           item.quantity,
           item.options as unknown as ChosenOption[],
+          // A personalised piece comes back with the same text, fonts and colours.
+          (item.design as { design?: TextDesignInput } | null)?.design,
         );
         result.added += 1;
       } catch (error) {

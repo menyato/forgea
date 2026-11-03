@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
-import { SetExchangeRateDto } from '@forgea/validation';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { AddCurrencyDto, SetExchangeRateDto } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import {
@@ -19,6 +19,17 @@ export class CurrenciesController {
   @Get()
   list(): Promise<CurrencyQuote[]> {
     return this.currencies.list();
+  }
+
+  /** A currency customers may also pay in, with its first rate. Audit-logged. */
+  @RequirePermission('currencies.manage')
+  @Audit({ action: 'currency.add', targetType: 'Currency', resultKey: 'code' })
+  @Post()
+  add(
+    @Body() dto: AddCurrencyDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CurrencyQuote> {
+    return this.currencies.add(dto, user.id);
   }
 
   /** Admin only: the rates set so far, for the dashboard. */

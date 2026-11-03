@@ -1,4 +1,11 @@
-import type { StockItemView, StockOverview } from '@forgea/types';
+import type {
+  Page,
+  StockItemView,
+  StockMovementCounts,
+  StockMovementView,
+  StockOverview,
+  StockPrintable,
+} from '@forgea/types';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
@@ -42,6 +49,10 @@ describe('Filament stock (e2e)', () => {
       (i) => i.material.id === studio.material.id && i.colour === colour,
     )!;
   };
+  /** The movements list (newest first), as the dashboard asks for it. */
+  const movements = async (query = '') =>
+    (await as(staff.cookie).get(`/stock/movements${query}`).expect(200))
+      .body as Page<StockMovementView>;
   const receive = (colour: string, grams: number) =>
     as(staff.cookie)
       .post('/stock/movements', {
@@ -167,16 +178,16 @@ describe('Filament stock (e2e)', () => {
       committedGrams: 0,
       used30Grams: 600,
     });
-    const overview = (await as(staff.cookie).get('/stock').expect(200))
-      .body as StockOverview;
-    expect(overview.movements).toContainEqual(
+    const taken = await movements(`?q=${order.orderNumber}`);
+    expect(taken.items).toEqual([
       expect.objectContaining({
         kind: 'ORDER',
         grams: -600,
         colour: 'Copper silk',
         orderNumber: order.orderNumber,
+        stockItemId: (await line('Copper silk')).id,
       }),
-    );
+    ]);
     // Cancelled after production started: the filament is spent.
     await moveOrder(app, staff.cookie, order.id, ['CANCELLED']);
     expect((await line('Copper silk')).stockGrams).toBe(400);
@@ -327,5 +338,278 @@ describe('Filament stock (e2e)', () => {
     expect(movements).toEqual([
       expect.objectContaining({ kind: 'OPENING', grams: 2500 }),
     ]);
+  });
+
+  it('spools received with their price: on the shelf, the material’s cost, booked when paid', async () => {
+    const shelfBefore = (await line('Copper silk'))?.stockGrams ?? 0;
+    await as(staff.cookie)
+      .post('/stock/receipts', {
+        materialId: studio.material.id,
+        colour: 'Copper silk',
+        spools: 3,
+        spoolGrams: 1000,
+        pricePerSpool: '24.00',
+        paidFrom: 'CASH',
+        updateCost: true,
+      })
+      .expect(204);
+    expect(await line('Copper silk')).toMatchObject({
+      stockGrams: shelfBefore + 3000,
+      costPerGram: '0.0240',
+      swatchHex: '#b87333',
+    });
+    // The spool's price is the material's cost per gram from now on.
+    expect(
+      await prisma.material.findUniqueOrThrow({
+        where: { id: studio.material.id },
+        select: { pricePerGram: true, reelPrice: true, reelGrams: true },
+      }),
+    ).toMatchObject({ reelGrams: 1000 });
+    const material = await prisma.material.findUniqueOrThrow({
+      where: { id: studio.material.id },
+    });
+    expect(material.pricePerGram.toFixed(4)).toBe('0.0240');
+    expect(material.reelPrice!.toFixed(2)).toBe('24.00');
+
+    // Paid from the cash box: an expense of $72.00 in the books, linked from the movement.
+    const delivery = await prisma.stockMovement.findFirstOrThrow({
+      where: {
+        stockItem: { materialId: studio.material.id },
+        kind: 'RECEIVED',
+      },
+      orderBy: { id: 'desc' },
+      include: {
+        journalEntry: { include: { lines: { include: { account: true } } } },
+      },
+    });
+    expect(delivery.cost!.toFixed(2)).toBe('72.00');
+    const lines = delivery.journalEntry!.lines;
+    expect(
+      lines.find((l) => l.account.type === 'EXPENSE')!.debit.toFixed(2),
+    ).toBe('72.00');
+    expect(
+      lines.find((l) => l.account.type === 'CASH')!.credit.toFixed(2),
+    ).toBe('72.00');
+    const overview = (await as(staff.cookie).get('/stock').expect(200))
+      .body as StockOverview;
+    expect(overview.canBookPurchases).toBe(true);
+    expect((await movements()).items[0]).toMatchObject({
+      kind: 'RECEIVED',
+      cost: '72.00',
+      entryNumber: expect.stringMatching(/^CSH\//),
+    });
+
+    // Not paid yet, and kept off pricing: only the grams and their cost.
+    await as(staff.cookie)
+      .post('/stock/receipts', {
+        materialId: studio.material.id,
+        colour: 'Copper silk',
+        spools: 1,
+        spoolGrams: 750,
+        pricePerSpool: '30.00',
+        updateCost: false,
+      })
+      .expect(204);
+    expect(
+      (
+        await prisma.stockMovement.findFirstOrThrow({
+          where: {
+            stockItem: { materialId: studio.material.id },
+            kind: 'RECEIVED',
+          },
+          orderBy: { id: 'desc' },
+        })
+      ).journalEntryId,
+    ).toBeNull();
+    expect(
+      (
+        await prisma.material.findUniqueOrThrow({
+          where: { id: studio.material.id },
+        })
+      ).pricePerGram.toFixed(4),
+    ).toBe('0.0240');
+    // Bad input: no spools, no price, a weight that isn't a spool's.
+    for (const bad of [
+      { spools: 0 },
+      { pricePerSpool: 'free' },
+      { spoolGrams: 5 },
+      { paidFrom: 'CARD' },
+    ]) {
+      await as(staff.cookie)
+        .post('/stock/receipts', {
+          materialId: studio.material.id,
+          colour: 'Copper silk',
+          spools: 1,
+          spoolGrams: 1000,
+          pricePerSpool: '20.00',
+          ...bad,
+        })
+        .expect(400);
+    }
+    await prisma.auditLog.findFirstOrThrow({
+      where: { actorUserId: staff.user.id, action: 'stock.receive' },
+    });
+  });
+
+  it('printed for the studio, a failed print and a weighing: grams from the product, costed', async () => {
+    const printables = (
+      await as(staff.cookie).get('/stock/printables').expect(200)
+    ).body as StockPrintable[];
+    const vase = printables.find((p) => p.id === studio.product.id)!;
+    expect(vase.colours.map((c) => c.label)).toEqual(['Red', 'Copper silk']);
+    expect(vase.sizes).toHaveLength(2);
+    const wide = vase.sizes[1]!;
+    const before = (await line('Copper silk')).stockGrams;
+
+    // Two wide vases for the shop window: 2 × 200 g, at cost with machine time.
+    const made = (
+      await as(staff.cookie)
+        .post('/stock/studio-prints', {
+          productId: studio.product.id,
+          size: wide,
+          colour: 'Copper silk',
+          quantity: 2,
+          note: 'Shop window',
+        })
+        .expect(200)
+    ).body as { grams: number; cost: string };
+    expect(made.grams).toBe(400);
+    expect(Number(made.cost)).toBeGreaterThan(400 * 0.024);
+    // A failed standard vase that got 40% through: 40 g lost.
+    const failed = (
+      await as(staff.cookie)
+        .post('/stock/failed-prints', {
+          productId: studio.product.id,
+          colour: 'Copper silk',
+          quantity: 1,
+          progressPercent: 40,
+        })
+        .expect(200)
+    ).body as { grams: number; cost: string };
+    expect(failed.grams).toBe(40);
+    expect((await line('Copper silk')).stockGrams).toBe(before - 440);
+
+    const overview = (await as(staff.cookie).get('/stock').expect(200))
+      .body as StockOverview;
+    expect((await movements()).items[0]).toMatchObject({
+      kind: 'FAILED_PRINT',
+      product: studio.product.name,
+      quantity: 1,
+      note: 'Failed at 40%',
+    });
+    expect(Number(overview.costs.studio.cost)).toBeGreaterThanOrEqual(
+      Number(made.cost),
+    );
+    expect(overview.costs.failed.grams).toBeGreaterThanOrEqual(40);
+    expect(Number(overview.costs.bought.cost)).toBeGreaterThanOrEqual(72);
+
+    // Only its own colours and sizes; a colour is needed when it has some.
+    for (const bad of [
+      { colour: 'Green' },
+      { colour: undefined },
+      { size: '99 × 99 × 99 cm' },
+      { quantity: 0 },
+      { progressPercent: 0 },
+    ]) {
+      await as(staff.cookie)
+        .post('/stock/failed-prints', {
+          productId: studio.product.id,
+          colour: 'Red',
+          quantity: 1,
+          ...bad,
+        })
+        .expect(400);
+    }
+
+    // Weighed: 2,500 g on the shelf; the difference is recorded, whatever it was.
+    const shelf = (await line('Copper silk')).stockGrams;
+    const counted = (
+      await as(staff.cookie)
+        .post('/stock/counts', {
+          materialId: studio.material.id,
+          colour: 'Copper silk',
+          gramsOnShelf: 2500,
+        })
+        .expect(200)
+    ).body as { difference: number };
+    expect(counted.difference).toBe(2500 - shelf);
+    expect((await line('Copper silk')).stockGrams).toBe(2500);
+    // Weighed again with nothing changed: nothing recorded.
+    expect(
+      (
+        await as(staff.cookie)
+          .post('/stock/counts', {
+            materialId: studio.material.id,
+            colour: 'Copper silk',
+            gramsOnShelf: 2500,
+          })
+          .expect(200)
+      ).body,
+    ).toEqual({ difference: 0 });
+    // Customers get none of it.
+    const customer = await signedInCustomer(app);
+    await as(customer.cookie).get('/stock/printables').expect(403);
+    await as(customer.cookie)
+      .post('/stock/counts', {
+        materialId: studio.material.id,
+        gramsOnShelf: 0,
+      })
+      .expect(403);
+  });
+
+  it("lists every movement page by page, one line's or one kind, with counts", async () => {
+    const copper = (await line('Copper silk')).id;
+    const all: StockMovementView[] = [];
+    let cursor = '';
+    do {
+      const page = await movements(
+        `?stockItemId=${copper}&limit=2${cursor ? `&cursor=${cursor}` : ''}`,
+      );
+      expect(page.items.length).toBeLessThanOrEqual(2);
+      all.push(...page.items);
+      cursor = page.nextCursor ?? '';
+    } while (cursor);
+    // Every one of the line's movements once, newest first, none of another line's.
+    const inDb = await prisma.stockMovement.findMany({
+      where: { stockItemId: copper },
+      orderBy: { id: 'desc' },
+      select: { id: true },
+    });
+    expect(all.map((m) => m.id)).toEqual(inDb.map((m) => m.id));
+    expect(all.length).toBeGreaterThan(2);
+
+    const counts = (
+      await as(staff.cookie)
+        .get(`/stock/movements/counts?stockItemId=${copper}`)
+        .expect(200)
+    ).body as StockMovementCounts;
+    expect(Object.values(counts).reduce((a, b) => a + (b ?? 0), 0)).toBe(
+      inDb.length,
+    );
+    const received = await movements(
+      `?stockItemId=${copper}&kinds=RECEIVED&limit=100`,
+    );
+    expect(received.items.length).toBe(counts.RECEIVED);
+    expect(received.items.every((m) => m.kind === 'RECEIVED')).toBe(true);
+
+    // Biggest delivery first by grams; a cursor from another sort is refused.
+    const byGrams = await movements(
+      `?stockItemId=${copper}&sort=grams&limit=1`,
+    );
+    expect(byGrams.items[0]!.grams).toBe(Math.max(...all.map((m) => m.grams)));
+    // Page by page by grams, it still gives every movement once, biggest first.
+    const grams: number[] = [];
+    for (let at = ''; ; ) {
+      const page = await movements(
+        `?stockItemId=${copper}&sort=grams&limit=2${at ? `&cursor=${at}` : ''}`,
+      );
+      grams.push(...page.items.map((m) => m.grams));
+      if (!page.nextCursor) break;
+      at = page.nextCursor;
+    }
+    expect(grams).toEqual(all.map((m) => m.grams).sort((a, b) => b - a));
+    await as(staff.cookie)
+      .get(`/stock/movements?sort=createdAt&cursor=${byGrams.nextCursor}`)
+      .expect(400);
   });
 });

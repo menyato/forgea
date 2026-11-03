@@ -91,7 +91,7 @@ describe('configuredUnitPrice', () => {
     failureAllowancePercent: 0,
     laborCostPerUnit: 0,
     packagingCostPerUnit: 0,
-    markupMultiplier: 2,
+    profit: { kind: 'PERCENT', value: 100 },
   });
 
   it('prices the configured print, then adds the fixed add-ons after markup', () => {
@@ -107,7 +107,7 @@ describe('configuredUnitCost', () => {
     failureAllowancePercent: 10,
     laborCostPerUnit: '0.5',
     packagingCostPerUnit: '0.5',
-    markupMultiplier: 2,
+    profit: { kind: 'PERCENT', value: 100 },
   });
 
   it('is the cost before markup, without the add-ons, with the grams it takes', () => {

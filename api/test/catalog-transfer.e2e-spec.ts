@@ -123,6 +123,7 @@ describe('Catalog transfer (e2e)', () => {
       categories: 1,
       optionGroups: 1,
       optionValues: 2,
+      fonts: 0,
       products: 1,
     });
     const product = await http()

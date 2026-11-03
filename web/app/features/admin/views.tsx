@@ -1,161 +1,727 @@
-import type { ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import {
+  type DragEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Form,
+  Link,
+  useFetcher,
+  useLocation,
+  useSearchParams,
+} from 'react-router';
+import { useRememberRecords } from './breadcrumbs';
+import type { ListState, ViewMode } from './list-state';
+import type { SaveResult } from './staff.server';
 
-/** The current address with one search parameter changed (and paging reset). */
+/** The current address with some search parameters changed (and paging reset). */
 function useWith() {
   const [params] = useSearchParams();
-  return (key: string, value: string | null) => {
+  return (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
-    next.delete('cursor');
-    if (value === null) next.delete(key);
-    else next.set(key, value);
+    for (const key of ['cursor', 'at', 'tab']) next.delete(key);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null) next.delete(key);
+      else next.set(key, value);
+    }
     const query = next.toString();
     return query ? `?${query}` : '?';
   };
 }
 
-export interface ViewTab {
+export interface ListFilter {
   key: string;
   label: string;
-  /** Shown beside the label, e.g. how many orders wait for a deposit. */
+  /** How many records it holds, when the API counts them. */
   count?: number | undefined;
+  /**
+   * Filters sharing this name are alternatives the API takes one at a time (open, won,
+   * lost): turning one on turns the others off. Others combine.
+   */
+  only?: string;
+  /** Narrows whatever else is on (and), shown as a facet of its own; others add up (or). */
+  apart?: boolean;
+}
+
+export interface ListOption {
+  key: string;
+  label: string;
 }
 
 /**
- * Tabs that split a list by what needs doing ("To confirm", "In production", "New"…): plain
- * links (`?tab=…`), so they work before JavaScript and can be bookmarked.
+ * A list's control panel, as in Odoo: the search box holding the filters, grouping and search
+ * that are on (each removable), a menu of filters and groupings, the pager and the view
+ * switch. Everything is a link or a GET form over the address, so it works before JavaScript.
  */
-export function ViewTabs({
-  label,
-  tabs,
-  current,
-  param = 'tab',
+export function ControlPanel({
+  state,
+  search,
+  filters = [],
+  groups = [],
+  views = ['list'],
+  page,
 }: {
-  label: string;
-  tabs: readonly ViewTab[];
-  current: string;
-  param?: string;
+  state: ListState;
+  /** What the search box looks through, e.g. "Order number or email". */
+  search: string;
+  filters?: readonly ListFilter[];
+  groups?: readonly ListOption[];
+  views?: readonly ViewMode[];
+  page?: {
+    shown: number;
+    total?: number | undefined;
+    nextCursor: string | null;
+  };
 }) {
   const href = useWith();
+  const [params] = useSearchParams();
+  const inputId = useId();
+  // One facet per set of filters that add up: each "apart" one, each set of alternatives,
+  // and the rest together ("To confirm or In production").
+  const facets: ListFilter[][] = [];
+  for (const f of filters.filter((x) => state.filters.includes(x.key))) {
+    const set = f.apart ? f.key : (f.only ?? '');
+    const facet = facets.find(
+      (x) => (x[0]!.apart ? x[0]!.key : (x[0]!.only ?? '')) === set,
+    );
+    if (facet) facet.push(f);
+    else facets.push([f]);
+  }
+  const group = groups.find((g) => g.key === state.group);
+  const toggle = (f: ListFilter) => {
+    const next = state.filters.includes(f.key)
+      ? state.filters.filter((k) => k !== f.key)
+      : [
+          ...state.filters.filter(
+            (k) => !f.only || filters.find((o) => o.key === k)?.only !== f.only,
+          ),
+          f.key,
+        ];
+    return href({ filter: next.join(',') });
+  };
+  // The form keeps everything else on the page as it is, and the filters showing.
+  const kept = [...params].filter(
+    ([k]) => !['q', 'cursor', 'at', 'tab', 'filter'].includes(k),
+  );
+
   return (
-    <nav
-      aria-label={label}
-      className="mb-4 flex gap-1 overflow-x-auto border-b border-border"
-    >
-      {tabs.map((t) => {
-        const active = t.key === current;
-        return (
-          <Link
-            key={t.key}
-            to={href(param, t.key)}
-            aria-current={active ? 'page' : undefined}
-            className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm ${
-              active
-                ? 'border-accent font-semibold text-text'
-                : 'border-transparent text-text-muted hover:text-text'
-            }`}
+    <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="relative flex min-w-0 rounded-md border border-border bg-surface focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-focus-ring">
+        <Form
+          method="get"
+          role="search"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 px-2 py-1.5"
+        >
+          {kept.map(([k, v]) => (
+            <input key={k} type="hidden" name={k} value={v} />
+          ))}
+          <input type="hidden" name="filter" value={state.filters.join(',')} />
+          {facets.map((facet) => (
+            <Facet
+              key={facet[0]!.key}
+              kind="Filter"
+              value={facet.map((f) => f.label).join(' or ')}
+              remove={href({
+                filter: state.filters
+                  .filter((k) => !facet.some((f) => f.key === k))
+                  .join(','),
+              })}
+            />
+          ))}
+          {group && (
+            <Facet
+              kind="Group by"
+              value={group.label}
+              remove={href({ group: null })}
+            />
+          )}
+          <label htmlFor={inputId} className="sr-only">
+            {search}
+          </label>
+          <input
+            id={inputId}
+            name="q"
+            type="search"
+            key={state.q ?? ''}
+            defaultValue={state.q ?? ''}
+            placeholder={`Search: ${search.toLowerCase()}…`}
+            autoComplete="off"
+            className="min-w-32 flex-1 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-text-muted"
+          />
+        </Form>
+        {(filters.length > 0 || groups.length > 0) && (
+          <FilterMenu
+            filters={filters}
+            groups={groups}
+            state={state}
+            toggle={toggle}
+            groupHref={(key) =>
+              href({ group: key === state.group ? null : key })
+            }
+          />
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-3 lg:justify-end">
+        {page && <Pager state={state} {...page} />}
+        {views.length > 1 && (
+          <div
+            role="group"
+            aria-label="Show as"
+            className="flex rounded-md border border-border text-sm"
           >
-            {t.label}
-            {t.count !== undefined && t.count > 0 && (
-              <span
-                className={`rounded-pill px-2 text-xs ${
-                  active
-                    ? 'bg-accent text-on-accent'
-                    : 'bg-surface-raised text-text-muted'
+            {views.map((mode) => (
+              <Link
+                key={mode}
+                to={href({ view: mode })}
+                aria-current={state.view === mode ? 'true' : undefined}
+                className={`flex items-center gap-1.5 px-3 py-1.5 first:rounded-l-md last:rounded-r-md ${
+                  state.view === mode
+                    ? 'bg-accent font-semibold text-on-accent'
+                    : 'text-text-muted hover:text-text'
                 }`}
               >
-                {t.count}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+                <ViewIcon mode={mode} />
+                {mode === 'list' ? 'List' : 'Kanban'}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One thing narrowing the list, inside the search box: "Filter · To confirm ×". */
+function Facet({
+  kind,
+  value,
+  remove,
+}: {
+  kind: string;
+  value: string;
+  remove: string;
+}) {
+  return (
+    <span className="inline-flex max-w-full items-center overflow-hidden rounded-md border border-border text-xs">
+      <span className="bg-accent px-1.5 py-1 font-semibold text-on-accent">
+        {kind}
+      </span>
+      <span className="min-w-0 truncate px-1.5">{value}</span>
+      <Link
+        to={remove}
+        aria-label={`Remove ${kind.toLowerCase()}: ${value}`}
+        className="px-1.5 py-1 text-text-muted hover:text-danger"
+      >
+        ×
+      </Link>
+    </span>
+  );
+}
+
+/** The menu at the end of the search box: filters on the left, groupings on the right. */
+function FilterMenu({
+  filters,
+  groups,
+  state,
+  toggle,
+  groupHref,
+}: {
+  filters: readonly ListFilter[];
+  groups: readonly ListOption[];
+  state: ListState;
+  toggle: (f: ListFilter) => string;
+  groupHref: (key: string) => string;
+}) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  const { search } = useLocation();
+  // Closes once a choice is made, and on a click anywhere else.
+  useEffect(() => {
+    if (menu.current) menu.current.open = false;
+  }, [search]);
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (menu.current && !menu.current.contains(e.target as Node))
+        menu.current.open = false;
+    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+  const item = (active: boolean) =>
+    `flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-surface-raised ${
+      active ? 'font-semibold text-text' : 'text-text-muted'
+    }`;
+
+  return (
+    <details ref={menu} className="shrink-0 border-l border-border">
+      <summary
+        aria-label="Filters and grouping"
+        className="flex h-full cursor-pointer list-none items-center px-3 text-text-muted hover:text-text [&::-webkit-details-marker]:hidden"
+      >
+        <span aria-hidden>▾</span>
+      </summary>
+      <div className="absolute right-0 top-full z-30 mt-1 grid w-[min(32rem,calc(100vw-2rem))] gap-4 rounded-md border border-border bg-surface p-3 text-sm shadow-lg sm:grid-cols-2">
+        {filters.length > 0 && (
+          <section aria-label="Filters">
+            <h3 className="mb-1 px-2 text-xs font-bold uppercase tracking-wide">
+              Filters
+            </h3>
+            <ul className="grid gap-0.5">
+              {filters.map((f, i) => {
+                const active = state.filters.includes(f.key);
+                const apart = i > 0 && filters[i - 1]!.only !== f.only;
+                return (
+                  <li
+                    key={f.key}
+                    className={apart ? 'mt-1 border-t border-border pt-1' : ''}
+                  >
+                    <Link
+                      to={toggle(f)}
+                      aria-current={active ? 'true' : undefined}
+                      className={item(active)}
+                    >
+                      <span>
+                        <span aria-hidden className="inline-block w-4">
+                          {active ? '✓' : ''}
+                        </span>
+                        {f.label}
+                      </span>
+                      {f.count !== undefined && (
+                        <span className="tabular-nums text-xs">{f.count}</span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {groups.length > 0 && (
+          <section aria-label="Group by">
+            <h3 className="mb-1 px-2 text-xs font-bold uppercase tracking-wide">
+              Group by
+            </h3>
+            <ul className="grid gap-0.5">
+              {groups.map((g) => {
+                const active = state.group === g.key;
+                return (
+                  <li key={g.key}>
+                    <Link
+                      to={groupHref(g.key)}
+                      aria-current={active ? 'true' : undefined}
+                      className={item(active)}
+                    >
+                      <span>
+                        <span aria-hidden className="inline-block w-4">
+                          {active ? '✓' : ''}
+                        </span>
+                        {g.label}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** "51–100 / 230 ‹ ›". Pages follow each other by cursor: back goes to the first page. */
+function Pager({
+  state,
+  shown,
+  total,
+  nextCursor,
+}: {
+  state: ListState;
+  shown: number;
+  total?: number | undefined;
+  nextCursor: string | null;
+}) {
+  const href = useWith();
+  const arrow =
+    'rounded-md border border-border px-2.5 py-1 hover:border-accent';
+  return (
+    <nav aria-label="Pages" className="flex items-center gap-2 text-sm">
+      <span className="tabular-nums text-text-muted">
+        {shown === 0
+          ? '0'
+          : `${state.at}–${state.at + shown - 1}${total !== undefined ? ` / ${total}` : ''}`}
+      </span>
+      {state.at > 1 ? (
+        <Link to={href({})} aria-label="First page" className={arrow}>
+          ‹
+        </Link>
+      ) : (
+        <span aria-hidden className={`${arrow} opacity-40`}>
+          ‹
+        </span>
+      )}
+      {nextCursor ? (
+        <Link
+          to={href({ cursor: nextCursor, at: String(state.at + shown) })}
+          aria-label="Next page"
+          className={arrow}
+        >
+          ›
+        </Link>
+      ) : (
+        <span aria-hidden className={`${arrow} opacity-40`}>
+          ›
+        </span>
+      )}
     </nav>
   );
 }
 
-export type ViewMode = 'list' | 'board';
-
-export const viewMode = (params: URLSearchParams): ViewMode =>
-  params.get('view') === 'board' ? 'board' : 'list';
-
-/** "List | Board": the same items as a table or as columns of cards. */
-export function ViewSwitch({ current }: { current: ViewMode }) {
-  const href = useWith();
+function ViewIcon({ mode }: { mode: ViewMode }) {
   return (
-    <div
-      role="group"
-      aria-label="Show as"
-      className="flex rounded-md border border-border text-sm"
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className="size-3.5"
+      fill="currentColor"
     >
-      {(['list', 'board'] as const).map((mode) => (
-        <Link
-          key={mode}
-          to={href('view', mode === 'list' ? null : mode)}
-          aria-current={current === mode ? 'true' : undefined}
-          className={`px-3 py-1.5 first:rounded-l-md last:rounded-r-md ${
-            current === mode
-              ? 'bg-accent font-semibold text-on-accent'
-              : 'text-text-muted hover:text-text'
-          }`}
-        >
-          {mode === 'list' ? 'List' : 'Board'}
-        </Link>
-      ))}
+      {mode === 'list' ? (
+        <path d="M2 3h12v2H2zm0 4h12v2H2zm0 4h12v2H2z" />
+      ) : (
+        <path d="M1 2h4v12H1zm5 0h4v8H6zm5 0h4v10h-4z" />
+      )}
+    </svg>
+  );
+}
+
+export interface ListColumn<T> {
+  key: string;
+  label: string;
+  /** The API sort its header applies (click again to reverse). */
+  sort?: string;
+  align?: 'right';
+  cell: (row: T) => ReactNode;
+}
+
+/**
+ * A list view: one row per record, the whole row opening it; sortable headers; grouped,
+ * each group folding away, when a grouping is on (the rows of this page).
+ */
+export function ListView<T extends { id: string }>({
+  label,
+  rows,
+  columns,
+  href,
+  state,
+  group,
+  empty,
+}: {
+  label: string;
+  rows: readonly T[];
+  columns: readonly ListColumn<T>[];
+  href: (row: T) => string;
+  state: ListState;
+  /** The current grouping's value for a row; `order` puts the groups in their natural order. */
+  group?: { of: (row: T) => string; order?: readonly string[] } | undefined;
+  empty: string;
+}) {
+  const link = useWith();
+  useRememberRecords(rows.map(href));
+  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  if (rows.length === 0) return <p className="text-text-muted">{empty}</p>;
+
+  const groups: { key: string; rows: T[] }[] = [];
+  for (const row of rows) {
+    const key = group ? group.of(row) : '';
+    const g = groups.find((x) => x.key === key);
+    if (g) g.rows.push(row);
+    else groups.push({ key, rows: [row] });
+  }
+  const rank = (key: string) => {
+    const i = group?.order?.indexOf(key) ?? -1;
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  groups.sort((a, b) => rank(a.key) - rank(b.key));
+  const flip = (key: string) =>
+    setClosed((now) => {
+      const next = new Set(now);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const cellClass = (c: ListColumn<T>) =>
+    `px-4 py-2.5 ${c.align === 'right' ? 'text-right tabular-nums' : ''}`;
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+      <table aria-label={label} className="w-full text-sm">
+        <thead className="text-left text-text-muted">
+          <tr>
+            {columns.map((c) => {
+              const active = c.sort !== undefined && state.sort === c.sort;
+              return (
+                <th
+                  key={c.key}
+                  scope="col"
+                  aria-sort={
+                    active
+                      ? state.order === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : undefined
+                  }
+                  className={`px-4 py-3 font-medium ${c.align === 'right' ? 'text-right' : ''}`}
+                >
+                  {c.sort ? (
+                    <Link
+                      to={link({
+                        sort: c.sort,
+                        order: active && state.order === 'asc' ? 'desc' : 'asc',
+                      })}
+                      className="inline-flex items-center gap-1 hover:text-text"
+                    >
+                      {c.label}
+                      <span aria-hidden className={active ? '' : 'opacity-30'}>
+                        {active && state.order === 'asc' ? '▲' : '▼'}
+                      </span>
+                    </Link>
+                  ) : (
+                    c.label
+                  )}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        {groups.map((g) => (
+          <tbody key={g.key}>
+            {group && (
+              <tr className="border-t border-border bg-surface-raised/60">
+                <th
+                  scope="rowgroup"
+                  colSpan={columns.length}
+                  className="px-4 py-2 text-left"
+                >
+                  <button
+                    type="button"
+                    aria-expanded={!closed.has(g.key)}
+                    onClick={() => flip(g.key)}
+                    className="flex items-center gap-2 font-semibold"
+                  >
+                    <span
+                      aria-hidden
+                      className={`transition-transform ${closed.has(g.key) ? '' : 'rotate-90'}`}
+                    >
+                      ›
+                    </span>
+                    {g.key}
+                    <span className="font-normal text-text-muted">
+                      ({g.rows.length})
+                    </span>
+                  </button>
+                </th>
+              </tr>
+            )}
+            {!closed.has(g.key) &&
+              g.rows.map((row) => (
+                <tr
+                  key={row.id}
+                  className="relative border-t border-border hover:bg-surface-raised"
+                >
+                  {columns.map((c, i) => (
+                    <td key={c.key} className={cellClass(c)}>
+                      {i === 0 ? (
+                        // The first cell's link covers the row: the whole row opens it.
+                        <Link
+                          to={href(row)}
+                          className="font-semibold after:absolute after:inset-0 hover:underline"
+                        >
+                          {c.cell(row)}
+                        </Link>
+                      ) : (
+                        c.cell(row)
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+          </tbody>
+        ))}
+      </table>
     </div>
   );
 }
 
-/** Kanban columns: one per step, each with its cards and how many. */
-export function Board<T extends { id: string }>({
+const CARD = 'application/x-forgea-card';
+
+/**
+ * A kanban view: a column per stage, a card per record. With `move`, cards drag to another
+ * column: the page's action gets `intent=move`, `id` and `to`, makes the same call the
+ * record's own buttons do, and the API's refusal (a step not allowed) shows above.
+ */
+export function KanbanView<T extends { id: string }>({
   columns,
+  title,
   card,
+  href,
+  move = false,
+  layout = 'columns',
 }: {
   columns: readonly { key: string; title: string; items: readonly T[] }[];
+  title: (item: T) => string;
   card: (item: T) => ReactNode;
+  href: (item: T) => string;
+  move?: boolean;
+  /** "grid": one column's cards side by side (a list with no stages). */
+  layout?: 'columns' | 'grid';
 }) {
+  const fetcher = useFetcher<SaveResult>();
+  const [over, setOver] = useState<string | null>(null);
+  useRememberRecords(columns.flatMap((c) => c.items.map(href)));
+  // While a move is on its way, the card already stands in its new column.
+  const moving = fetcher.formData
+    ? {
+        id: String(fetcher.formData.get('id')),
+        to: String(fetcher.formData.get('to')),
+      }
+    : null;
+  const all = columns.flatMap((c) => c.items);
+  const shown = columns.map((c) => ({
+    ...c,
+    items: moving
+      ? [
+          ...c.items.filter((i) => i.id !== moving.id),
+          ...(moving.to === c.key ? all.filter((i) => i.id === moving.id) : []),
+        ]
+      : c.items,
+  }));
+  const drop = (column: string) => (e: DragEvent) => {
+    e.preventDefault();
+    setOver(null);
+    const id = e.dataTransfer.getData(CARD);
+    const from = columns.find((c) => c.items.some((i) => i.id === id));
+    if (!id || !from || from.key === column) return;
+    void fetcher.submit({ intent: 'move', id, to: column }, { method: 'post' });
+  };
+
+  const cards = (items: readonly T[]) =>
+    items.map((item) => (
+      <Link
+        key={item.id}
+        to={href(item)}
+        draggable={move}
+        onDragStart={
+          move ? (e) => e.dataTransfer.setData(CARD, item.id) : undefined
+        }
+        className={`grid gap-1 rounded-md border border-border bg-surface p-3 text-sm shadow-sm hover:border-accent ${
+          moving?.id === item.id ? 'opacity-60' : ''
+        } ${move ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      >
+        <span className="font-semibold">{title(item)}</span>
+        {card(item)}
+      </Link>
+    ));
+
   return (
-    <div className="grid gap-4 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(15rem,1fr)]">
-      {columns.map((c) => (
-        <section
-          key={c.key}
-          aria-label={c.title}
-          className="grid content-start gap-3 rounded-lg bg-surface/60 p-3"
-        >
-          <h2 className="flex items-center justify-between font-display text-base font-bold">
-            {c.title}
-            <span className="text-sm font-normal text-text-muted">
-              {c.items.length}
-            </span>
-          </h2>
-          {c.items.length === 0 ? (
-            <p className="text-sm text-text-muted">Nothing here.</p>
-          ) : (
-            c.items.map((item) => <div key={item.id}>{card(item)}</div>)
-          )}
-        </section>
-      ))}
+    <div className="grid gap-3">
+      <p aria-live="polite" className="text-sm text-danger empty:hidden">
+        {fetcher.state === 'idle' ? (fetcher.data?.error ?? '') : ''}
+      </p>
+      {layout === 'grid' ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {shown.flatMap((c) => cards(c.items))}
+        </div>
+      ) : (
+        <div className="grid gap-4 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(15rem,1fr)]">
+          {shown.map((c) => (
+            <section
+              key={c.key}
+              aria-label={c.title}
+              onDragOver={
+                move
+                  ? (e) => {
+                      if (!e.dataTransfer.types.includes(CARD)) return;
+                      e.preventDefault();
+                      setOver(c.key);
+                    }
+                  : undefined
+              }
+              onDragLeave={move ? () => setOver(null) : undefined}
+              onDrop={move ? drop(c.key) : undefined}
+              className={`grid content-start gap-3 rounded-lg p-3 ${
+                over === c.key
+                  ? 'bg-accent/15 outline-2 outline-dashed outline-accent'
+                  : 'bg-surface/60'
+              }`}
+            >
+              <h2 className="flex items-center justify-between font-display text-base font-bold">
+                {c.title}
+                <span className="text-sm font-normal text-text-muted">
+                  {c.items.length}
+                </span>
+              </h2>
+              {c.items.length === 0 ? (
+                <p className="text-sm text-text-muted">Nothing here.</p>
+              ) : (
+                cards(c.items)
+              )}
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/** A small card for a board column: a title link and a few lines under it. */
-export function BoardCard({
-  to,
-  title,
-  children,
+/**
+ * A record's steps along the top of its form, as in Odoo: the one it is in stands out, the
+ * ones before it read as done. `aside` holds a step off the main path (Cancelled, Lost).
+ */
+export function StatusBar({
+  steps,
+  current,
+  aside,
 }: {
-  to: string;
-  title: string;
-  children?: ReactNode;
+  steps: readonly { key: string; label: string }[];
+  current: string;
+  aside?: string | undefined;
 }) {
+  const at = steps.findIndex((s) => s.key === current);
   return (
-    <Link
-      to={to}
-      className="grid gap-1 rounded-md border border-border bg-surface p-3 text-sm shadow-sm hover:border-accent"
+    <ol
+      aria-label="Status"
+      className="mb-4 flex flex-wrap items-center gap-1 text-xs sm:text-sm"
     >
-      <span className="font-semibold">{title}</span>
-      {children}
-    </Link>
+      {steps.map((s, i) => (
+        <li
+          key={s.key}
+          aria-current={i === at && !aside ? 'step' : undefined}
+          className={`rounded-pill border px-3 py-1 ${
+            i === at && !aside
+              ? 'border-accent bg-accent font-semibold text-on-accent'
+              : i < at
+                ? 'border-border bg-surface-raised text-text'
+                : 'border-border text-text-muted'
+          }`}
+        >
+          {i < at && !aside && (
+            <span aria-hidden className="mr-1">
+              ✓
+            </span>
+          )}
+          {s.label}
+        </li>
+      ))}
+      {aside && (
+        <li
+          aria-current="step"
+          className="rounded-pill border border-danger px-3 py-1 font-semibold text-danger"
+        >
+          {aside}
+        </li>
+      )}
+    </ol>
   );
 }

@@ -37,7 +37,15 @@ export type SortOrder = (typeof SORT_ORDERS)[number];
 export const PRODUCT_SORTS = ['createdAt', 'name'] as const;
 export const ORDER_SORTS = ['createdAt', 'total'] as const;
 export const PRINT_JOB_SORTS = ['createdAt'] as const;
+export const LEAD_SORTS = ['createdAt', 'name'] as const;
+export const QUOTATION_SORTS = ['createdAt', 'number', 'validUntil'] as const;
+export const CUSTOM_REQUEST_SORTS = ['createdAt', 'title'] as const;
 export const AUDIT_LOG_SORTS = ['timestamp'] as const;
+export const INVOICE_SORTS = ['date', 'number', 'total', 'residual'] as const;
+/** The invoice list's filters: still owed, settled, credit notes (several add up). */
+export const INVOICE_FILTERS = ['unpaid', 'paid', 'credit'] as const;
+export const ENTRY_SORTS = ['date', 'number'] as const;
+export const STOCK_MOVEMENT_SORTS = ['createdAt', 'grams'] as const;
 
 /** "FG-" + 10 Crockford base-32 characters (no I, L, O or U). Also enforced by the database. */
 export const ORDER_NUMBER_PATTERN = /^FG-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{10}$/;

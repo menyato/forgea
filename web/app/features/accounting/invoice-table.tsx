@@ -9,12 +9,20 @@ const STATE_LABELS: Record<PaymentState, { label: string; tone: string }> = {
 };
 
 /** A credit note's open amount is money to give back, not money owed. */
-function stateOf(i: InvoiceListItem) {
+export function stateOf(i: InvoiceListItem) {
   if (i.type !== 'CREDIT_NOTE') return STATE_LABELS[i.paymentState];
   return Number(i.residual) > 0
     ? { label: 'To refund', tone: 'text-warning' }
     : { label: 'Settled', tone: 'text-text-muted' };
 }
+
+/** "Credit note", "Deposit" or "Invoice". */
+export const kindOf = (i: InvoiceListItem) =>
+  i.type === 'CREDIT_NOTE'
+    ? 'Credit note'
+    : i.invoiceKind === 'DEPOSIT'
+      ? 'Deposit'
+      : 'Invoice';
 
 /** Invoices and credit notes with what is still owed (the accounting page and an order). */
 export function InvoiceTable({
@@ -46,11 +54,7 @@ export function InvoiceTable({
               <td className="py-2 pr-4 font-mono">
                 {i.number}
                 <span className="block font-sans text-xs text-text-muted">
-                  {i.type === 'CREDIT_NOTE'
-                    ? 'Credit note'
-                    : i.invoiceKind === 'DEPOSIT'
-                      ? 'Deposit'
-                      : 'Invoice'}
+                  {kindOf(i)}
                 </span>
               </td>
               <td className="py-2 pr-4">{i.date}</td>

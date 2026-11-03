@@ -44,7 +44,8 @@ test('the owner adds a product with a 3D model and options, and a shopper buys i
   await page.getByLabel('Offer Colour', { exact: true }).check();
   await page.getByRole('button', { name: 'Create product' }).click();
   await expect(page).toHaveURL(/\/admin\/products\/[0-9a-f-]{36}$/);
-  await expect(page.getByText('Price with default options:')).toBeVisible();
+  // The API prices it as it is edited.
+  await expect(page.getByText(/^Sells at \$\d+\.\d\d/)).toBeVisible();
 
   // In the shop: the 3D view, the colours, the price, and the cart line with the colour.
   await page.goto(`/products/test-cube-${tag}`);
@@ -62,7 +63,7 @@ test('the owner adds a product with a 3D model and options, and a shopper buys i
 test('a text option must be filled in, and its price is added', async ({
   page,
 }) => {
-  await page.goto('/products/name-keychain');
+  await page.goto('/products/cable-clip-set');
   const add = page.getByRole('button', { name: /^Choose / });
   await expect(add).toBeDisabled();
   await page.getByText('Black').click();
@@ -70,6 +71,76 @@ test('a text option must be filled in, and its price is added', async ({
   await page.getByRole('textbox', { name: 'Name on it' }).fill('Rana');
   await expect(page.getByRole('button', { name: 'Add to cart' })).toBeEnabled();
   await expect(page.locator('p.text-3xl')).not.toHaveText(before ?? '');
+});
+
+test('breadcrumbs lead back to the list as it was left', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/orders?filter=&sort=total&order=asc');
+  await page
+    .getByRole('table')
+    .getByRole('link', { name: /^FG-/ })
+    .first()
+    .click();
+  const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(crumbs.getByText(/^FG-/)).toBeVisible();
+  await crumbs.getByRole('link', { name: 'Orders' }).click();
+  // The same filters and sort, not the default list.
+  await expect(page).toHaveURL(
+    /\/admin\/orders\?filter=&sort=total&order=asc$/,
+  );
+  await expect(page.getByRole('link', { name: /^Remove filter/ })).toBeHidden();
+  await expect(
+    page.getByRole('columnheader', { name: /Total/ }),
+  ).toHaveAttribute('aria-sort', 'ascending');
+  // The record steps through the list it was opened from.
+  await page
+    .getByRole('table')
+    .getByRole('link', { name: /^FG-/ })
+    .first()
+    .click();
+  await expect(page.getByRole('navigation', { name: 'Records' })).toContainText(
+    /^1 \//,
+  );
+  // Every dashboard page leads back to the dashboard.
+  await page.goto('/admin/materials');
+  await page
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByRole('link', { name: 'Dashboard' })
+    .click();
+  await expect(page).toHaveURL(/\/admin$/);
+});
+
+test('an audit entry opens with what it recorded, and leads to its record', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  // Order status changes (every journey makes some): each names its order.
+  await page.goto('/admin/audit?q=order.status.change');
+  await page
+    .getByRole('table', { name: 'Audit log' })
+    // A row's link (the header's is the sort).
+    .locator('tbody a')
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/admin\/audit\/[0-9a-f-]{36}$/);
+  await expect(
+    page.getByRole('heading', { name: 'order.status.change', level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recorded' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Records' })).toContainText(
+    /^1 \//,
+  );
+  await page
+    .getByRole('region', { name: 'Entry' })
+    .getByRole('link', { name: /^[0-9a-f-]{36}$/ })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/orders\/[0-9a-f-]{36}$/);
 });
 
 test('customers cannot open the dashboard', async ({ page }) => {

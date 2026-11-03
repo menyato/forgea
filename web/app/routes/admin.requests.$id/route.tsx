@@ -22,6 +22,7 @@ import {
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { RequestFileView } from '~/features/custom-requests/request-file-view';
 import { RequestTimeline } from '~/features/custom-requests/request-timeline';
+import { StatusBar } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -80,6 +81,7 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Custom requests', to: '/admin/requests' }]}
         title={r.title}
         intro={`${r.requestNumber} · ${r.expired ? 'Quote expired' : CUSTOM_REQUEST_STATUS_LABELS[r.status].title} · ${new Date(r.createdAt).toLocaleString('en-GB')}`}
         action={
@@ -89,6 +91,20 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
           >
             All requests
           </Link>
+        }
+      />
+      <StatusBar
+        steps={(['SUBMITTED', 'QUOTED', 'ACCEPTED'] as const).map((s) => ({
+          key: s,
+          label: CUSTOM_REQUEST_STATUS_LABELS[s].title,
+        }))}
+        current={r.status}
+        aside={
+          r.status === 'DECLINED' || r.status === 'CANCELLED'
+            ? CUSTOM_REQUEST_STATUS_LABELS[r.status].title
+            : r.expired
+              ? 'Quote expired'
+              : undefined
         }
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">

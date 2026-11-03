@@ -13,8 +13,11 @@ export {
   OrderStatus,
   PaymentMethod,
   PrintJobStatus,
+  ProfitKind,
   Role,
   StockMovementKind,
+  TextDecor,
+  TextStyle,
 } from './generated/prisma/enums.js';
 export type * from './lists.js';
 export type * from './commerce.js';
@@ -22,6 +25,7 @@ export type * from './catalog.js';
 export type * from './dashboard.js';
 export type * from './catalog-transfer.js';
 export type * from './crm.js';
+export type * from './text-studio.js';
 export { HTTP } from './http.js';
 export type * from './auth.js';
 export {
@@ -90,7 +94,11 @@ export {
 export type {
   ManualStockMovement,
   ProductFilamentUse,
+  GramsCost,
+  StockCosts,
   StockItemView,
+  StockPrintable,
+  StockMovementCounts,
   StockMovementView,
   StockOverview,
 } from './stock.js';

@@ -43,6 +43,16 @@ export class UploadsController {
     return this.accept(file, UploadPurpose.PRODUCT_MODEL, user);
   }
 
+  /** A font for personalised text: TTF or OTF (Dashboard → Fonts). */
+  @Post('font')
+  @UseInterceptors(single(UploadPurpose.FONT))
+  font(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UploadedFileView> {
+    return this.accept(file, UploadPurpose.FONT, user);
+  }
+
   /** A product photo: PNG, JPEG or WebP. */
   @Post('product-image')
   @UseInterceptors(single(UploadPurpose.PRODUCT_IMAGE))

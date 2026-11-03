@@ -8,7 +8,7 @@ import { CSRF } from './commerce-helpers.js';
 
 /**
  * Pricing settings with round numbers, so every cost in a test can be worked out by hand:
- * $1 a machine hour, 10% waste, 10% failures, $0.50 labour, $0.50 packaging, ×2 markup;
+ * $1 a machine hour, 10% waste, 10% failures, $0.50 labour, $0.50 packaging, 100% profit;
  * rush 20%, delivery $4, no bulk discounts.
  */
 export const ROUND_PRICING = {
@@ -17,12 +17,42 @@ export const ROUND_PRICING = {
   failureAllowancePercent: '10',
   laborCostPerUnit: '0.50',
   packagingCostPerUnit: '0.50',
-  markupMultiplier: '2',
+  profitKind: 'PERCENT',
+  profitValue: '100',
   rushFeePercent: '20',
   deliveryFee: '4.00',
   depositPercent: '50',
   bulkDiscountTiers: [],
 };
+
+/** GET /pricing/settings, as the API returns it. */
+export interface PricingSettingsBody {
+  cost: Record<string, unknown> & { profit: { kind: string; value: string } };
+  order: Record<string, unknown>;
+  printer: {
+    printerPrice: string;
+    lifeHours: number;
+    watts: number;
+    electricityPerKwh: string;
+  } | null;
+}
+
+/** The settings as the Pricing page sends them back (PUT /pricing/settings). */
+export function pricingForm(s: PricingSettingsBody): Record<string, unknown> {
+  const { profit, ...cost } = s.cost;
+  return {
+    ...cost,
+    profitKind: profit.kind,
+    profitValue: profit.value,
+    ...s.order,
+    ...(s.printer && {
+      printerPrice: s.printer.printerPrice,
+      printerLifeHours: s.printer.lifeHours,
+      printerWatts: s.printer.watts,
+      electricityPerKwh: s.printer.electricityPerKwh,
+    }),
+  };
+}
 
 /** Puts round pricing in place; returns a function that puts the previous settings back. */
 export async function useRoundPricing(
@@ -32,7 +62,7 @@ export async function useRoundPricing(
   const http = () => request(app.getHttpServer());
   const before = (
     await http().get('/pricing/settings').set('Cookie', adminCookie).expect(200)
-  ).body as { cost: object; order: object };
+  ).body as PricingSettingsBody;
   const put = (body: object) =>
     http()
       .put('/pricing/settings')
@@ -42,7 +72,7 @@ export async function useRoundPricing(
       .expect(200);
   await put(ROUND_PRICING);
   return async () => {
-    await put({ ...before.cost, ...before.order });
+    await put(pricingForm(before));
   };
 }
 

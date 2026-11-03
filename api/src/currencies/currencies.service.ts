@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CurrencyConverter } from '@forgea/pricing';
 import type { CurrencyQuote, ExchangeRateEntry } from '@forgea/types';
+import type { AddCurrencyDto } from '@forgea/validation';
 import {
   CurrenciesRepository,
   type CurrencyWithRate,
@@ -47,6 +49,18 @@ export class CurrenciesService {
       effectiveFrom: r.effectiveFrom.toISOString(),
       setBy: r.setBy?.email ?? null,
     }));
+  }
+
+  /** A currency customers can pay in from now on, at the rate given. */
+  async add(dto: AddCurrencyDto, adminId: string): Promise<CurrencyQuote> {
+    if (await this.currencies.findByCode(dto.code))
+      throw new ConflictException(`${dto.code} is already a currency`);
+    const { rate, ...currency } = dto;
+    await this.currencies.create(currency, { rate, setByUserId: adminId });
+    const added = (await this.list()).find((c) => c.code === dto.code);
+    if (!added)
+      throw new InternalServerErrorException('Currency was not recorded');
+    return added;
   }
 
   async setRate(

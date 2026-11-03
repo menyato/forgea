@@ -52,6 +52,7 @@ describe('pageAccess', () => {
     expect(adminOnly.sort()).toEqual([
       '/admin/permissions',
       '/admin/team',
+      '/admin/team/new',
       '/admin/team/some-id',
     ]);
   });

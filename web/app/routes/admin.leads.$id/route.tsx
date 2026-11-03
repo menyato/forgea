@@ -12,6 +12,7 @@ import { Field, SelectField, TextAreaField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { StatusBar } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -95,6 +96,7 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Leads', to: '/admin/leads' }]}
         title={l.name}
         intro={`${l.email}${l.phone ? ` · ${l.phone}` : ''} · ${l.state === 'open' ? `${l.stage.name}, ${l.probability}%` : l.state === 'won' ? 'Won' : `Lost: ${l.lostReason}`}`}
         action={
@@ -105,6 +107,11 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
             All leads
           </Link>
         }
+      />
+      <StatusBar
+        steps={stages.map((s) => ({ key: s.id, label: s.name }))}
+        current={l.stage.id}
+        aside={l.state === 'lost' ? 'Lost' : undefined}
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">

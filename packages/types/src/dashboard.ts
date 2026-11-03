@@ -6,6 +6,7 @@ import type {
   Role,
 } from './generated/prisma/enums.js';
 import type { Money } from './lists.js';
+import type { DesignSummary } from './text-studio.js';
 
 /** GET /orders/:id — everything staff need to prepare, deliver and get paid for an order. */
 export interface StaffOrder {
@@ -30,6 +31,9 @@ export interface StaffOrder {
     options: ChosenOption[];
     /** The product's page, when it was bought from the catalog. */
     productSlug: string | null;
+    /** A personalised piece: what to print, with its print files (one STL per colour). */
+    design:
+      (DesignSummary & { itemId: string; files: { colour: string }[] }) | null;
   }[];
   /** The labelled lines the customer saw (subtotal, rush fee, discounts, delivery…). */
   priceBreakdown: { label: string; amount: Money }[];

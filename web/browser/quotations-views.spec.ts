@@ -121,36 +121,52 @@ test('the dashboard menu folds into groups; lists split into tabs and boards', a
     menu.getByRole('link', { name: 'Products', exact: true }),
   ).toBeVisible();
 
-  // Leads: new ones apart from the pipeline.
-  const leadTabs = page.getByRole('navigation', { name: 'Lead groups' });
-  await expect(leadTabs.getByRole('link', { name: /^New/ })).toBeVisible();
+  // Leads open as the pipeline's kanban; filters add to the open ones.
   await closeDashboardMenu(page);
-  await leadTabs.getByRole('link', { name: 'Assigned to me' }).click();
-  await expect(page).toHaveURL(/tab=mine/);
-
-  // Orders: grouped by what to do next, or as a board by status.
-  await page.goto('/admin/orders');
-  const orderTabs = page.getByRole('navigation', { name: 'Order groups' });
   await expect(
-    orderTabs.getByRole('link', { name: /^To confirm/ }),
-  ).toHaveAttribute('aria-current', 'page');
+    page.getByRole('link', { name: 'Remove filter: Open' }),
+  ).toBeVisible();
+  const filters = page.getByRole('group', { name: 'Show as' });
+  await expect(filters.getByRole('link', { name: 'Kanban' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await page.getByLabel('Filters and grouping').click();
+  await page
+    .getByRole('region', { name: 'Filters' })
+    .getByRole('link', { name: 'Assigned to me' })
+    .click();
+  await expect(page).toHaveURL(/filter=open%2Cmine|filter=open,mine/);
+  await expect(
+    page.getByRole('link', { name: 'Remove filter: Assigned to me' }),
+  ).toBeVisible();
+
+  // Orders: filtered by what to do next, as a list grouped by status or a kanban.
+  await page.goto('/admin/orders');
+  await expect(
+    page.getByRole('link', { name: 'Remove filter: To confirm' }),
+  ).toBeVisible();
+  await page.getByLabel('Filters and grouping').click();
+  await page
+    .getByRole('region', { name: 'Group by' })
+    .getByRole('link', { name: 'Status' })
+    .click();
+  await expect(page).toHaveURL(/group=status/);
   await page
     .getByRole('group', { name: 'Show as' })
-    .getByRole('link', { name: 'Board' })
+    .getByRole('link', { name: 'Kanban' })
     .click();
-  await expect(page).toHaveURL(/view=board/);
+  await expect(page).toHaveURL(/view=kanban/);
   await expect(
     page.getByRole('region', { name: 'Waiting for deposit' }),
   ).toBeVisible();
 
-  await page.goto('/admin/quotations?view=board');
+  await page.goto('/admin/quotations?view=kanban');
   await expect(page.getByRole('region', { name: 'Draft' })).toBeVisible();
   await page.goto('/admin/requests');
   await expect(
-    page
-      .getByRole('navigation', { name: 'Request groups' })
-      .getByRole('link', { name: /^New/ }),
-  ).toHaveAttribute('aria-current', 'page');
+    page.getByRole('link', { name: 'Remove filter: New' }),
+  ).toBeVisible();
 });
 
 test('the dashboard menu folds away to a strip and comes back; the current page stands out', async ({

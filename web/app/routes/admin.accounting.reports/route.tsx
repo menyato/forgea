@@ -70,6 +70,7 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Invoices', to: '/admin/accounting' }]}
         title="Reports"
         intro="From posted entries only, in US dollars. The balance sheet always balances: assets = liabilities + equity."
       />

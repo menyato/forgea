@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountingModule } from '../accounting/accounting.module.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { PricingModule } from '../pricing/pricing.module.js';
 import { OrderStock } from './order-stock.service.js';
@@ -9,7 +10,7 @@ import { StockService } from './stock.service.js';
 
 /** Filament stock per material and colour, kept as an append-only list of movements. */
 @Module({
-  imports: [DatabaseModule, PricingModule],
+  imports: [DatabaseModule, PricingModule, AccountingModule],
   controllers: [StockController],
   providers: [StockRepository, StockService, ProductionEstimator, OrderStock],
   // Orders take their filament when they go into production; print jobs record failed

@@ -119,9 +119,11 @@ export function ModelField({
           <label className="flex flex-wrap items-center gap-2">
             How solid it prints
             <input
+              id="model-solidity"
               type="number"
               min={1}
               max={100}
+              autoComplete="off"
               value={solidity}
               onChange={(e) => setSolidity(e.currentTarget.value)}
               className="w-20 rounded-md border border-border bg-surface px-2 py-1"

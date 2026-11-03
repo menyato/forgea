@@ -11,6 +11,7 @@ import {
   signedInCustomer,
 } from './commerce-helpers.js';
 import { createApp } from './create-app.js';
+import { pricingForm, type PricingSettingsBody } from './studio-helpers.js';
 
 /** Phase 8b dashboard endpoints: pricing, rates, order detail, team, theme. */
 describe('Dashboard (e2e)', () => {
@@ -46,13 +47,9 @@ describe('Dashboard (e2e)', () => {
       const before = (
         await as(admin.cookie).get('/pricing/settings').expect(200)
       ).body;
-      expect(Object.keys(before.cost)).toContain('markupMultiplier');
+      expect(before.cost.profit).toMatchObject({ kind: 'PERCENT' });
 
-      const form = {
-        ...before.cost,
-        ...before.order,
-        bulkDiscountTiers: before.order.bulkDiscountTiers,
-      };
+      const form = pricingForm(before as PricingSettingsBody);
       await as(admin.cookie)
         .put('/pricing/settings', {
           ...form,

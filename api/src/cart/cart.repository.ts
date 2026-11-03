@@ -19,6 +19,8 @@ export interface LineKey {
   productId: string;
   configKey: string;
   selections: readonly OptionSelection[];
+  /** A personalised piece: its design as measured (TextStudio), kept with the line. */
+  design?: object | null;
 }
 
 @Injectable()
@@ -114,6 +116,7 @@ export class CartRepository {
             productId: item.productId,
             configKey: item.configKey,
             selections: item.options as unknown as OptionSelection[],
+            design: item.design as object | null,
           },
           item.quantity,
         );
@@ -148,6 +151,7 @@ async function addTo(
       productId: line.productId,
       configKey: line.configKey,
       options: line.selections as unknown as Prisma.InputJsonValue,
+      ...(line.design ? { design: line.design as Prisma.InputJsonValue } : {}),
       quantity: total,
     },
     update: { quantity: total },

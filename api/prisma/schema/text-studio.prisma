@@ -1,0 +1,37 @@
+/// A typeface customers write their text in (Dashboard → Fonts). The file is an uploaded
+/// TTF/OTF, served to browsers for the live preview and read by the API to make the piece.
+/// Never deleted once used (orders keep pointing at it): switched off instead.
+model Font {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// As customers see it in the font list, e.g. "Cairo".
+  name      String   @unique
+  /// The uploaded file's object key (clean/<id>.ttf). Two names may share one file.
+  fileKey   String
+  /// Which letters it has, checked when it is uploaded.
+  latin     Boolean  @default(false)
+  arabic    Boolean  @default(false)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("fonts")
+}
+
+/// How a personalised product is made (@forgea/text3d TextStyle).
+enum TextStyle {
+  KEYCHAIN
+  NAME
+  MONOGRAM
+  LETTERS
+  INITIAL_NAME
+  COUPLE
+}
+
+/// The decorations around a big initial (@forgea/text3d TextDecor).
+enum TextDecor {
+  HEARTS
+  FLOWERS
+  STARS
+  CROWN
+}

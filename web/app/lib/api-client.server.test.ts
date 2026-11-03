@@ -239,6 +239,31 @@ describe('ApiClient', () => {
     expect(api.calls.map((c) => c.method)).toEqual(['GET', 'PUT', 'GET']);
   });
 
+  it('a read made while a change is being saved is not kept', async () => {
+    let finishSave!: () => void;
+    const saving = new Promise<void>((resolve) => (finishSave = resolve));
+    const calls: string[] = [];
+    const fetchImpl = (async (input: URL | RequestInfo, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push(method);
+      if (method === 'PUT') await saving;
+      return json(200, {
+        theme: method === 'GET' && calls.length < 3 ? 'old' : 'new',
+      });
+    }) as typeof fetch;
+    const visitor = () => new ApiClient(browser({}), env, fetchImpl);
+    const save = visitor().put('/site-theme', { palette: {} });
+    // Someone opens a page while it saves: reads the old palette.
+    await visitor().shared('/site-theme');
+    finishSave();
+    await save;
+    // The next page asks again rather than keeping the old one.
+    await visitor().shared('/site-theme');
+    expect(calls).toEqual(['PUT', 'GET', 'GET']);
+    // Leaves nothing shared behind for the next test.
+    await visitor().put('/site-theme', {});
+  });
+
   it('never keeps a failed shared read', async () => {
     const api = fakeApi(
       json(503, { message: 'down' }),

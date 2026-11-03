@@ -1,7 +1,7 @@
 import type {
   AdminProductListItem,
   CustomRequestStatus,
-  InvoiceListItem,
+  InvoiceCounts,
   MaterialView,
   OrderStatus,
   Page,
@@ -62,7 +62,7 @@ export async function loader({ context }: Route.LoaderArgs) {
             .then(ok)
         : null,
       may('invoices.view')
-        ? api.get<InvoiceListItem[]>('/accounting/invoices').then(ok)
+        ? api.get<InvoiceCounts>('/accounting/invoices/counts').then(ok)
         : null,
       may('materials.view')
         ? api.get<MaterialView[]>('/materials').then(ok)
@@ -131,18 +131,13 @@ export async function loader({ context }: Route.LoaderArgs) {
     });
   }
   if (invoices) {
-    const unpaid = invoices.filter(
-      (i) => i.type === 'INVOICE' && Number(i.residual) > 0,
-    );
     cards.push({
       key: 'invoices',
-      count: unpaid.length,
+      count: invoices.unpaid,
       label: 'unpaid invoices',
-      owed: unpaid.length
-        ? unpaid.reduce((s, i) => s + Number(i.residual), 0).toFixed(2)
-        : undefined,
-      to: '/admin/accounting?tab=unpaid',
-      urgent: unpaid.length > 0,
+      owed: invoices.unpaid ? invoices.owed : undefined,
+      to: '/admin/accounting?filter=unpaid',
+      urgent: invoices.unpaid > 0,
     });
   }
   if (materials) {
@@ -179,6 +174,7 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={null}
         title="Needs attention"
         intro={
           waiting.length

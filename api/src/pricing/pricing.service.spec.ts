@@ -13,7 +13,7 @@ class FakeSettingsRepository extends PricingSettingsRepository {
       failureAllowancePercent: '10',
       laborCostPerUnit: '5',
       packagingCostPerUnit: '3',
-      markupMultiplier: '1.6',
+      profit: { kind: 'PERCENT', value: '60' },
     },
     order: {
       rushFeePercent: '30',
@@ -21,6 +21,7 @@ class FakeSettingsRepository extends PricingSettingsRepository {
       depositPercent: '50',
       bulkDiscountTiers: [{ minQuantity: 10, percent: '5' }],
     },
+    printer: null,
   };
 
   current(): Promise<PricingSettingsSnapshot> {
@@ -91,7 +92,10 @@ describe('PricingService', () => {
   it('uses the latest settings on every call', async () => {
     repo.snapshot = {
       ...repo.snapshot,
-      cost: { ...repo.snapshot.cost, markupMultiplier: '2' },
+      cost: {
+        ...repo.snapshot.cost,
+        profit: { kind: 'PERCENT', value: '100' },
+      },
     };
     const result = await service.unitPrice({
       grams: 120,

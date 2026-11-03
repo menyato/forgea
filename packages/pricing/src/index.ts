@@ -8,9 +8,16 @@ export type { DecimalInput } from './money.js';
 export {
   UnitCostCalculator,
   type CostSettings,
+  type ProfitKind,
+  type ProfitRule,
   type UnitCostInput,
   type UnitPriceBreakdown,
 } from './unit-cost-calculator.js';
+export {
+  pricePerGramFromReel,
+  printerHourlyRate,
+  type PrinterCosts,
+} from './setup-rates.js';
 export {
   OrderPricer,
   orderLinesFromCart,

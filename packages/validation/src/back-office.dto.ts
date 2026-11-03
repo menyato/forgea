@@ -27,12 +27,17 @@ import {
 } from 'class-validator';
 import {
   EMAIL_MAX_LENGTH,
+  ENTRY_SORTS,
+  INVOICE_FILTERS,
+  INVOICE_SORTS,
+  LEAD_SORTS,
   MONEY_PATTERN,
   PERCENT_PATTERN,
   PHONE_PATTERN,
+  QUOTATION_SORTS,
   SIZE_CM_PATTERN,
 } from './constants.js';
-import { NormalizeEmail, QueryBoolean, Trim } from './email.js';
+import { CommaList, NormalizeEmail, QueryBoolean, Trim } from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
 
 const money = { message: 'Enter an amount, e.g. 12.50' };
@@ -160,6 +165,10 @@ export class AddNoteDto {
 export const LEAD_STATES = ['open', 'won', 'lost'] as const;
 
 export class LeadListQuery extends CursorPageQuery {
+  @IsOptional()
+  @IsIn(LEAD_SORTS)
+  sort: (typeof LEAD_SORTS)[number] = 'createdAt';
+
   @IsOptional()
   @IsUUID()
   stageId?: string;
@@ -292,8 +301,20 @@ export class SaveQuotationDto {
 
 export class QuotationListQuery extends CursorPageQuery {
   @IsOptional()
+  @IsIn(QUOTATION_SORTS)
+  sort: (typeof QUOTATION_SORTS)[number] = 'createdAt';
+
+  @IsOptional()
   @IsIn(Object.values(QuotationStatus))
   status?: QuotationStatus;
+
+  /** Several statuses, comma-separated (the dashboard's filters). */
+  @IsOptional()
+  @CommaList()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsIn(Object.values(QuotationStatus), { each: true })
+  statuses?: QuotationStatus[];
 
   /** Number or customer email. */
   @IsOptional()
@@ -397,10 +418,41 @@ export class ReportPeriodQuery {
   to?: string;
 }
 
+export class InvoiceListQuery extends CursorPageQuery {
+  @IsOptional()
+  @IsIn(INVOICE_SORTS)
+  sort: (typeof INVOICE_SORTS)[number] = 'date';
+
+  @IsOptional()
+  @CommaList()
+  @IsArray()
+  @ArrayMaxSize(INVOICE_FILTERS.length)
+  @IsIn(INVOICE_FILTERS, { each: true })
+  filters?: (typeof INVOICE_FILTERS)[number][];
+
+  /** Number, order number, customer name or email. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+}
+
 export class EntryListQuery extends CursorPageQuery {
+  @IsOptional()
+  @IsIn(ENTRY_SORTS)
+  sort: (typeof ENTRY_SORTS)[number] = 'date';
+
   @IsOptional()
   @IsIn(['INVOICE', 'CREDIT_NOTE', 'PAYMENT', 'ENTRY'])
   type?: 'INVOICE' | 'CREDIT_NOTE' | 'PAYMENT' | 'ENTRY';
+
+  /** Number, label, order number, customer email or journal. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
 
   @IsOptional()
   @IsUUID()

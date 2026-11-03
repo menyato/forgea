@@ -107,7 +107,22 @@ Money and measurements are strings (`"12.50"`), so no rounding happens on the wa
 the printed size in cm (width, depth, height) that `grams` and `printHours` are for; `sizes` are
 the real sizes a product is sold in, each with its own measurements, grams and hours (both are
 optional, so older files still import). `material`
-on an option value is the code of the material it switches to. Files are base64 inside the
+on an option value is the code of the material it switches to.
+
+Newer files may also carry (all optional, so older files still import):
+
+- `reel` on a material: `{ "price": "22.00", "grams": 1000 }`, the reel the price per gram comes
+  from;
+- `profit` on a product: `{ "kind": "PERCENT" | "FIXED", "value": "50" }`, its own profit rule;
+- `fonts`: `[{ "name", "active", "sortOrder", "file": { "name", "base64" } }]`, matched by name,
+  each file read like an upload (it must write English or Arabic);
+- `text` on a product (personalised): `{ "style": "KEYCHAIN" | "NAME" | "MONOGRAM" | "LETTERS" |
+  "INITIAL_NAME" | "COUPLE", "maxChars", "letterHeightMm", "letterDepthMm", "baseDepthMm", "maxWidthMm",
+  "colourGroup" (an option group's name), "extraColourPrice" }`, and optionally `"sizesMm"` (more
+  letter heights), `"defaultColour"`, `"defaultBaseColour"`, `"defaultAccentColour"` (labels in the
+  colour group) and, for `INITIAL_NAME` (required there), `"decor": "HEARTS" | "FLOWERS" | "STARS" | "CROWN"`.
+
+Files are base64 inside the
 JSON; a catalog with many large models can be hundreds of MB, in which case use the command
 line.
 

@@ -13,7 +13,7 @@ const calculator = new UnitCostCalculator({
   failureAllowancePercent: '10',
   laborCostPerUnit: '0.5',
   packagingCostPerUnit: '0.5',
-  markupMultiplier: '2',
+  profit: { kind: 'PERCENT', value: '100' },
 });
 
 const catalog: Catalog = {

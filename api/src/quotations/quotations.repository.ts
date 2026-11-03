@@ -174,7 +174,11 @@ export class QuotationsRepository {
   list(query: QuotationListQuery) {
     const q = query.q?.trim();
     const where: Prisma.QuotationWhereInput = {
-      ...(query.status ? { status: query.status } : {}),
+      ...(query.statuses?.length
+        ? { status: { in: query.statuses } }
+        : query.status
+          ? { status: query.status }
+          : {}),
       ...(q
         ? {
             OR: [
@@ -187,12 +191,12 @@ export class QuotationsRepository {
     };
     return keysetPage<QuotationRow>(
       {
-        sortField: 'createdAt',
-        kind: 'date',
+        sortField: query.sort,
+        kind: query.sort === 'number' ? 'string' : 'date',
         order: query.order,
         limit: query.limit,
         cursor: query.cursor,
-        valueOf: (row) => row.createdAt,
+        valueOf: (row) => row[query.sort],
       },
       ({ after, orderBy, take }) =>
         this.prisma.quotation.findMany({

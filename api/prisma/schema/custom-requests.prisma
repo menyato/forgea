@@ -23,15 +23,15 @@ model CustomRequest {
   user          User                @relation("CustomRequestOwner", fields: [userId], references: [id], onDelete: Restrict)
   status        CustomRequestStatus @default(SUBMITTED)
 
-  title       String
-  description String
-  quantity    Int     @default(1)
+  title            String
+  description      String
+  quantity         Int       @default(1)
   /// Preferred material and colour, if the customer has one.
-  materialId  String? @db.Uuid
-  material    Material? @relation(fields: [materialId], references: [id], onDelete: Restrict)
-  colour      String?
+  materialId       String?   @db.Uuid
+  material         Material? @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  colour           String?
   /// Optional attachment: an accepted upload's object key (STL/GLB model or a photo).
-  fileKey     String?
+  fileKey          String?
   /// The studio's design for the request (a 3D model or image), shown with the quote.
   designPreviewKey String?
 

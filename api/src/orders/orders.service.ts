@@ -10,6 +10,7 @@ import type { OrderListQuery } from '@forgea/validation';
 import type { OrderStatus } from '../generated/prisma/enums.js';
 import { toPage } from '../common/pagination/keyset.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
+import type { Measurement } from '../text-studio/text-studio.service.js';
 import { OrdersRepository, type StaffOrderRow } from './orders.repository.js';
 
 @Injectable()
@@ -71,6 +72,7 @@ function toStaffOrder(o: StaffOrderRow): Omit<StaffOrder, 'invoices'> {
       // A snapshot written at checkout: [{ group, value }].
       options: i.options as unknown as ChosenOption[],
       productSlug: i.product?.slug ?? null,
+      design: staffDesign(i.id, i.design),
     })),
     priceBreakdown: (
       o.priceBreakdown as unknown as { label: string; amount: string }[]
@@ -90,5 +92,19 @@ function toStaffOrder(o: StaffOrderRow): Omit<StaffOrder, 'invoices'> {
     })),
     customRequestNumber: o.customRequest?.requestNumber ?? null,
     createdAt: o.createdAt.toISOString(),
+  };
+}
+
+/** A personalised piece as the studio prints it: how it reads, and one print file per colour. */
+function staffDesign(
+  itemId: string,
+  snapshot: unknown,
+): StaffOrder['items'][number]['design'] {
+  const m = snapshot as Measurement | null;
+  if (!m) return null;
+  return {
+    ...m.summary,
+    itemId,
+    files: m.colours.map((c) => ({ colour: c.label })),
   };
 }

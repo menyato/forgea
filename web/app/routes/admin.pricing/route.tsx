@@ -1,10 +1,19 @@
-import type { CostSettings, OrderSettings } from '@forgea/pricing';
+import {
+  type CostSettings,
+  type OrderSettings,
+  type PrinterCosts,
+  printerHourlyRate,
+} from '@forgea/pricing';
 import { UpdatePricingSettingsDto } from '@forgea/validation';
 import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
+import {
+  ProfitRuleField,
+  type ProfitValue,
+} from '~/features/admin/profit-rule-field';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
@@ -13,6 +22,7 @@ import type { Route } from './+types/route';
 interface Settings {
   cost: CostSettings;
   order: OrderSettings;
+  printer: PrinterCosts | null;
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
@@ -27,7 +37,12 @@ const FIELDS = [
   'failureAllowancePercent',
   'laborCostPerUnit',
   'packagingCostPerUnit',
-  'markupMultiplier',
+  'profitKind',
+  'profitValue',
+  'printerPrice',
+  'printerLifeHours',
+  'printerWatts',
+  'electricityPerKwh',
   'rushFeePercent',
   'deliveryFee',
   'depositPercent',
@@ -49,6 +64,32 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
   const { cost, order } = loaderData.settings;
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
+  const saved = loaderData.settings.printer;
+  const [printer, setPrinter] = useState({
+    printerPrice: saved ? String(saved.printerPrice) : '',
+    printerLifeHours: saved ? String(saved.lifeHours) : '',
+    printerWatts: saved ? String(saved.watts) : '',
+    electricityPerKwh: saved ? String(saved.electricityPerKwh) : '',
+  });
+  const [profit, setProfit] = useState<ProfitValue>({
+    kind: cost.profit.kind,
+    value: String(cost.profit.value),
+  });
+  // All four printer details given: the hourly cost follows from them, as the API works it out.
+  const rate = (() => {
+    const p = printer;
+    if (Object.values(p).some((v) => v.trim() === '')) return null;
+    try {
+      return printerHourlyRate({
+        printerPrice: p.printerPrice,
+        lifeHours: p.printerLifeHours,
+        watts: p.printerWatts,
+        electricityPerKwh: p.electricityPerKwh,
+      });
+    } catch {
+      return null;
+    }
+  })();
   const [tiers, setTiers] = useState(
     order.bulkDiscountTiers.map((t) => ({
       minQuantity: String(t.minQuantity),
@@ -89,14 +130,55 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
             })),
           )}
         />
-        <Panel title="What a print costs you">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {number(
-              'machineRatePerHour',
-              'Printer time (USD per hour)',
-              cost.machineRatePerHour,
-              'Electricity, wear and the printer itself',
-            )}
+        <Panel title="Your printer">
+          <p className="max-w-2xl text-sm text-text-muted">
+            Fill these in once, when you get the printer: what an hour of
+            printing costs you is worked out from them (its price spread over
+            its life, plus its electricity). Leave all four empty to type the
+            hourly cost yourself.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {(
+              [
+                ['printerPrice', 'What it cost (USD)', 'e.g. 600'],
+                ['printerLifeHours', 'Printing hours it lasts', 'e.g. 5000'],
+                ['printerWatts', 'Power while printing (W)', 'e.g. 150'],
+                ['electricityPerKwh', 'Electricity (USD per kWh)', 'e.g. 0.30'],
+              ] as const
+            ).map(([name, label, hint]) => (
+              <Field
+                key={name}
+                label={label}
+                name={name}
+                inputMode="decimal"
+                value={printer[name]}
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setPrinter((p) => ({ ...p, [name]: v }));
+                }}
+                error={errors[name]}
+                hint={hint}
+              />
+            ))}
+          </div>
+          {rate ? (
+            <p aria-live="polite">
+              An hour of printing costs you <strong>${rate}</strong>.
+              <input type="hidden" name="machineRatePerHour" value={rate} />
+            </p>
+          ) : (
+            <div className="max-w-xs">
+              {number(
+                'machineRatePerHour',
+                'Printer time (USD per hour)',
+                cost.machineRatePerHour,
+                'Electricity, wear and the printer itself',
+              )}
+            </div>
+          )}
+        </Panel>
+        <Panel title="What else a print costs you">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {number(
               'purgeWastePercent',
               'Purge and waste (%)',
@@ -117,12 +199,22 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
               'Packaging per piece (USD)',
               cost.packagingCostPerUnit,
             )}
-            {number(
-              'markupMultiplier',
-              'Markup (×)',
-              cost.markupMultiplier,
-              'Price = cost × this',
-            )}
+          </div>
+          <p className="text-sm text-text-muted">
+            Filament is priced per material, from its reel (Materials page).
+          </p>
+        </Panel>
+        <Panel title="Your profit">
+          <p className="max-w-2xl text-sm text-text-muted">
+            What every product earns on top of what it costs you, unless the
+            product sets its own rule (on its page).
+          </p>
+          <div className="max-w-md">
+            <ProfitRuleField
+              value={profit}
+              onChange={setProfit}
+              errors={errors}
+            />
           </div>
         </Panel>
         <Panel title="What customers pay on top">

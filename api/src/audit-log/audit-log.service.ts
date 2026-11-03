@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import type { AuditLogListItem, Page } from '@forgea/types';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type {
+  AuditLogEntry,
+  AuditLogListItem,
+  JsonValue,
+  Page,
+} from '@forgea/types';
 import type { AuditLogListQuery } from '@forgea/validation';
 import { dateRange } from '../common/pagination/date-range.js';
 import { keysetPage, toPage } from '../common/pagination/keyset.js';
@@ -47,6 +52,7 @@ export class AuditLogService {
     const where: Prisma.AuditLogWhereInput = {
       ...(query.action ? { action: query.action } : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
+      ...(query.targetId ? { targetId: query.targetId } : {}),
       ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
       ...(when ? { timestamp: when } : {}),
     };
@@ -67,19 +73,34 @@ export class AuditLogService {
           include: withActor,
         }),
     );
-    return toPage(page, (a) => ({
-      id: a.id,
-      actor: a.actor,
-      action: a.action,
-      targetType: a.targetType,
-      targetId: a.targetId,
-      ipAddress: a.ipAddress,
-      timestamp: a.timestamp.toISOString(),
-    }));
+    return toPage(page, toListItem);
+  }
+
+  /** One entry with its details (read-only, like the rest). */
+  async one(id: string): Promise<AuditLogEntry> {
+    const row = await this.prisma.auditLog.findUnique({
+      where: { id },
+      include: withActor,
+    });
+    if (!row) throw new NotFoundException('No such audit entry');
+    // Stored by `record` from JSON-safe values only.
+    return { ...toListItem(row), metadata: row.metadata as JsonValue | null };
   }
 }
 
 /** The column is INET; anything that isn't an address (e.g. "unknown") is stored as null. */
 function isRecordableIp(ip: string | null): ip is string {
   return ip !== null && /^[0-9a-f.:]+$/i.test(ip);
+}
+
+function toListItem(a: AuditRow): AuditLogListItem {
+  return {
+    id: a.id,
+    actor: a.actor,
+    action: a.action,
+    targetType: a.targetType,
+    targetId: a.targetId,
+    ipAddress: a.ipAddress,
+    timestamp: a.timestamp.toISOString(),
+  };
 }

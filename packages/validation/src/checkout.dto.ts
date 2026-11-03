@@ -21,6 +21,7 @@ import { OptionSelectionDto } from './catalog.dto.js';
 import { MONEY_PATTERN } from './constants.js';
 import { Trim } from './email.js';
 import { CART_QUANTITY_MAX, PHONE_PATTERN } from './constants.js';
+import { TextDesignDto } from './text-studio.dto.js';
 
 export class AddCartItemDto {
   @IsUUID()
@@ -39,6 +40,12 @@ export class AddCartItemDto {
   @ValidateNested({ each: true })
   @Type(() => OptionSelectionDto)
   options: OptionSelectionDto[] = [];
+
+  /** A personalised product: the customer's design (the API checks it and makes it). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TextDesignDto)
+  design?: TextDesignDto;
 }
 
 export class UpdateCartItemDto {

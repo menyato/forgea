@@ -103,17 +103,33 @@ export function DashboardNav({ staff }: { staff: Profile }) {
               </span>
             </summary>
             <ul className="grid gap-0.5 pb-2 pl-2">
-              {inGroup.map((p) => (
-                <li key={p.path}>
-                  <NavLink
-                    to={p.path}
-                    end={p.path === '/admin/accounting'}
-                    className={linkClass}
-                  >
-                    {p.label}
-                  </NavLink>
+              {inGroup
+                .filter((p) => !p.config)
+                .map((p) => (
+                  <li key={p.path}>
+                    <NavLink
+                      to={p.path}
+                      end={p.path === '/admin/accounting'}
+                      className={linkClass}
+                    >
+                      {p.label}
+                    </NavLink>
+                  </li>
+                ))}
+              {inGroup.some((p) => p.config) && (
+                <li className="mt-1 px-3 pt-1 text-[0.7rem] font-semibold uppercase tracking-wide text-text-muted">
+                  Configuration
                 </li>
-              ))}
+              )}
+              {inGroup
+                .filter((p) => p.config)
+                .map((p) => (
+                  <li key={p.path}>
+                    <NavLink to={p.path} className={linkClass}>
+                      {p.label}
+                    </NavLink>
+                  </li>
+                ))}
             </ul>
           </details>
         );

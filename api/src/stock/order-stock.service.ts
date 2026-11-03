@@ -43,12 +43,13 @@ export class OrderStock {
               id: true,
               productId: true,
               options: true,
+              design: true,
               quantity: true,
             },
           },
         },
       });
-      const { estimate } = await this.estimator.for(order.items);
+      const { estimate, catalog } = await this.estimator.for(order.items);
       const movements: NewMovement[] = [];
       for (const item of order.items) {
         const e = estimate(item);
@@ -58,20 +59,27 @@ export class OrderStock {
           );
           continue;
         }
-        const grams = new Prisma.Decimal(e.gramsPerUnit)
-          .times(item.quantity)
-          .ceil()
-          .toNumber();
-        if (grams <= 0) continue;
-        movements.push({
-          materialId: e.materialId,
-          colour: e.colour,
-          kind: StockMovementKind.ORDER,
-          grams: -grams,
-          orderItemId: item.id,
-          note: `Order ${order.orderNumber}`,
-          createdById: actorId,
-        });
+        // A multi-colour piece takes from each colour's reel (one movement per reel).
+        for (const part of e.colours ?? [
+          { colour: e.colour, gramsPerUnit: e.gramsPerUnit },
+        ]) {
+          const grams = new Prisma.Decimal(part.gramsPerUnit)
+            .times(item.quantity)
+            .ceil()
+            .toNumber();
+          if (grams <= 0) continue;
+          movements.push({
+            materialId: e.materialId,
+            colour: part.colour,
+            kind: StockMovementKind.ORDER,
+            grams: -grams,
+            orderItemId: item.id,
+            // Its cost per gram today, so later price changes leave this cost as it was.
+            costPerGram: catalog.pricePerGram.get(e.materialId) ?? null,
+            note: `Order ${order.orderNumber}`,
+            createdById: actorId,
+          });
+        }
       }
       return { movements };
     } catch (error) {

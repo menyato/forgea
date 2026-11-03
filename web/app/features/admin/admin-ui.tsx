@@ -1,23 +1,34 @@
 import { type ReactNode, useId } from 'react';
 import { Busy } from '~/components/brand/busy';
+import { Breadcrumbs, type Crumb, RecordPager } from './breadcrumbs';
 
-/** A dashboard page's title, one-line explanation and main action. */
+/**
+ * A dashboard page's breadcrumbs, title, one-line explanation and main action. `trail` is
+ * the way back up (a detail page's list); null on the dashboard's own first page. A record
+ * opened from its list steps to the list's previous and next records.
+ */
 export function AdminHeader({
   title,
   intro,
   action,
+  trail = [],
 }: {
   title: string;
   intro: string;
   action?: ReactNode;
+  trail?: readonly Crumb[] | null;
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div className="grid gap-1">
+      <div className="grid min-w-0 gap-1">
+        {trail && <Breadcrumbs trail={trail} current={title} />}
         <h1 className="font-display text-3xl font-bold">{title}</h1>
         <p className="max-w-2xl text-text-muted">{intro}</p>
       </div>
-      {action}
+      <div className="flex flex-wrap items-center gap-3">
+        {trail && trail.length > 0 && <RecordPager list={trail.at(-1)!.to} />}
+        {action}
+      </div>
     </header>
   );
 }

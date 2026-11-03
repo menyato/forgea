@@ -3,7 +3,7 @@ import type { Page } from '@forgea/types';
 import type { SortOrder } from '@forgea/validation';
 
 /** How a sort field's value is written into the cursor and read back. */
-export type SortKind = 'date' | 'string' | 'decimal';
+export type SortKind = 'date' | 'string' | 'decimal' | 'int';
 
 interface CursorPayload {
   /** Sort field and order the cursor belongs to; a cursor is only valid for the same sort. */
@@ -21,7 +21,7 @@ export interface KeysetRequest<Row extends { id: string }> {
   limit: number;
   cursor?: string | undefined;
   /** The sort field's value on a row (Date, string, or a Prisma Decimal). */
-  valueOf: (row: Row) => Date | string | { toString(): string };
+  valueOf: (row: Row) => Date | string | number | { toString(): string };
 }
 
 export interface KeysetQuery {
@@ -104,7 +104,9 @@ export function toPage<Row, Item>(
   };
 }
 
-function serialize(value: Date | string | { toString(): string }): string {
+function serialize(
+  value: Date | string | number | { toString(): string },
+): string {
   return value instanceof Date ? value.toISOString() : value.toString();
 }
 
@@ -119,7 +121,7 @@ export function decodeCursor(
   sortField: string,
   order: SortOrder,
   kind: SortKind,
-): { value: Date | string; id: string } {
+): { value: Date | string | number; id: string } {
   let payload: unknown;
   try {
     payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
@@ -147,6 +149,9 @@ export function decodeCursor(
     case 'decimal':
       if (!/^-?\d+(\.\d+)?$/.test(v)) throw new BadRequestException(INVALID);
       return { value: v, id };
+    case 'int':
+      if (!/^-?\d+$/.test(v)) throw new BadRequestException(INVALID);
+      return { value: Number(v), id };
     case 'string':
       return { value: v, id };
   }

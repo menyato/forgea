@@ -39,6 +39,7 @@ import { MailModule } from './mail/mail.module.js';
 import { QuotationsModule } from './quotations/quotations.module.js';
 import { AccountingModule } from './accounting/accounting.module.js';
 import { StockModule } from './stock/stock.module.js';
+import { TextStudioModule } from './text-studio/text-studio.module.js';
 import { InsightsModule } from './insights/insights.module.js';
 
 @Module({
@@ -73,6 +74,7 @@ import { InsightsModule } from './insights/insights.module.js';
     QuotationsModule,
     AccountingModule,
     StockModule,
+    TextStudioModule,
     InsightsModule,
   ],
   providers: [

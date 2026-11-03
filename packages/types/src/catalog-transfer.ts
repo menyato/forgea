@@ -1,4 +1,9 @@
-import type { OptionKind } from './generated/prisma/enums.js';
+import type {
+  OptionKind,
+  ProfitKind,
+  TextDecor,
+  TextStyle,
+} from './generated/prisma/enums.js';
 
 /**
  * A whole catalog in one JSON file, to move it between installations (local → deployed) or
@@ -13,13 +18,25 @@ export interface CatalogFile {
   materials: CatalogMaterial[];
   categories: CatalogCategory[];
   optionGroups: CatalogOptionGroup[];
+  /** Fonts for personalised text (optional in older files). */
+  fonts?: CatalogFont[];
   products: CatalogProduct[];
+}
+
+/** A font customers write in, its file inside the catalog. Matched by name. */
+export interface CatalogFont {
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  file: CatalogAsset;
 }
 
 export interface CatalogMaterial {
   code: string;
   name: string;
   pricePerGram: string;
+  /** One reel as bought (optional in older files): the price per gram comes from it. */
+  reel?: { price: string; grams: number } | null;
   densityGPerCm3: string;
   gramsPerHour: string;
   active: boolean;
@@ -82,6 +99,28 @@ export interface CatalogProduct {
     values: string[];
     default: string | null;
   }[];
+  /** Personalised text: how its pieces are made (optional; none = a regular product). */
+  text?: {
+    style: TextStyle;
+    maxChars: number;
+    letterHeightMm: string;
+    letterDepthMm: string;
+    baseDepthMm: string;
+    maxWidthMm: string;
+    /** The option group customers choose colours from, by name. */
+    colourGroup: string;
+    extraColourPrice: string;
+    /** More letter heights customers may choose (optional). */
+    sizesMm?: string[];
+    /** The colours a design starts with, by label (optional). */
+    defaultColour?: string | null;
+    defaultBaseColour?: string | null;
+    defaultAccentColour?: string | null;
+    /** Big initial pieces: their decorations. */
+    decor?: TextDecor | null;
+  } | null;
+  /** Its own profit rule (optional; none = the importing shop's own). */
+  profit?: { kind: ProfitKind; value: string } | null;
   /** The printed size grams and printHours are for (optional in older files). */
   size?: { x: string; y: string; z: string } | null;
   /** The real sizes it is sold in (optional in older files). */
@@ -97,11 +136,21 @@ export interface CatalogProduct {
 /** What an import did, per kind of entry. */
 export interface CatalogImportReport {
   created: Record<
-    'materials' | 'categories' | 'optionGroups' | 'optionValues' | 'products',
+    | 'materials'
+    | 'categories'
+    | 'optionGroups'
+    | 'optionValues'
+    | 'fonts'
+    | 'products',
     number
   >;
   updated: Record<
-    'materials' | 'categories' | 'optionGroups' | 'optionValues' | 'products',
+    | 'materials'
+    | 'categories'
+    | 'optionGroups'
+    | 'optionValues'
+    | 'fonts'
+    | 'products',
     number
   >;
   /** Already there and left alone (adding mode), or unchanged files reused. */

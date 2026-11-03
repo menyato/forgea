@@ -25,6 +25,7 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   // Staff log the lead, then write a quotation from it.
   await signInAsAdmin(context, baseURL!);
   await page.goto('/admin/leads');
+  await page.getByRole('link', { name: 'New lead' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Lina Lead');
   await page.getByLabel('Email').fill(email);
   await page

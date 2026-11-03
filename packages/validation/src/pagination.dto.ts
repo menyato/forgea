@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -14,7 +15,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { CommaList, Trim } from './email.js';
+import { CommaList, QueryBoolean, Trim } from './email.js';
 import {
   AUDIT_LOG_SORTS,
   ORDER_SORTS,
@@ -76,6 +77,12 @@ export class ProductListQuery extends CursorPageQuery {
   @IsOptional()
   @Matches(SLUG_PATTERN)
   category?: string;
+
+  /** The dashboard's list only: in the shop (true) or hidden (false); the shop shows active ones. */
+  @IsOptional()
+  @QueryBoolean()
+  @IsBoolean()
+  active?: boolean;
 }
 
 export class OrderListQuery extends CursorPageQuery {
@@ -133,6 +140,10 @@ export class PrintJobListQuery extends CursorPageQuery {
   @IsOptional()
   @IsISO8601({ strict: true })
   scheduledTo?: string;
+
+  /** Order number, machine or colour. */
+  @apply(...SEARCH())
+  q?: string;
 }
 
 export class AuditLogListQuery extends CursorPageQuery {
@@ -148,6 +159,11 @@ export class AuditLogListQuery extends CursorPageQuery {
   @IsOptional()
   @Matches(/^[A-Za-z]{1,50}$/)
   targetType?: string;
+
+  /** One record's entries (with its type): an id, a code or a setting's name. */
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9_.:-]{1,100}$/)
+  targetId?: string;
 
   @IsOptional()
   @IsUUID()

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   configuredUnitPrice,
   type OptionEffect,
+  type ProfitRule,
   type UnitCostCalculator,
 } from '@forgea/pricing';
 import {
@@ -12,11 +13,25 @@ import {
   type ProductOption,
 } from '@forgea/types';
 import type { Prisma } from '../generated/prisma/client.js';
-import { OptionKind } from '../generated/prisma/enums.js';
+import { OptionKind, type ProfitKind } from '../generated/prisma/enums.js';
 
 /** Everything needed to show, configure and price a product. */
 export const withConfiguration = {
-  material: { select: { code: true, name: true, pricePerGram: true } },
+  material: {
+    select: {
+      code: true,
+      name: true,
+      pricePerGram: true,
+      densityGPerCm3: true,
+      gramsPerHour: true,
+    },
+  },
+  // Personalised products: the colours customers choose from.
+  textColourGroup: {
+    include: {
+      values: { where: { active: true }, orderBy: { sortOrder: 'asc' } },
+    },
+  },
   category: { select: { slug: true, name: true } },
   optionGroups: {
     orderBy: { sortOrder: 'asc' },
@@ -187,6 +202,7 @@ export class ProductConfigurator {
         pricePerGram: product.material.pricePerGram.toString(),
       },
       configuration.effects,
+      profitOf(product),
     );
   }
 
@@ -299,3 +315,13 @@ const sizeOf = (s: {
   y: s.sizeYcm.toString(),
   z: s.sizeZcm.toString(),
 });
+
+/** The product's own profit rule, or null for the shop's. */
+export function profitOf(product: {
+  profitKind: ProfitKind | null;
+  profitValue: { toString(): string } | null;
+}): (ProfitRule & { kind: ProfitKind; value: string }) | null {
+  return product.profitKind && product.profitValue !== null
+    ? { kind: product.profitKind, value: product.profitValue.toString() }
+    : null;
+}

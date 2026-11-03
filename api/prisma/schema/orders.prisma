@@ -61,13 +61,13 @@ model Order {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  items         OrderItem[]
-  statusHistory OrderStatusHistory[]
-  printJobs     PrintJob[]
+  items          OrderItem[]
+  statusHistory  OrderStatusHistory[]
+  printJobs      PrintJob[]
   /// Set when the order was made by accepting a custom request's quote.
-  customRequest CustomRequest?
+  customRequest  CustomRequest?
   /// Set when the order was made by confirming a quotation.
-  quotation     Quotation?
+  quotation      Quotation?
   journalEntries JournalEntry[]
 
   @@index([userId, id])
@@ -92,6 +92,9 @@ model OrderItem {
   /// The options as chosen, by name: [{ group: "Colour", value: "Copper" }]. A snapshot, so
   /// renaming or removing an option later never rewrites old orders.
   options   Json     @default("[]")
+  /// A personalised piece: the design as ordered, with the fonts, colours, grams and hours it
+  /// was priced at (a snapshot, so the studio prints exactly what was bought).
+  design    Json?
 
   stockMovements StockMovement[]
 

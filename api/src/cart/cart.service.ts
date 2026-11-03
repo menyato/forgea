@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   Injectable,
@@ -8,10 +9,15 @@ import type {
   CartView,
   ChosenOption,
   OptionSelection,
+  TextDesignInput,
 } from '@forgea/types';
 import { PricingService } from '../pricing/pricing.service.js';
 import { ProductConfigurator } from '../products/product-configurator.js';
 import { ProductsRepository } from '../products/products.repository.js';
+import {
+  type Measurement,
+  TextStudio,
+} from '../text-studio/text-studio.service.js';
 import { CartRepository, type CartRow } from './cart.repository.js';
 
 /** Who the cart belongs to on this request: a signed-in user, a guest cookie, or both. */
@@ -19,6 +25,9 @@ export interface CartOwner {
   userId?: string | undefined;
   guestCartId?: string | undefined;
 }
+
+/** A line ready for checkout: with a personalised piece's design as just measured. */
+export type CheckoutLine = CartLine & { measurement: Measurement | null };
 
 export interface CartResult {
   view: CartView;
@@ -35,6 +44,7 @@ export class CartService {
     private readonly pricing: PricingService,
     private readonly products: ProductsRepository,
     private readonly configurator: ProductConfigurator,
+    private readonly studio: TextStudio,
   ) {}
 
   async view(owner: CartOwner): Promise<CartResult> {
@@ -47,11 +57,20 @@ export class CartService {
     productId: string,
     quantity: number,
     selections: readonly OptionSelection[],
+    design?: TextDesignInput,
   ): Promise<CartResult> {
     const product = await this.products.findActive(productId);
     if (!product) throw new NotFoundException('This product is not available');
     // 400 with a message for the shopper when a choice is missing or not offered.
     const configuration = this.configurator.configure(product, selections);
+    // A personalised piece is made (in the worker) before it goes in: 400 if it can't be.
+    let measured: Measurement | null = null;
+    if (product.textStyle) {
+      if (!design) throw new BadRequestException('Type your text first');
+      measured = await this.studio.measure(product, design);
+    } else if (design) {
+      throw new BadRequestException('This product has no text to design');
+    }
     const resolved = await this.resolve(owner);
     let cart = resolved.cart;
     let newGuestCartId: string | undefined;
@@ -65,8 +84,12 @@ export class CartService {
       cart.id,
       {
         productId,
-        configKey: configuration.configKey,
+        // Another text, font or colour is another line.
+        configKey: measured
+          ? `${configuration.configKey}|${designKey(measured.design)}`
+          : configuration.configKey,
         selections: configuration.selections,
+        design: measured,
       },
       quantity,
     );
@@ -86,6 +109,8 @@ export class CartService {
     productId: string,
     quantity: number,
     chosen: readonly ChosenOption[],
+    /** A personalised piece's design, as the order recorded it. */
+    design?: TextDesignInput,
   ): Promise<CartResult> {
     const product = await this.products.findActive(productId);
     if (!product) throw new NotFoundException('no longer sold');
@@ -113,7 +138,7 @@ export class CartService {
         );
       selections.push({ groupId: option.groupId, valueId: choice.id });
     }
-    return this.add(owner, productId, quantity, selections);
+    return this.add(owner, productId, quantity, selections, design);
   }
 
   async setQuantity(
@@ -140,12 +165,30 @@ export class CartService {
    */
   async linesForCheckout(
     owner: CartOwner,
-  ): Promise<{ cartId: string; lines: CartLine[] }> {
+  ): Promise<{ cartId: string; lines: CheckoutLine[] }> {
     const { cart } = await this.resolve(owner);
-    const view = await this.toView(cart);
-    if (!cart || view.lines.length === 0)
+    const lines = await this.priced(cart);
+    if (!cart || lines.length === 0)
       throw new BadRequestException('Your cart is empty');
-    return { cartId: cart.id, lines: view.lines };
+    // Personalised pieces are made again, so the order has today's grams and price.
+    const calculator = await this.pricing.costCalculator();
+    for (const line of lines) {
+      if (!line.measurement) continue;
+      const product = cart.items.find((i) => i.id === line.id)!.product;
+      try {
+        line.measurement = await this.studio.measure(
+          product,
+          line.measurement.design,
+        );
+      } catch (error) {
+        if (error instanceof BadRequestException)
+          throw new BadRequestException(`${line.name}: ${error.message}`);
+        throw error;
+      }
+      line.unitPrice = this.studio.price(calculator, product, line.measurement);
+      line.design = line.measurement.summary;
+    }
+    return { cartId: cart.id, lines };
   }
 
   /**
@@ -183,12 +226,25 @@ export class CartService {
   }
 
   private async toView(cart: CartRow | null): Promise<CartView> {
+    // The browser sees how a design reads, never what it takes to print.
+    const lines = (await this.priced(cart)).map((l) => {
+      const { measurement: _, ...line } = l;
+      return line;
+    });
+    return { lines, itemCount: lines.reduce((n, l) => n + l.quantity, 0) };
+  }
+
+  private async priced(cart: CartRow | null): Promise<CheckoutLine[]> {
     const items = cart?.items.filter((i) => i.product.active) ?? [];
-    if (items.length === 0) return { lines: [], itemCount: 0 };
+    if (items.length === 0) return [];
     const calculator = await this.pricing.costCalculator();
-    const lines = items.flatMap((i): CartLine[] => {
+    return items.flatMap((i): CheckoutLine[] => {
       const configuration = this.configureSaved(i.product, i.options);
       if (!configuration) return [];
+      // A personalised piece keeps its measurement; a product no longer personalised (or a
+      // line from before it was) can't be bought as it is.
+      const measurement = (i.design as Measurement | null) ?? null;
+      if (!!i.product.textStyle !== !!measurement) return [];
       return [
         {
           id: i.id,
@@ -196,18 +252,17 @@ export class CartService {
           slug: i.product.slug,
           name: i.product.name,
           materialCode: i.product.material.code,
-          unitPrice: this.configurator.unitPrice(
-            calculator,
-            i.product,
-            configuration,
-          ),
+          unitPrice: measurement
+            ? this.studio.price(calculator, i.product, measurement)
+            : this.configurator.unitPrice(calculator, i.product, configuration),
           quantity: i.quantity,
           isCustom: i.product.isCustom,
           options: configuration.chosen,
+          design: measurement?.summary ?? null,
+          measurement,
         },
       ];
     });
-    return { lines, itemCount: lines.reduce((n, l) => n + l.quantity, 0) };
   }
 
   /** The line's saved choices, or null if the product no longer offers them. */
@@ -222,4 +277,12 @@ export class CartService {
       throw error;
     }
   }
+}
+
+/** A design's identity: the same text, fonts and colours make the same line. */
+function designKey(design: TextDesignInput): string {
+  return createHash('sha256')
+    .update(JSON.stringify(design))
+    .digest('hex')
+    .slice(0, 24);
 }

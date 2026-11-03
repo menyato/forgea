@@ -43,20 +43,32 @@ enum StockMovementKind {
 /// Append-only (a trigger refuses changes): every gram in or out, with why and who.
 /// `grams` is signed: + in, − out (CHECK constraint per kind).
 model StockMovement {
-  id          String            @id @default(uuid(7)) @db.Uuid
-  stockItemId String            @db.Uuid
-  stockItem   StockItem         @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
-  kind        StockMovementKind
-  grams       Int
+  id             String            @id @default(uuid(7)) @db.Uuid
+  stockItemId    String            @db.Uuid
+  stockItem      StockItem         @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  kind           StockMovementKind
+  grams          Int
   /// ORDER: the order line it was used for (once per line: unique index).
-  orderItemId String?           @db.Uuid
-  orderItem   OrderItem?        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
-  printJobId  String?           @db.Uuid
-  printJob    PrintJob?         @relation(fields: [printJobId], references: [id], onDelete: Restrict)
-  note        String?
-  createdById String?           @db.Uuid
-  createdBy   User?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  orderItemId    String?           @db.Uuid
+  orderItem      OrderItem?        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  printJobId     String?           @db.Uuid
+  printJob       PrintJob?         @relation(fields: [printJobId], references: [id], onDelete: Restrict)
+  /// What it cost, USD, worked out when recorded: a delivery's price paid; filament used
+  /// (studio prints, failed prints) at the material's cost per gram plus machine time.
+  cost           Decimal?          @db.Decimal(10, 2)
+  /// The filament's cost per gram when recorded (a delivery: its own price per gram).
+  costPerGram    Decimal?          @db.Decimal(10, 4)
+  /// USED or FAILED_PRINT for a product (printed for the studio, or failed): which, how many.
+  productId      String?           @db.Uuid
+  product        Product?          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity       Int?
+  /// RECEIVED and paid: the expense entry it was booked with.
+  journalEntryId String?           @db.Uuid
+  journalEntry   JournalEntry?     @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  note           String?
+  createdById    String?           @db.Uuid
+  createdBy      User?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
 
   @@index([stockItemId, createdAt])
   @@index([createdAt])

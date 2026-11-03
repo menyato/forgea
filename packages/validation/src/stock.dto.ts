@@ -1,15 +1,19 @@
 import {
   type ManualStockMovement,
   MANUAL_STOCK_MOVEMENTS,
+  StockMovementKind,
 } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -19,8 +23,14 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from 'class-validator';
-import { STOCK_COLOUR_MAX_LENGTH, STOCK_GRAMS_MAX } from './constants.js';
-import { Trim } from './email.js';
+import {
+  MONEY_PATTERN,
+  STOCK_COLOUR_MAX_LENGTH,
+  STOCK_GRAMS_MAX,
+  STOCK_MOVEMENT_SORTS,
+} from './constants.js';
+import { CommaList, Trim } from './email.js';
+import { CursorPageQuery } from './pagination.dto.js';
 
 const grams = { message: 'Enter whole grams, e.g. 1000' };
 
@@ -100,4 +110,150 @@ export class SaveStockItemDto {
 
   @IsBoolean()
   active!: boolean;
+}
+
+const note = { message: 'At most 200 characters' };
+
+/** Where a delivery was paid from: the cash box or a money transfer; none = not booked. */
+export const PURCHASE_PAID_FROM = ['CASH', 'BANK'] as const;
+export type PurchasePaidFrom = (typeof PURCHASE_PAID_FROM)[number];
+
+/**
+ * Spools received: how many, how much each holds and what each cost. The grams go on the
+ * shelf; the price gives the material its cost per gram (when `updateCost`); paid from cash
+ * or a transfer, it is booked as an expense.
+ */
+export class ReceiveSpoolsDto {
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour: string = '';
+
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many spools' })
+  @Min(1, { message: 'Enter how many spools' })
+  @Max(200)
+  spools!: number;
+
+  @Type(() => Number)
+  @IsInt(grams)
+  @Min(50, grams)
+  @Max(20_000, grams)
+  spoolGrams!: number;
+
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the price of one spool, e.g. 19.50',
+  })
+  pricePerSpool!: string;
+
+  @IsOptional()
+  @IsIn(PURCHASE_PAID_FROM)
+  paidFrom?: PurchasePaidFrom;
+
+  /** Use this price for the material's cost per gram (pricing) from now on. */
+  @IsBoolean()
+  updateCost: boolean = true;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(200, note)
+  note?: string;
+}
+
+/**
+ * Pieces the studio printed for itself (samples, display, gifts, stock made ahead) or that
+ * failed: the product, its size and colour as the shop offers them, how many. The grams and
+ * cost come from the product's own figures; a failure counts only how far it got.
+ */
+export class StudioPrintDto {
+  @IsUUID('all', { message: 'Choose a product' })
+  productId!: string;
+
+  /** One of the product's sizes, by measurements; none = its own size. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(60)
+  size?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour?: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many' })
+  @Min(1, { message: 'Enter how many' })
+  @Max(500)
+  quantity!: number;
+
+  /** A failure: how far it printed before it failed. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Enter a percentage, e.g. 40' })
+  @Min(1, { message: 'Enter a percentage, e.g. 40' })
+  @Max(100, { message: 'Enter a percentage, e.g. 40' })
+  progressPercent?: number;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(200, note)
+  note?: string;
+}
+
+/** The spools weighed: what is on the shelf now; the difference is recorded. */
+export class StockCountDto {
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour: string = '';
+
+  @Type(() => Number)
+  @IsInt(grams)
+  @Min(0, grams)
+  @Max(STOCK_GRAMS_MAX, grams)
+  gramsOnShelf!: number;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(200, note)
+  note?: string;
+}
+
+/** Filament movements, newest first: all of them, or one stock line's. */
+export class StockMovementListQuery extends CursorPageQuery {
+  @IsOptional()
+  @IsIn(STOCK_MOVEMENT_SORTS)
+  sort: (typeof STOCK_MOVEMENT_SORTS)[number] = 'createdAt';
+
+  @IsOptional()
+  @IsUUID()
+  stockItemId?: string;
+
+  /** Several kinds, comma-separated (the dashboard's filters). */
+  @IsOptional()
+  @CommaList()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsIn(Object.values(StockMovementKind), { each: true })
+  kinds?: StockMovementKind[];
+
+  /** Material, colour, note, order number, product or who recorded it. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
 }

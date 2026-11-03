@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PRINT_JOB_WASTES_MATERIAL } from '@forgea/types';
+import { PRINT_JOB_WASTES_MATERIAL, type PrintJobCounts } from '@forgea/types';
 import type { PrintJobListQuery } from '@forgea/validation';
 import { dateRange } from '../common/pagination/date-range.js';
 import { keysetPage } from '../common/pagination/keyset.js';
@@ -43,6 +43,19 @@ export class PrintJobsRepository {
       ...(query.status ? { status: query.status } : {}),
       ...(query.machine ? { machine: query.machine } : {}),
       ...(scheduled ? { scheduledDate: scheduled } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              {
+                order: {
+                  orderNumber: { contains: query.q, mode: 'insensitive' },
+                },
+              },
+              { machine: { contains: query.q, mode: 'insensitive' } },
+              { color: { contains: query.q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
     return keysetPage<PrintJobRow>(
       {
@@ -61,6 +74,22 @@ export class PrintJobsRepository {
           include: withRefs,
         }),
     );
+  }
+
+  /** Jobs per status and per machine, in two grouped counts. */
+  async counts(): Promise<PrintJobCounts> {
+    const [byStatus, byMachine] = await Promise.all([
+      this.prisma.printJob.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.printJob.groupBy({ by: ['machine'], _count: { _all: true } }),
+    ]);
+    return {
+      statuses: Object.fromEntries(
+        byStatus.map((g) => [g.status, g._count._all]),
+      ),
+      machines: Object.fromEntries(
+        byMachine.map((g) => [g.machine, g._count._all]),
+      ),
+    };
   }
 
   findById(id: string): Promise<PrintJobRow | null> {

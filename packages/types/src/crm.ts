@@ -139,6 +139,7 @@ export interface InvoiceListItem {
   invoiceKind: InvoiceKind | null;
   date: string;
   customer: { id: string; email: string; name: string | null } | null;
+  orderId: string | null;
   orderNumber: string | null;
   total: Money;
   /** What is still owed on it. */
@@ -147,6 +148,14 @@ export interface InvoiceListItem {
   /** On an invoice: the number of the credit note that reversed it. */
   creditedBy: string | null;
   currencyCode: string;
+}
+
+/** The invoice list's filters, counted over every invoice, and what customers still owe. */
+export interface InvoiceCounts {
+  unpaid: number;
+  paid: number;
+  credit: number;
+  owed: Money;
 }
 
 export interface JournalEntryView {

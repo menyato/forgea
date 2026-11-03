@@ -3,6 +3,7 @@ import type { ProductListQuery, SaveProductDto } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { SAMPLE_MODEL_NAMES } from '../text-studio/text-studio.service.js';
 import {
   type ConfigurableProduct,
   withConfiguration,
@@ -15,7 +16,11 @@ export class ProductsRepository {
   /** The public catalog (active only), or every product for the dashboard. */
   list(query: ProductListQuery, activeOnly: boolean) {
     const where: Prisma.ProductWhereInput = {
-      ...(activeOnly ? { active: true } : {}),
+      ...(activeOnly
+        ? { active: true }
+        : query.active !== undefined
+          ? { active: query.active }
+          : {}),
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
       ...(query.material ? { material: { code: query.material } } : {}),
       ...(query.category ? { category: { slug: query.category } } : {}),
@@ -108,6 +113,48 @@ export class ProductsRepository {
     });
   }
 
+  /** How many of these values belong to the group (a personalised product's default colours). */
+  valuesInGroup(groupId: string, ids: readonly string[]): Promise<number> {
+    return this.prisma.optionValue.count({
+      where: { groupId, id: { in: [...ids] } },
+    });
+  }
+
+  /** How many switched-on colours an option group has (a personalised product's colours). */
+  colourCount(groupId: string): Promise<number> {
+    return this.prisma.optionValue.count({
+      where: { groupId, active: true, group: { active: true } },
+    });
+  }
+
+  /** Whether a model file is a generated sample (a personalised product's "Forgea"). */
+  async isSampleModel(key: string): Promise<boolean> {
+    return (
+      (await this.prisma.upload.count({
+        where: {
+          storageKey: key,
+          originalName: { in: [...SAMPLE_MODEL_NAMES] },
+        },
+      })) > 0
+    );
+  }
+
+  setModel(id: string, key: string): Promise<ConfigurableProduct> {
+    return this.prisma.product.update({
+      where: { id },
+      data: { modelFileKey: key },
+      include: withConfiguration,
+    });
+  }
+
+  /** A material's price per gram, for pricing a product being edited. */
+  material(id: string) {
+    return this.prisma.material.findUnique({
+      where: { id },
+      select: { pricePerGram: true },
+    });
+  }
+
   findById(id: string): Promise<ConfigurableProduct | null> {
     return this.prisma.product.findUnique({
       where: { id },
@@ -185,6 +232,24 @@ const fields = (dto: SaveProductDto) => ({
   sizeXcm: dto.sizeXcm ?? null,
   sizeYcm: dto.sizeYcm ?? null,
   sizeZcm: dto.sizeZcm ?? null,
+  // Personalised text: all its settings, or none (a regular product).
+  textStyle: dto.text?.style ?? null,
+  textMaxChars: dto.text?.maxChars ?? null,
+  textHeightMm: dto.text?.letterHeightMm ?? null,
+  textDepthMm: dto.text?.letterDepthMm ?? null,
+  textBaseMm: dto.text?.baseDepthMm ?? null,
+  textMaxWidthMm: dto.text?.maxWidthMm ?? null,
+  textColourGroupId: dto.text?.colourGroupId ?? null,
+  textExtraColourPrice: dto.text?.extraColourPrice ?? '0',
+  textSizesMm: dto.text?.sizesMm ?? [],
+  textDefaultColourId: dto.text?.defaultColourId ?? null,
+  textDefaultBaseId: dto.text?.defaultBaseColourId ?? null,
+  textDefaultAccentId: dto.text?.defaultAccentColourId ?? null,
+  // Decorations belong to a big initial only (CHECK).
+  textDecor:
+    dto.text?.style === 'INITIAL_NAME' ? (dto.text.decor ?? null) : null,
+  profitKind: dto.profitKind ?? null,
+  profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
 });
 
 const sizeRow = (s: SaveProductDto['sizes'][number], sortOrder: number) => ({

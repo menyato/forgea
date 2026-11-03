@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { ChosenOption } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import { OptionKind } from '../generated/prisma/enums.js';
+import type { UnitCostCalculator } from '@forgea/pricing';
 import { PricingService } from '../pricing/pricing.service.js';
 import {
   type Catalog,
@@ -15,6 +16,8 @@ import {
 export interface LineConfig {
   productId: string | null;
   options: unknown;
+  /** A personalised piece: its design as ordered, with the grams and hours it takes. */
+  design?: unknown;
 }
 
 export type Estimate = (line: LineConfig) => ItemEstimate | null;
@@ -115,12 +118,51 @@ export class ProductionEstimator {
     return {
       catalog,
       estimate: (line) =>
-        estimateItem(
-          catalog,
-          calculator,
-          line.productId,
-          chosenOptions(line.options),
-        ),
+        line.design
+          ? designEstimate(catalog, calculator, line.productId, line.design)
+          : estimateItem(
+              catalog,
+              calculator,
+              line.productId,
+              chosenOptions(line.options),
+            ),
     };
   }
+}
+
+/**
+ * A personalised piece: its own grams and hours (made from the design at checkout), costed
+ * with today's settings and its product's material, its grams split by colour.
+ */
+function designEstimate(
+  catalog: Catalog,
+  calculator: UnitCostCalculator,
+  productId: string | null,
+  design: unknown,
+): ItemEstimate | null {
+  const m = design as {
+    grams?: string;
+    printHours?: string;
+    colours?: { label: string; grams: string }[];
+  };
+  const product = productId ? catalog.products.get(productId) : undefined;
+  const pricePerGram = product
+    ? catalog.pricePerGram.get(product.materialId)
+    : undefined;
+  if (!product || !pricePerGram || !m.grams || !m.printHours) return null;
+  const colours = (m.colours ?? []).map((c) => ({
+    colour: c.label,
+    gramsPerUnit: c.grams,
+  }));
+  return {
+    unitCost: calculator.price({
+      grams: m.grams,
+      printHours: m.printHours,
+      pricePerGram,
+    }).subtotal,
+    gramsPerUnit: m.grams,
+    materialId: product.materialId,
+    colour: colours[0]?.colour ?? '',
+    colours,
+  };
 }

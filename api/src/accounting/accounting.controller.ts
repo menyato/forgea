@@ -14,12 +14,15 @@ import type {
   AccountView,
   AgedReceivables,
   BalanceSheet,
+  InvoiceCounts,
   InvoiceListItem,
   JournalEntryView,
+  Page,
   ProfitAndLoss,
 } from '@forgea/types';
 import {
   EntryListQuery,
+  InvoiceListQuery,
   ManualEntryDto,
   RecordPaymentDto,
   ReportPeriodQuery,
@@ -48,8 +51,20 @@ export class AccountingController {
 
   @RequirePermission('invoices.view')
   @Get('invoices')
-  invoices(): Promise<InvoiceListItem[]> {
-    return this.invoicing.list();
+  invoices(@Query() query: InvoiceListQuery): Promise<Page<InvoiceListItem>> {
+    return this.invoicing.list(query);
+  }
+
+  @RequirePermission('invoices.view')
+  @Get('invoices/counts')
+  invoiceCounts(): Promise<InvoiceCounts> {
+    return this.invoicing.counts();
+  }
+
+  @RequirePermission('invoices.view')
+  @Get('invoices/:id')
+  invoice(@Param('id', ParseUUIDPipe) id: string): Promise<InvoiceListItem> {
+    return this.invoicing.one(id);
   }
 
   @RequirePermission('invoices.view')
@@ -110,8 +125,8 @@ export class AccountingController {
 
   @RequirePermission('books.view')
   @Get('entries')
-  entries(@Query() query: EntryListQuery): Promise<JournalEntryView[]> {
-    return this.books.entries(query.type);
+  entries(@Query() query: EntryListQuery): Promise<Page<JournalEntryView>> {
+    return this.books.entries(query);
   }
 
   @RequirePermission('books.view')

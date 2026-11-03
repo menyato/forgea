@@ -3,6 +3,7 @@ import {
   type Permission,
   PERMISSIONS,
   PrintJobStatus,
+  ProfitKind,
   Role,
 } from '@forgea/types';
 import { Type } from 'class-transformer';
@@ -28,6 +29,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  CUSTOM_REQUEST_SORTS,
   CUSTOM_UPLOAD_CEILING_MB,
   EMAIL_MAX_LENGTH,
   MONEY_PATTERN,
@@ -74,8 +76,41 @@ export class UpdatePricingSettingsDto {
   @Matches(MONEY_PATTERN, money)
   packagingCostPerUnit!: string;
 
-  @Matches(POSITIVE_DECIMAL, { message: 'Enter a multiplier, e.g. 2.5' })
-  markupMultiplier!: string;
+  /** The shop's profit on top of cost: a percentage or a fixed amount (USD). */
+  @IsIn(Object.values(ProfitKind), {
+    message: 'Choose a percentage or a fixed amount',
+  })
+  profitKind!: ProfitKind;
+
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the profit, e.g. 120 (%) or 4.50 (USD)',
+  })
+  profitValue!: string;
+
+  /** The printer as bought: all four, or none (then machineRatePerHour is typed directly). */
+  @IsOptional()
+  @Matches(MONEY_PATTERN, money)
+  printerPrice?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Enter whole hours, e.g. 5000' })
+  @Min(1)
+  @Max(1_000_000)
+  printerLifeHours?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Enter whole watts, e.g. 150' })
+  @Min(0)
+  @Max(100_000)
+  printerWatts?: number;
+
+  @IsOptional()
+  @Matches(/^\d{1,4}(\.\d{1,4})?$/, {
+    message: 'Enter a price per kWh, e.g. 0.30',
+  })
+  electricityPerKwh?: string;
 
   @Matches(PERCENT_PATTERN, percent)
   rushFeePercent!: string;
@@ -285,6 +320,10 @@ export class CloseCustomRequestDto {
 }
 
 export class CustomRequestListQuery extends CursorPageQuery {
+  @IsOptional()
+  @IsIn(CUSTOM_REQUEST_SORTS)
+  sort: (typeof CUSTOM_REQUEST_SORTS)[number] = 'createdAt';
+
   @IsOptional()
   @IsIn(Object.values(CustomRequestStatus))
   status?: CustomRequestStatus;

@@ -7,6 +7,7 @@ import type {
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
+import { InsightsRepository } from '../src/insights/insights.repository.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
 import { createApp } from './create-app.js';
@@ -317,13 +318,23 @@ describe('Business insights (e2e)', () => {
       units: 3,
       revenue: '89.37',
     });
-    expect(after.options).toContainEqual({
-      group: studio.colourGroup,
-      values: [
-        { value: 'Red', units: 4 },
-        { value: 'Copper silk', units: 1 },
-      ],
-    });
+  });
+
+  it('adds up the colours chosen, and shows the busiest groups', async () => {
+    // This test's own group, summed by the database (other test files order today too, so it
+    // need not be among the busiest few the page shows).
+    const today = { from: day(0), to: day(0) };
+    const chosen = await app.get(InsightsRepository).options(today);
+    expect(chosen.filter((o) => o.group === studio.colourGroup)).toEqual([
+      { group: studio.colourGroup, value: 'Red', units: 4 },
+      { group: studio.colourGroup, value: 'Copper silk', units: 1 },
+    ]);
+    // The page: at most six groups, busiest first.
+    const shown = after.options.map((g) =>
+      g.values.reduce((n, v) => n + v.units, 0),
+    );
+    expect(shown.length).toBeLessThanOrEqual(6);
+    expect(shown).toEqual([...shown].sort((a, b) => b - a));
   });
 
   it('counts orders, customers and the funnel', () => {

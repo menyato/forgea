@@ -73,6 +73,7 @@ export function OptionsPicker({
         <span>Pay in</span>
         <select
           name={name('currency')}
+          autoComplete="off"
           value={value.currency}
           onChange={(e) =>
             onChange({ ...value, currency: e.currentTarget.value })

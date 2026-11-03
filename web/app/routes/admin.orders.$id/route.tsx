@@ -7,12 +7,14 @@ import {
 import { ChangeOrderStatusDto, RecordPaymentDto } from '@forgea/validation';
 import { data, Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
-import { Button } from '~/components/ui/button';
+import { Button, buttonClass } from '~/components/ui/button';
+import { DesignLines } from '~/features/text-studio/design-lines';
 import { TextAreaField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
+import { StatusBar } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
@@ -70,6 +72,17 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   );
 }
 
+/** The status bar's steps, in order (cancelled shows apart). */
+const FLOW = [
+  OrderStatus.PENDING,
+  OrderStatus.AWAITING_DEPOSIT,
+  OrderStatus.CONFIRMED,
+  OrderStatus.IN_PRODUCTION,
+  OrderStatus.READY,
+  OrderStatus.OUT_FOR_DELIVERY,
+  OrderStatus.DELIVERED,
+];
+
 /** What each step is called on its button. */
 const ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
   [OrderStatus.AWAITING_DEPOSIT]: 'Ask for the deposit',
@@ -90,6 +103,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Orders', to: '/admin/orders' }]}
         title={o.orderNumber}
         intro={`${ORDER_STATUS_LABELS[o.status].title} · placed ${new Date(o.createdAt).toLocaleString('en-GB')}`}
         action={
@@ -99,6 +113,21 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
           >
             All orders
           </Link>
+        }
+      />
+      <StatusBar
+        steps={FLOW.filter(
+          (s) =>
+            (s !== OrderStatus.AWAITING_DEPOSIT ||
+              Number(o.depositRequired) > 0 ||
+              o.status === s) &&
+            (s !== OrderStatus.OUT_FOR_DELIVERY || o.delivery),
+        ).map((s) => ({ key: s, label: ORDER_STATUS_LABELS[s].title }))}
+        current={o.status}
+        aside={
+          o.status === OrderStatus.CANCELLED
+            ? ORDER_STATUS_LABELS.CANCELLED.title
+            : undefined
         }
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -124,6 +153,39 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                     {i.isCustom && (
                       <span className="ml-2 text-xs text-warning">
                         Made to order
+                      </span>
+                    )}
+                    {i.design && (
+                      <span className="mt-1 grid gap-2">
+                        <DesignLines design={i.design} />
+                        <span className="flex flex-wrap gap-2">
+                          {i.design.files.length > 1 && (
+                            <a
+                              href={`/admin/orders/${o.id}/project/${i.design.itemId}`}
+                              download
+                              title="One object with a part per colour, placed as designed: turn it as a whole in the slicer and give each part its filament"
+                              className={buttonClass(
+                                'primary',
+                                'px-3 py-1 text-sm',
+                              )}
+                            >
+                              Download all (3MF)
+                            </a>
+                          )}
+                          {i.design.files.map((f) => (
+                            <a
+                              key={f.colour}
+                              href={`/admin/orders/${o.id}/print/${i.design!.itemId}/${encodeURIComponent(f.colour)}`}
+                              download
+                              className={buttonClass(
+                                'secondary',
+                                'px-3 py-1 text-sm',
+                              )}
+                            >
+                              Print file: {f.colour}
+                            </a>
+                          ))}
+                        </span>
                       </span>
                     )}
                     {i.options.length > 0 && (

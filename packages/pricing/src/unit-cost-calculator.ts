@@ -10,6 +10,16 @@ import {
 import { PricingError } from './errors.js';
 
 /**
+ * What the studio earns on a piece, on top of what it costs: a percentage of the cost
+ * ("100%" doubles it) or a fixed amount in USD ("$4 on every keychain").
+ */
+export type ProfitKind = 'PERCENT' | 'FIXED';
+export interface ProfitRule {
+  kind: ProfitKind;
+  value: DecimalInput;
+}
+
+/**
  * Cost-model settings. SERVER ONLY — these reveal the studio's cost structure and margin,
  * so the API never sends them to the browser.
  */
@@ -19,7 +29,8 @@ export interface CostSettings {
   failureAllowancePercent: DecimalInput;
   laborCostPerUnit: DecimalInput;
   packagingCostPerUnit: DecimalInput;
-  markupMultiplier: DecimalInput;
+  /** The shop's default rule; a product may set its own. */
+  profit: ProfitRule;
 }
 
 export interface UnitCostInput {
@@ -37,8 +48,11 @@ export interface UnitPriceBreakdown {
   failureAllowance: string;
   laborCost: string;
   packagingCost: string;
+  /** What it costs the studio to make. */
   subtotal: string;
-  markupMultiplier: string;
+  /** What the studio earns on it, by the rule applied. */
+  profit: string;
+  profitRule: { kind: ProfitKind; value: string };
   unitPrice: string;
 }
 
@@ -50,7 +64,8 @@ export interface UnitPriceBreakdown {
  *   wasteCost        = (materialCost + machineCost) × purgeWaste%
  *   failureAllowance = (materialCost + machineCost) × failureAllowance%
  *   subtotal         = material + machine + waste + failure + labor + packaging
- *   unitPrice        = subtotal × markupMultiplier
+ *   profit           = subtotal × percent%  (PERCENT)  or  the amount  (FIXED)
+ *   unitPrice        = subtotal + profit
  */
 export class UnitCostCalculator {
   private readonly machineRate: Big;
@@ -58,7 +73,7 @@ export class UnitCostCalculator {
   private readonly failureAllowance: Big;
   private readonly labor: Big;
   private readonly packaging: Big;
-  private readonly markup: Big;
+  private readonly profit: ProfitRule;
 
   constructor(settings: CostSettings) {
     this.machineRate = requireNonNegative(
@@ -81,12 +96,12 @@ export class UnitCostCalculator {
       toBig(settings.packagingCostPerUnit, 'packagingCostPerUnit'),
       'packagingCostPerUnit',
     );
-    this.markup = toBig(settings.markupMultiplier, 'markupMultiplier');
-    if (this.markup.lte(0))
-      throw new PricingError('markupMultiplier must be greater than 0');
+    this.profit = checkedProfit(settings.profit, 'profit');
   }
 
-  price(input: UnitCostInput): UnitPriceBreakdown {
+  /** `profit` is a product's own rule; without one, the shop's default applies. */
+  price(input: UnitCostInput, profit?: ProfitRule | null): UnitPriceBreakdown {
+    const rule = profit ? checkedProfit(profit, 'product profit') : this.profit;
     const grams = toBig(input.grams, 'grams');
     if (grams.lte(0)) throw new PricingError('grams must be greater than 0');
     const hours = requireNonNegative(
@@ -108,6 +123,9 @@ export class UnitCostCalculator {
       .plus(failureAllowance)
       .plus(this.labor)
       .plus(this.packaging);
+    const value = toBig(rule.value, 'profit');
+    const profitAmount =
+      rule.kind === 'PERCENT' ? percentOf(subtotal, value) : value;
 
     return {
       materialCost: money(materialCost),
@@ -117,8 +135,21 @@ export class UnitCostCalculator {
       laborCost: money(this.labor),
       packagingCost: money(this.packaging),
       subtotal: money(subtotal),
-      markupMultiplier: this.markup.toString(),
-      unitPrice: money(subtotal.times(this.markup)),
+      profit: money(profitAmount),
+      profitRule: { kind: rule.kind, value: value.toString() },
+      unitPrice: money(subtotal.plus(profitAmount)),
     };
   }
+}
+
+/** A rule that makes sense: a known kind and a value of 0 or more (a percentage up to 1000). */
+function checkedProfit(rule: ProfitRule, field: string): ProfitRule {
+  if (rule.kind !== 'PERCENT' && rule.kind !== 'FIXED') {
+    throw new PricingError(`${field} must be a percentage or a fixed amount`);
+  }
+  const value = requireNonNegative(toBig(rule.value, field), field);
+  if (rule.kind === 'PERCENT' && value.gt(1000)) {
+    throw new PricingError(`${field} must be at most 1000%`);
+  }
+  return { kind: rule.kind, value: value.toString() };
 }

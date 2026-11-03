@@ -57,6 +57,7 @@ export class CartController {
         dto.productId,
         dto.quantity,
         dto.options,
+        dto.design,
       ),
     );
   }

@@ -33,6 +33,7 @@
   "dependencies": {
     "@forgea/brand": "workspace:*",
     "@forgea/pricing": "workspace:*",
+    "@forgea/text3d": "workspace:*",
     "@forgea/types": "workspace:*",
     "@forgea/validation": "workspace:*",
     "@gltf-transform/core": "4.5.1",

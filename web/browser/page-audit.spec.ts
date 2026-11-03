@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { signInAsAdmin } from './admin-session';
+import { recordPages } from './record-pages';
 import { expect, test } from './fixtures';
 
 /**
@@ -67,6 +68,10 @@ const PUBLIC = [
   '/',
   '/shop',
   '/products/phone-stand',
+  '/products/name-keychain',
+  '/products/curved-initials',
+  '/products/baby-initial-name',
+  '/products/couple-names',
   '/custom',
   '/contact',
   '/cart',
@@ -81,6 +86,9 @@ const DASHBOARD = [
   '/admin/production',
   '/admin/requests',
   '/admin/leads',
+  '/admin/leads?view=list&group=stage',
+  '/admin/leads/new',
+  '/admin/orders?group=status',
   '/admin/quotations',
   '/admin/quotations/new',
   '/admin/accounting',
@@ -90,14 +98,42 @@ const DASHBOARD = [
   '/admin/insights?from=2026-01-01&to=2026-10-31',
   '/admin/products',
   '/admin/products/new',
+  '/admin/fonts',
   '/admin/home-plate',
   '/admin/categories',
   '/admin/options',
   '/admin/materials',
   '/admin/stock',
-  '/admin/pipeline',
+  '/admin/lead-stages',
+  '/admin/lead-stages/new',
+  '/admin/lost-reasons',
+  '/admin/lost-reasons/new',
+  '/admin/materials/new',
+  '/admin/materials?view=kanban',
+  '/admin/categories/new',
+  '/admin/categories?view=kanban',
+  '/admin/options/new',
+  '/admin/options?view=kanban',
+  '/admin/fonts/new',
+  '/admin/fonts?view=kanban',
+  '/admin/stock?view=kanban',
+  '/admin/stock/movements',
+  '/admin/stock/receive',
+  '/admin/stock/print',
+  '/admin/stock/failed',
+  '/admin/stock/weigh',
+  '/admin/production?view=list',
+  '/admin/production/new',
+  '/admin/production/calendar',
+  '/admin/accounting/books/entries/new',
+  '/admin/team/new',
+  '/admin/team?filter=customers',
+  '/admin/products?view=kanban',
+  '/admin/quotations?view=kanban',
+  '/admin/requests?view=kanban',
   '/admin/pricing',
   '/admin/currencies',
+  '/admin/currencies/new',
   '/admin/theme',
   '/admin/team',
   '/admin/permissions',
@@ -125,8 +161,10 @@ test('the dashboard pages have nothing for DevTools to flag', async ({
     testInfo.project.name !== 'desktop',
     'the same markup on both sizes',
   );
-  // Twenty-five pages, each waited on until quiet.
-  test.setTimeout(300_000);
+  // Every dashboard page and a record from each list, each waited on until quiet.
+  test.setTimeout(600_000);
   await signInAsAdmin(context, baseURL!);
-  expect(await audit(page, DASHBOARD)).toEqual([]);
+  // And a record's form from every list.
+  const records = await recordPages(page);
+  expect(await audit(page, [...DASHBOARD, ...records])).toEqual([]);
 });

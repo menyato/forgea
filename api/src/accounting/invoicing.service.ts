@@ -5,8 +5,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { InvoiceListItem } from '@forgea/types';
-import type { RecordPaymentDto } from '@forgea/validation';
+import type { InvoiceCounts, InvoiceListItem, Page } from '@forgea/types';
+import type { InvoiceListQuery, RecordPaymentDto } from '@forgea/validation';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -16,6 +16,7 @@ import {
   OrderStatus,
   PaymentMethod,
 } from '../generated/prisma/enums.js';
+import { InvoiceListRepository } from './invoice-list.repository.js';
 import { paymentState, splitTaxIncluded, type Amount } from './ledger-math.js';
 import { Ledger, type NewLine } from './ledger.service.js';
 
@@ -65,6 +66,7 @@ export class Invoicing {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: Ledger,
+    private readonly listing: InvoiceListRepository,
   ) {}
 
   /** Called after an order's status changes: invoices and payments that follow from it. */
@@ -156,15 +158,33 @@ export class Invoicing {
     return byOrder;
   }
 
-  async list(take = 100): Promise<InvoiceListItem[]> {
+  /** A page of the invoice list: the database picks and orders the ids, then each is read whole. */
+  async list(query: InvoiceListQuery): Promise<Page<InvoiceListItem>> {
+    const { ids, nextCursor, hasMore } = await this.listing.page(query);
     const entries = await this.prisma.journalEntry.findMany({
-      where: { type: { in: [EntryType.INVOICE, EntryType.CREDIT_NOTE] } },
-      // Newest first by id (UUIDv7: creation order, already indexed).
-      orderBy: { id: 'desc' },
-      take,
+      where: { id: { in: ids } },
       include: withLines,
     });
-    return entries.map(toInvoiceItem);
+    const byId = new Map(entries.map((e) => [e.id, toInvoiceItem(e)]));
+    return {
+      items: ids.flatMap((id) => byId.get(id) ?? []),
+      nextCursor,
+      hasMore,
+    };
+  }
+
+  counts(): Promise<InvoiceCounts> {
+    return this.listing.counts();
+  }
+
+  /** One invoice or credit note (its page in the dashboard). */
+  async one(id: string): Promise<InvoiceListItem> {
+    const entry = await this.prisma.journalEntry.findFirst({
+      where: { id, type: { in: [EntryType.INVOICE, EntryType.CREDIT_NOTE] } },
+      include: withLines,
+    });
+    if (!entry) throw new NotFoundException('Invoice not found');
+    return toInvoiceItem(entry);
   }
 
   async depositInvoice(
@@ -592,6 +612,7 @@ function toInvoiceItem(e: EntryRow): InvoiceListItem {
     invoiceKind: e.invoiceKind,
     date: e.date.toISOString().slice(0, 10),
     customer: e.customer,
+    orderId: e.orderId,
     orderNumber: e.order?.orderNumber ?? null,
     total: total.toFixed(2),
     residual: residual.toFixed(2),

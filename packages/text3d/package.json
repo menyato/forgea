@@ -1,0 +1,37 @@
+{
+  "name": "@forgea/text3d",
+  "description": "Personalised text as 3D print shapes (keychains, names, monograms, letters), shared by api and web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./design": {
+      "types": "./dist/design.d.ts",
+      "default": "./dist/design.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "clipper2-ts": "catalog:",
+    "harfbuzzjs": "catalog:",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/three": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

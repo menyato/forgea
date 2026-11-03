@@ -3,45 +3,95 @@ import {
   type AccountingSettingsView,
   type AccountView,
   type JournalEntryView,
+  type Page,
 } from '@forgea/types';
 import {
-  ManualEntryDto,
   SaveAccountDto,
   UpdateAccountingSettingsDto,
 } from '@forgea/validation';
-import { useState } from 'react';
-import { useFetcher } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
-import { Button } from '~/components/ui/button';
-import { CheckboxField, Field, SelectField } from '~/components/ui/field';
-import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
+import { Button, buttonClass } from '~/components/ui/button';
+import { Field, SelectField } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
+import {
+  AdminHeader,
+  Panel,
+  SaveStatus,
+  ViewOnly,
+} from '~/features/admin/admin-ui';
+import { listState, pageQuery } from '~/features/admin/list-state';
 import {
   checked,
   type SaveResult,
   save,
   text,
 } from '~/features/admin/staff.server';
-import { jsonField } from '~/lib/forms.server';
+import {
+  ControlPanel,
+  type ListColumn,
+  ListView,
+} from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
-export async function loader({ context }: Route.LoaderArgs) {
+/** The kinds of entry; the API returns one kind (or all) at a time. */
+const TYPES = [
+  { key: 'INVOICE', label: 'Invoices' },
+  { key: 'CREDIT_NOTE', label: 'Credit notes' },
+  { key: 'PAYMENT', label: 'Payments' },
+  { key: 'ENTRY', label: 'Manual entries' },
+] as const;
+const TYPE_NAMES: Record<JournalEntryView['type'], string> = {
+  INVOICE: 'Invoice',
+  CREDIT_NOTE: 'Credit note',
+  PAYMENT: 'Payment',
+  ENTRY: 'Manual entry',
+};
+
+const DEFAULTS = { sorts: ['date', 'number'] };
+
+const GROUPS = [
+  { key: 'type', label: 'Kind' },
+  { key: 'journal', label: 'Journal' },
+  { key: 'month', label: 'Month' },
+];
+
+/** What an entry moves: its debits (which equal its credits). */
+const amountOf = (e: JournalEntryView) =>
+  e.lines.reduce((s, l) => s + Math.round(Number(l.debit) * 100), 0) / 100;
+
+const month = (day: string) =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
+  const state = listState(url.searchParams, DEFAULTS);
+  const type = TYPES.find((t) => state.filters.includes(t.key));
+  const query = pageQuery(state, 50);
+  if (type) query.set('type', type.key);
   const [accounts, settings, entries] = await Promise.all([
     api.get<AccountView[]>('/accounting/accounts'),
     api.get<AccountingSettingsView>('/accounting/settings'),
-    api.get<JournalEntryView[]>('/accounting/entries'),
+    api.get<Page<JournalEntryView>>(`/accounting/entries?${query}`),
   ]);
-  for (const r of [accounts, settings, entries])
+  if (!entries.ok)
+    throw new Response(entries.message, { status: entries.status });
+  for (const r of [accounts, settings])
     if (!r.ok) throw new Response(r.message, { status: r.status });
   return {
+    state,
+    page: entries.data,
     accounts: accounts.ok ? accounts.data : [],
     settings: settings.ok ? settings.data : null,
-    entries: entries.ok ? entries.data : [],
   };
 }
 
-/** account | settings | entry */
+/** account | settings */
 export async function action({ request, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
@@ -54,16 +104,6 @@ export async function action({ request, context }: Route.ActionArgs) {
           lockDate: text(form, 'lockDate') ?? null,
         },
         (dto) => api.put('/accounting/settings', dto),
-      );
-    case 'entry':
-      return save(
-        ManualEntryDto,
-        {
-          date: text(form, 'date'),
-          label: text(form, 'label'),
-          lines: jsonField(form, 'lines') ?? [],
-        },
-        (dto) => api.post('/accounting/entries', dto),
       );
     default: {
       const id = text(form, 'id');
@@ -97,63 +137,114 @@ const TYPE_LABELS: Record<AccountType, string> = {
   EXPENSE: 'Expense',
 };
 
+const COLUMNS: ListColumn<JournalEntryView>[] = [
+  {
+    key: 'number',
+    label: 'Number',
+    sort: 'number',
+    cell: (e) => <span className="font-mono">{e.number}</span>,
+  },
+  { key: 'date', label: 'Date', sort: 'date', cell: (e) => e.date },
+  {
+    key: 'kind',
+    label: 'Kind',
+    cell: (e) => <span className="text-text-muted">{TYPE_NAMES[e.type]}</span>,
+  },
+  { key: 'label', label: 'What it is', cell: (e) => e.label },
+  {
+    key: 'order',
+    label: 'Order',
+    cell: (e) => <span className="font-mono">{e.orderNumber ?? ''}</span>,
+  },
+  {
+    key: 'amount',
+    label: 'Amount',
+    align: 'right',
+    cell: (e) => <Money amount={amountOf(e).toFixed(2)} />,
+  },
+];
+
 export default function Books({ loaderData }: Route.ComponentProps) {
-  const { accounts, settings, entries } = loaderData;
+  const { state, page, accounts, settings } = loaderData;
+  const mayManage = useCan()('books.manage');
   return (
     <>
       <AdminHeader
+        trail={[{ label: 'Invoices', to: '/admin/accounting' }]}
         title="Books"
-        intro="The chart of accounts, the sales tax, the lock date, and every posted entry. Posted entries never change: correct with a new entry or a credit note."
+        intro="Every posted entry, the chart of accounts, the sales tax and the lock date. Posted entries never change: correct with a new entry or a credit note."
+        action={
+          mayManage ? (
+            <Link
+              to="/admin/accounting/books/entries/new"
+              className={buttonClass()}
+            >
+              New entry
+            </Link>
+          ) : undefined
+        }
       />
-      <div className="grid gap-6 xl:grid-cols-2">
-        {settings && <SettingsForm settings={settings} />}
-        <ManualEntry accounts={accounts.filter((a) => a.active)} />
-        <Panel title="Accounts">
-          <div className="grid gap-1 text-sm">
-            {accounts.map((a) => (
-              <div key={a.id} className="flex justify-between gap-4">
-                <span
-                  className={a.active ? '' : 'text-text-muted line-through'}
-                >
-                  <span className="mr-2 font-mono text-text-muted">
-                    {a.code}
-                  </span>
-                  {a.name}
-                  <span className="ml-2 text-xs text-text-muted">
-                    {TYPE_LABELS[a.type as AccountType]}
-                  </span>
-                </span>
-                <Money amount={a.balance} />
-              </div>
-            ))}
-          </div>
-          <AccountForm />
-        </Panel>
-        <Panel title="Latest entries">
-          <ul className="grid gap-3 text-sm">
-            {entries.map((e) => (
-              <li key={e.id} className="border-b border-border pb-2">
-                <p>
-                  <span className="font-mono font-semibold">{e.number}</span> ·{' '}
-                  {e.date} · {e.label}
-                </p>
-                {e.lines.map((l, i) => (
-                  <p
-                    key={i}
-                    className="flex justify-between text-xs text-text-muted"
-                  >
-                    <span>
-                      {l.account.code} {l.account.name}
+      <ControlPanel
+        state={state}
+        search="Number, label, order or customer"
+        filters={TYPES.map((t) => ({
+          key: t.key,
+          label: t.label,
+          only: 'type',
+        }))}
+        groups={GROUPS}
+        page={{
+          shown: page.items.length,
+          nextCursor: page.nextCursor,
+        }}
+      />
+      <ListView
+        label="Journal entries"
+        rows={page.items}
+        columns={COLUMNS}
+        href={(e) => `/admin/accounting/books/entries/${e.id}`}
+        state={state}
+        empty="No entries here."
+        group={
+          state.group === 'type'
+            ? {
+                of: (e) => TYPE_NAMES[e.type],
+                order: Object.values(TYPE_NAMES),
+              }
+            : state.group === 'journal'
+              ? { of: (e) => e.journal.name }
+              : state.group === 'month'
+                ? { of: (e) => month(e.date) }
+                : undefined
+        }
+      />
+      <div className="mt-8">
+        <ViewOnly editable={mayManage}>
+          <div className="grid gap-6 xl:grid-cols-2">
+            {settings && <SettingsForm settings={settings} />}
+            <Panel title="Accounts">
+              <div className="grid gap-1 text-sm">
+                {accounts.map((a) => (
+                  <div key={a.id} className="flex justify-between gap-4">
+                    <span
+                      className={a.active ? '' : 'text-text-muted line-through'}
+                    >
+                      <span className="mr-2 font-mono text-text-muted">
+                        {a.code}
+                      </span>
+                      {a.name}
+                      <span className="ml-2 text-xs text-text-muted">
+                        {TYPE_LABELS[a.type as AccountType]}
+                      </span>
                     </span>
-                    <span className="tabular-nums">
-                      {Number(l.debit) > 0 ? `Dr ${l.debit}` : `Cr ${l.credit}`}
-                    </span>
-                  </p>
+                    <Money amount={a.balance} />
+                  </div>
                 ))}
-              </li>
-            ))}
-          </ul>
-        </Panel>
+              </div>
+              <AccountForm />
+            </Panel>
+          </div>
+        </ViewOnly>
       </div>
     </>
   );
@@ -227,129 +318,5 @@ function AccountForm() {
         <SaveStatus state={fetcher.state} result={fetcher.data} />
       </div>
     </fetcher.Form>
-  );
-}
-
-interface Line {
-  accountId: string;
-  debit: string;
-  credit: string;
-}
-
-function ManualEntry({ accounts }: { accounts: AccountView[] }) {
-  const fetcher = useFetcher<SaveResult>();
-  const errors = fetcher.data?.errors ?? {};
-  const blank = (): Line => ({
-    accountId: accounts[0]?.id ?? '',
-    debit: '',
-    credit: '',
-  });
-  const [lines, setLines] = useState<Line[]>([blank(), blank()]);
-  const set = (i: number, change: Partial<Line>) =>
-    setLines((all) => all.map((l, j) => (j === i ? { ...l, ...change } : l)));
-  // In cents: 10.10 + 20.20 must equal 30.30 (as decimals it is 30.299999…).
-  const cents = (v: string) => Math.round((Number(v) || 0) * 100);
-  const debits = lines.reduce((s, l) => s + cents(l.debit), 0) / 100;
-  const credits = lines.reduce((s, l) => s + cents(l.credit), 0) / 100;
-  return (
-    <Panel title="Manual entry">
-      <p className="text-sm text-text-muted">
-        Opening balances, an expense paid in cash, money the owner puts in.
-        Debits must equal credits.
-      </p>
-      <fetcher.Form
-        method="post"
-        key={fetcher.data?.ok ? 'reset' : 'form'}
-        className="grid gap-3"
-      >
-        <input type="hidden" name="intent" value="entry" />
-        <input
-          type="hidden"
-          name="lines"
-          value={JSON.stringify(
-            lines.map((l) => ({
-              accountId: l.accountId,
-              debit: l.debit || '0',
-              credit: l.credit || '0',
-            })),
-          )}
-        />
-        <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
-          <Field
-            label="Date"
-            name="date"
-            type="date"
-            required
-            defaultValue={new Date().toISOString().slice(0, 10)}
-            error={errors['date']}
-          />
-          <Field
-            label="What it is"
-            name="label"
-            required
-            error={errors['label']}
-          />
-        </div>
-        {lines.map((l, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-[minmax(0,1fr)_6rem_6rem] gap-2"
-          >
-            <SelectField
-              label="Account"
-              name={`entry-${i}-account`}
-              value={l.accountId}
-              onChange={(e) => set(i, { accountId: e.currentTarget.value })}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.code} {a.name}
-                </option>
-              ))}
-            </SelectField>
-            <Field
-              label="Debit"
-              name={`entry-${i}-debit`}
-              inputMode="decimal"
-              value={l.debit}
-              onChange={(e) =>
-                set(i, { debit: e.currentTarget.value, credit: '' })
-              }
-            />
-            <Field
-              label="Credit"
-              name={`entry-${i}-credit`}
-              inputMode="decimal"
-              value={l.credit}
-              onChange={(e) =>
-                set(i, { credit: e.currentTarget.value, debit: '' })
-              }
-            />
-          </div>
-        ))}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={() => setLines((all) => [...all, blank()])}
-          >
-            Add a line
-          </Button>
-          <span
-            className={`text-sm ${debits === credits && debits > 0 ? 'text-success' : 'text-text-muted'}`}
-          >
-            Debits {debits.toFixed(2)} · Credits {credits.toFixed(2)}
-          </span>
-          <Button
-            type="submit"
-            disabled={
-              fetcher.state !== 'idle' || debits !== credits || debits === 0
-            }
-          >
-            Post
-          </Button>
-          <SaveStatus state={fetcher.state} result={fetcher.data} />
-        </div>
-      </fetcher.Form>
-    </Panel>
   );
 }

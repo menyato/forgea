@@ -1,8 +1,49 @@
 import { Injectable } from '@nestjs/common';
 import type { DateRange } from '@forgea/types';
+import type { StockMovementListQuery } from '@forgea/validation';
+import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { StockMovementKind } from '../generated/prisma/enums.js';
+
+const movementInclude = {
+  stockItem: {
+    select: {
+      colour: true,
+      material: { select: { code: true, pricePerGram: true } },
+    },
+  },
+  orderItem: { select: { order: { select: { orderNumber: true } } } },
+  product: { select: { name: true } },
+  journalEntry: { select: { number: true } },
+  createdBy: { select: { email: true, name: true } },
+} as const satisfies Prisma.StockMovementInclude;
+export type MovementRow = Prisma.StockMovementGetPayload<{
+  include: typeof movementInclude;
+}>;
+
+/** A movement list's filters (all but the page and the sort). */
+function movementWhere(
+  query: Pick<StockMovementListQuery, 'stockItemId' | 'kinds' | 'q'>,
+): Prisma.StockMovementWhereInput {
+  const has = { contains: query.q ?? '', mode: 'insensitive' } as const;
+  return {
+    ...(query.stockItemId ? { stockItemId: query.stockItemId } : {}),
+    ...(query.kinds?.length ? { kind: { in: query.kinds } } : {}),
+    ...(query.q
+      ? {
+          OR: [
+            { note: has },
+            { stockItem: { colour: has } },
+            { stockItem: { material: { code: has } } },
+            { orderItem: { order: { orderNumber: has } } },
+            { product: { name: has } },
+            { createdBy: { OR: [{ email: has }, { name: has }] } },
+          ],
+        }
+      : {}),
+  };
+}
 
 export interface NewMovement {
   materialId: string;
@@ -12,6 +53,12 @@ export interface NewMovement {
   grams: number;
   orderItemId?: string | null;
   printJobId?: string | null;
+  /** USD: a delivery's price paid; filament used, at cost (with machine time). */
+  cost?: Prisma.Decimal | string | null;
+  costPerGram?: Prisma.Decimal | string | null;
+  productId?: string | null;
+  quantity?: number | null;
+  journalEntryId?: string | null;
   note?: string | null;
   createdById?: string | null;
 }
@@ -27,15 +74,19 @@ export interface StockRow {
   spoolGrams: number;
   leadTimeDays: number;
   coverDays: number;
+  pricePerGram: string;
   stock: number;
   used30: number;
   used90: number;
+  lastMovedAt: Date | null;
 }
 
 /** Order lines not yet in production, grouped by product and options (what they'll take). */
 export interface OpenLine {
   productId: string;
   options: unknown;
+  /** A personalised piece's design as ordered. */
+  design: unknown;
   units: number;
 }
 
@@ -95,6 +146,11 @@ export class StockRepository {
         grams: m.grams,
         orderItemId: m.orderItemId ?? null,
         printJobId: m.printJobId ?? null,
+        cost: m.cost ?? null,
+        costPerGram: m.costPerGram ?? null,
+        productId: m.productId ?? null,
+        quantity: m.quantity ?? null,
+        journalEntryId: m.journalEntryId ?? null,
         note: m.note ?? null,
         createdById: m.createdById ?? null,
       });
@@ -111,17 +167,19 @@ export class StockRepository {
     return this.prisma.$queryRaw<StockRow[]>`
       SELECT i.id, i."materialId", m.code, m.name, i.colour, i.active,
              i."lowStockGrams", i."spoolGrams", i."leadTimeDays", i."coverDays",
+             m."pricePerGram"::text AS "pricePerGram",
              coalesce(sum(s.grams), 0)::int AS stock,
              coalesce(-sum(s.grams) FILTER (
                WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED') AND s."createdAt" >= ${since30}
              ), 0)::int AS used30,
              coalesce(-sum(s.grams) FILTER (
                WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED') AND s."createdAt" >= ${since90}
-             ), 0)::int AS used90
+             ), 0)::int AS used90,
+             max(s."createdAt") AS "lastMovedAt"
       FROM stock_items i
       JOIN materials m ON m.id = i."materialId"
       LEFT JOIN stock_movements s ON s."stockItemId" = i.id
-      GROUP BY i.id, m.code, m.name
+      GROUP BY i.id, m.code, m.name, m."pricePerGram"
       ORDER BY m.code, i.colour
     `;
   }
@@ -129,27 +187,45 @@ export class StockRepository {
   /** Lines of orders placed but not in production yet: they will take filament soon. */
   openLines(): Promise<OpenLine[]> {
     return this.prisma.$queryRaw<OpenLine[]>`
-      SELECT i."productId", i.options, sum(i.quantity)::int AS units
+      SELECT i."productId", i.options, i.design, sum(i.quantity)::int AS units
       FROM order_items i
       JOIN orders o ON o.id = i."orderId"
       WHERE o.status IN ('PENDING', 'AWAITING_DEPOSIT', 'CONFIRMED')
         AND i."productId" IS NOT NULL
-      GROUP BY i."productId", i.options
+      GROUP BY i."productId", i.options, i.design
     `;
   }
 
-  movements(take: number) {
-    return this.prisma.stockMovement.findMany({
-      orderBy: { id: 'desc' },
-      take,
-      include: {
-        stockItem: {
-          select: { colour: true, material: { select: { code: true } } },
-        },
-        orderItem: { select: { order: { select: { orderNumber: true } } } },
-        createdBy: { select: { email: true, name: true } },
+  /** One page of movements, newest first by default (or by grams). */
+  movements(query: StockMovementListQuery) {
+    const where = movementWhere(query);
+    return keysetPage<MovementRow>(
+      {
+        sortField: query.sort,
+        kind: query.sort === 'grams' ? 'int' : 'date',
+        order: query.order,
+        limit: query.limit,
+        cursor: query.cursor,
+        valueOf: (m) => (query.sort === 'grams' ? m.grams : m.createdAt),
       },
+      ({ after, orderBy, take }) =>
+        this.prisma.stockMovement.findMany({
+          where: { AND: [where, after as Prisma.StockMovementWhereInput] },
+          orderBy: orderBy as Prisma.StockMovementOrderByWithRelationInput[],
+          take,
+          include: movementInclude,
+        }),
+    );
+  }
+
+  /** How many movements of each kind (one line's, or all), for the list's filters. */
+  async movementCounts(stockItemId?: string) {
+    const rows = await this.prisma.stockMovement.groupBy({
+      by: ['kind'],
+      where: movementWhere({ stockItemId }),
+      _count: { _all: true },
     });
+    return Object.fromEntries(rows.map((r) => [r.kind, r._count._all]));
   }
 
   /** Grams each product's orders took out of stock in the period, per material and colour. */
@@ -192,6 +268,121 @@ export class StockRepository {
         AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY s."stockItemId"
     `;
+  }
+
+  /**
+   * Filament in and out over the period with its cost. A movement's own cost when it has one;
+   * orders' filament otherwise at its cost per gram when it went out, or today's.
+   */
+  async costs(range: DateRange) {
+    const { start, end } = between(range);
+    const rows = await this.prisma.$queryRaw<
+      { kind: string; grams: number; cost: Prisma.Decimal }[]
+    >`
+      SELECT s.kind, abs(sum(s.grams))::int AS grams,
+             coalesce(sum(coalesce(s.cost, abs(s.grams) * coalesce(s."costPerGram", m."pricePerGram"))), 0)
+               ::decimal(12, 2) AS cost
+      FROM stock_movements s
+      JOIN stock_items i ON i.id = s."stockItemId"
+      JOIN materials m ON m.id = i."materialId"
+      WHERE s.kind IN ('RECEIVED', 'ORDER', 'USED', 'FAILED_PRINT')
+        AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
+      GROUP BY s.kind
+    `;
+    return new Map(rows.map((r) => [r.kind, r]));
+  }
+
+  /** The shop's colour swatches by label (the first one found for each). */
+  async swatches(): Promise<Map<string, string>> {
+    const rows = await this.prisma.optionValue.findMany({
+      where: { swatchHex: { not: null } },
+      select: { label: true, swatchHex: true },
+      orderBy: { id: 'asc' },
+    });
+    const out = new Map<string, string>();
+    for (const r of rows) if (!out.has(r.label)) out.set(r.label, r.swatchHex!);
+    return out;
+  }
+
+  /**
+   * What is on the shelf for a material and colour, read under the material's stock lock (the
+   * one each movement takes), so a count's difference is exact.
+   */
+  async onShelf(
+    tx: Prisma.TransactionClient,
+    materialId: string,
+    colour: string,
+  ): Promise<number> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('stock:' || ${materialId}::text))`;
+    const [row] = await tx.$queryRaw<{ grams: number }[]>`
+      SELECT coalesce(sum(s.grams), 0)::int AS grams
+      FROM stock_movements s
+      JOIN stock_items i ON i.id = s."stockItemId"
+      WHERE i."materialId" = ${materialId}::uuid AND i.colour = ${colour}
+    `;
+    return row?.grams ?? 0;
+  }
+
+  material(id: string) {
+    return this.prisma.material.findUnique({
+      where: { id },
+      select: { id: true, code: true, name: true, pricePerGram: true },
+    });
+  }
+
+  /** A delivery's price becomes the material's reel (and so its cost per gram). */
+  setReel(
+    tx: Prisma.TransactionClient,
+    id: string,
+    reel: { price: string; grams: number; pricePerGram: string },
+  ) {
+    return tx.material.update({
+      where: { id },
+      data: {
+        reelPrice: reel.price,
+        reelGrams: reel.grams,
+        pricePerGram: reel.pricePerGram,
+      },
+    });
+  }
+
+  /** Products the studio may print for itself (or one of them), with their sizes and colours. */
+  printables(id?: string) {
+    return this.prisma.product.findMany({
+      ...(id ? { where: { id } } : {}),
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        material: { select: { code: true } },
+        sizes: {
+          select: { sizeXcm: true, sizeYcm: true, sizeZcm: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+        optionValues: {
+          where: { value: { swatchHex: { not: null }, active: true } },
+          select: {
+            value: {
+              select: {
+                label: true,
+                swatchHex: true,
+                group: { select: { name: true } },
+              },
+            },
+          },
+        },
+        textColourGroup: {
+          select: {
+            name: true,
+            values: {
+              where: { active: true, swatchHex: { not: null } },
+              select: { label: true, swatchHex: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
+    });
   }
 
   findItem(id: string) {

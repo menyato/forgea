@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import type { CostSettings, OrderSettings } from '@forgea/pricing';
+import type {
+  CostSettings,
+  OrderSettings,
+  PrinterCosts,
+} from '@forgea/pricing';
 import { PrismaService } from '../database/prisma.service.js';
 
 /** The current settings, split by audience: cost is server-only, order is public. */
 export interface PricingSettingsSnapshot {
   cost: CostSettings;
   order: OrderSettings;
+  /** The printer as bought, when the owner works the hourly rate out from it. */
+  printer: PrinterCosts | null;
 }
 
 /** Data access for pricing settings. Abstract so services and tests depend on the contract. */
@@ -26,10 +32,23 @@ export class PrismaPricingSettingsRepository extends PricingSettingsRepository {
 
   async save(s: PricingSettingsSnapshot, adminId: string): Promise<void> {
     const { bulkDiscountTiers, ...order } = s.order;
+    const { profit, ...cost } = s.cost;
     await this.prisma.$transaction([
       this.prisma.pricingSettings.update({
         where: { id: 1 },
-        data: { ...s.cost, ...order, updatedByUserId: adminId },
+        data: {
+          ...cost,
+          ...order,
+          profitKind: profit.kind,
+          profitValue: String(profit.value),
+          printerPrice: s.printer ? String(s.printer.printerPrice) : null,
+          printerLifeHours: s.printer ? Number(s.printer.lifeHours) : null,
+          printerWatts: s.printer ? Number(s.printer.watts) : null,
+          electricityPerKwh: s.printer
+            ? String(s.printer.electricityPerKwh)
+            : null,
+          updatedByUserId: adminId,
+        },
       }),
       this.prisma.bulkDiscountTier.deleteMany(),
       this.prisma.bulkDiscountTier.createMany({ data: [...bulkDiscountTiers] }),
@@ -51,7 +70,7 @@ export class PrismaPricingSettingsRepository extends PricingSettingsRepository {
         failureAllowancePercent: s.failureAllowancePercent.toString(),
         laborCostPerUnit: s.laborCostPerUnit.toString(),
         packagingCostPerUnit: s.packagingCostPerUnit.toString(),
-        markupMultiplier: s.markupMultiplier.toString(),
+        profit: { kind: s.profitKind, value: s.profitValue.toString() },
       },
       order: {
         rushFeePercent: s.rushFeePercent.toString(),
@@ -62,6 +81,18 @@ export class PrismaPricingSettingsRepository extends PricingSettingsRepository {
           percent: t.percent.toString(),
         })),
       },
+      printer:
+        s.printerPrice !== null &&
+        s.printerLifeHours !== null &&
+        s.printerWatts !== null &&
+        s.electricityPerKwh !== null
+          ? {
+              printerPrice: s.printerPrice.toString(),
+              lifeHours: s.printerLifeHours,
+              watts: s.printerWatts,
+              electricityPerKwh: s.electricityPerKwh.toString(),
+            }
+          : null,
     };
   }
 }

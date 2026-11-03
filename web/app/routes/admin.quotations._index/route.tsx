@@ -3,38 +3,20 @@ import {
   type QuotationListItem,
   QuotationStatus,
 } from '@forgea/types';
-import { Link, useSearchParams } from 'react-router';
+import { Link } from 'react-router';
 import { Money } from '~/components/money';
 import { buttonClass } from '~/components/ui/button';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader } from '~/features/admin/admin-ui';
+import { listState, pageQuery } from '~/features/admin/list-state';
 import {
-  Board,
-  BoardCard,
-  ViewSwitch,
-  ViewTabs,
-  viewMode,
+  ControlPanel,
+  KanbanView,
+  type ListColumn,
+  ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
-
-export async function loader({ url, context }: Route.LoaderArgs) {
-  const query = new URLSearchParams({ limit: '100' });
-  const status = url.searchParams.get('status');
-  const board = viewMode(url.searchParams) === 'board';
-  if (
-    !board &&
-    Object.values(QuotationStatus).includes(status as QuotationStatus)
-  )
-    query.set('status', status!);
-  const api = context.get(apiContext);
-  const [r, counts] = await Promise.all([
-    api.get<Page<QuotationListItem>>(`/quotations?${query}`),
-    api.get<Partial<Record<QuotationStatus, number>>>('/quotations/counts'),
-  ]);
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { quotations: r.data.items, counts: counts.ok ? counts.data : {} };
-}
 
 const LABELS: Record<QuotationStatus, string> = {
   DRAFT: 'Draft',
@@ -43,11 +25,117 @@ const LABELS: Record<QuotationStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
+/** Filters by status (several together add up); their keys are the statuses, lower case. */
+const STATUSES = Object.values(QuotationStatus);
+const key = (s: QuotationStatus) => s.toLowerCase();
+
+/** The kanban with no filter: drafts, sent and confirmed. */
+const BOARD = [
+  QuotationStatus.DRAFT,
+  QuotationStatus.SENT,
+  QuotationStatus.CONFIRMED,
+];
+
+const DEFAULTS = { sorts: ['createdAt', 'number', 'validUntil'] };
+
+const GROUPS = [
+  { key: 'status', label: 'Status' },
+  { key: 'customer', label: 'Customer' },
+];
+
+export async function loader({ url, context }: Route.LoaderArgs) {
+  const state = listState(url.searchParams, DEFAULTS);
+  const kanban = state.view === 'kanban';
+  const picked = STATUSES.filter((s) => state.filters.includes(key(s)));
+  const statuses = picked.length > 0 ? picked : kanban ? BOARD : [];
+  const query = pageQuery(state, kanban ? 100 : 50);
+  if (statuses.length > 0) query.set('statuses', statuses.join(','));
+  const api = context.get(apiContext);
+  const [r, counts] = await Promise.all([
+    api.get<Page<QuotationListItem>>(`/quotations?${query}`),
+    api.get<Partial<Record<QuotationStatus, number>>>('/quotations/counts'),
+  ]);
+  if (!r.ok) throw new Response(r.message, { status: r.status });
+  const count = counts.ok ? counts.data : {};
+  return {
+    state,
+    quotations: r.data,
+    counts: count,
+    total: state.q
+      ? undefined
+      : (statuses.length > 0 ? statuses : STATUSES).reduce(
+          (n, s) => n + (count[s] ?? 0),
+          0,
+        ),
+    columns: kanban ? STATUSES.filter((s) => statuses.includes(s)) : [],
+  };
+}
+
+const customer = (q: QuotationListItem) => q.customer.name ?? q.customer.email;
+
+const COLUMNS: ListColumn<QuotationListItem>[] = [
+  {
+    key: 'number',
+    label: 'Number',
+    sort: 'number',
+    cell: (q) => <span className="font-mono">{q.number}</span>,
+  },
+  {
+    key: 'customer',
+    label: 'Customer',
+    cell: (q) => (
+      <>
+        {customer(q)}
+        {q.customer.id === null && (
+          <span className="block text-xs text-text-muted">
+            no account yet · by email
+          </span>
+        )}
+      </>
+    ),
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    cell: (q) => (
+      <>
+        {q.expired ? 'Expired' : LABELS[q.status]}
+        {q.orderNumber && (
+          <span className="block font-mono text-xs text-text-muted">
+            {q.orderNumber}
+          </span>
+        )}
+      </>
+    ),
+  },
+  {
+    key: 'valid',
+    label: 'Valid until',
+    sort: 'validUntil',
+    cell: (q) => q.validUntil,
+  },
+  {
+    key: 'total',
+    label: 'Total',
+    align: 'right',
+    cell: (q) => <Money amount={q.total} />,
+  },
+  {
+    key: 'created',
+    label: 'Written',
+    sort: 'createdAt',
+    cell: (q) => (
+      <span className="text-text-muted">
+        {new Date(q.createdAt).toLocaleDateString('en-GB')}
+      </span>
+    ),
+  },
+];
+
+const href = (q: QuotationListItem) => `/admin/quotations/${q.id}`;
+
 export default function Quotations({ loaderData }: Route.ComponentProps) {
-  const [params] = useSearchParams();
-  const status = params.get('status') ?? 'all';
-  const mode = viewMode(params);
-  const { counts } = loaderData;
+  const { state, quotations, counts, total, columns } = loaderData;
   const mayWrite = useCan()('quotations.manage');
   return (
     <>
@@ -55,104 +143,71 @@ export default function Quotations({ loaderData }: Route.ComponentProps) {
         title="Quotations"
         intro="Prices you write for a customer. Send one and they can accept it online; confirming it creates the order."
         action={
-          <div className="flex flex-wrap items-center gap-3">
-            <ViewSwitch current={mode} />
-            {mayWrite && (
-              <Link to="/admin/quotations/new" className={buttonClass()}>
-                Write a quotation
-              </Link>
-            )}
-          </div>
+          mayWrite && (
+            <Link to="/admin/quotations/new" className={buttonClass()}>
+              New quotation
+            </Link>
+          )
         }
       />
-      {mode === 'board' ? (
-        <Board
-          columns={(['DRAFT', 'SENT', 'CONFIRMED'] as const).map((st) => ({
-            key: st,
-            title: LABELS[st],
-            items: loaderData.quotations.filter((q) => q.status === st),
+      <ControlPanel
+        state={state}
+        search="Number, customer or email"
+        filters={STATUSES.map((s) => ({
+          key: key(s),
+          label: LABELS[s],
+          count: counts[s] ?? 0,
+        }))}
+        groups={GROUPS}
+        views={['list', 'kanban']}
+        {...(state.view === 'list'
+          ? {
+              page: {
+                shown: quotations.items.length,
+                total,
+                nextCursor: quotations.nextCursor,
+              },
+            }
+          : {})}
+      />
+      {state.view === 'kanban' ? (
+        <KanbanView
+          href={href}
+          columns={columns.map((s) => ({
+            key: s,
+            title: LABELS[s],
+            items: quotations.items.filter((q) => q.status === s),
           }))}
+          title={(q) => q.number}
           card={(q) => (
-            <BoardCard to={`/admin/quotations/${q.id}`} title={q.number}>
-              <span className="text-text-muted">
-                {q.customer.name ?? q.customer.email}
-              </span>
+            <>
+              <span className="text-text-muted">{customer(q)}</span>
               <span className="flex justify-between">
                 <Money amount={q.total} />
                 {q.expired && <span className="text-warning">expired</span>}
               </span>
-            </BoardCard>
+            </>
           )}
         />
       ) : (
-        <>
-          <ViewTabs
-            label="Quotation status"
-            param="status"
-            current={status}
-            tabs={[
-              { key: 'all', label: 'All' },
-              ...Object.values(QuotationStatus).map((st) => ({
-                key: st,
-                label: LABELS[st],
-                ...(st === 'DRAFT' || st === 'SENT'
-                  ? { count: counts[st] ?? 0 }
-                  : {}),
-              })),
-            ]}
-          />
-          {loaderData.quotations.length === 0 ? (
-            <p className="text-text-muted">No quotations here.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-              <table className="w-full text-sm">
-                <thead className="text-left text-text-muted">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Number</th>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Valid until</th>
-                    <th className="px-4 py-3 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loaderData.quotations.map((q) => (
-                    <tr key={q.id} className="border-t border-border">
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/admin/quotations/${q.id}`}
-                          className="font-mono font-semibold hover:underline"
-                        >
-                          {q.number}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        {q.customer.name ?? q.customer.email}
-                        {q.customer.id === null && (
-                          <span className="block text-xs text-text-muted">
-                            no account yet · by email
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {q.expired ? 'Expired' : LABELS[q.status]}
-                        {q.orderNumber && (
-                          <span className="block font-mono text-xs text-text-muted">
-                            {q.orderNumber}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">{q.validUntil}</td>
-                      <td className="px-4 py-3 text-right">
-                        <Money amount={q.total} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+        <ListView
+          label="Quotations"
+          rows={quotations.items}
+          columns={COLUMNS}
+          href={href}
+          state={state}
+          empty="No quotations here."
+          group={
+            state.group === 'status'
+              ? {
+                  of: (q) => LABELS[q.status],
+                  order: STATUSES.map((s) => LABELS[s]),
+                }
+              : state.group === 'customer'
+                ? { of: customer }
+                : undefined
+          }
+        />
       )}
     </>
   );

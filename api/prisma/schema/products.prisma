@@ -25,6 +25,39 @@ model Product {
   sizeYcm    Decimal? @db.Decimal(7, 1)
   sizeZcm    Decimal? @db.Decimal(7, 1)
 
+  /// Its own profit rule; both null = the shop's (Pricing page). Both or neither (CHECK).
+  profitKind  ProfitKind?
+  profitValue Decimal?    @db.Decimal(10, 2)
+
+  /// Personalised: the customer types their text and sees it in 3D (null = a regular product).
+  /// The pieces are made from the text (@forgea/text3d), not from a model file; grams and
+  /// hours come from the piece's volume. All set together (CHECK).
+  textStyle            TextStyle?
+  textMaxChars         Int?
+  /// Letter height (cap height), letter thickness, backing thickness, widest piece: mm.
+  textHeightMm         Decimal?     @db.Decimal(6, 1)
+  textDepthMm          Decimal?     @db.Decimal(5, 1)
+  textBaseMm           Decimal?     @db.Decimal(5, 1)
+  textMaxWidthMm       Decimal?     @db.Decimal(6, 1)
+  /// The colours customers choose from: an option group with swatches.
+  textColourGroupId    String?      @db.Uuid
+  textColourGroup      OptionGroup? @relation("TextColours", fields: [textColourGroupId], references: [id], onDelete: Restrict)
+  /// More letter heights customers may choose (mm); textHeightMm is the default one.
+  textSizesMm          Decimal[]    @default([]) @db.Decimal(6, 1)
+  /// The colours a design starts with: the letters', and the backing's (null = the letters').
+  textDefaultColourId  String?      @db.Uuid
+  textDefaultColour    OptionValue? @relation("TextDefaultColour", fields: [textDefaultColourId], references: [id], onDelete: SetNull)
+  textDefaultBaseId    String?      @db.Uuid
+  textDefaultBase      OptionValue? @relation("TextDefaultBase", fields: [textDefaultBaseId], references: [id], onDelete: SetNull)
+  /// Big initial and couple pieces: the accent's starting colour (the initial and decorations,
+  /// or the heart); null = the letters'.
+  textDefaultAccentId  String?      @db.Uuid
+  textDefaultAccent    OptionValue? @relation("TextDefaultAccent", fields: [textDefaultAccentId], references: [id], onDelete: SetNull)
+  /// Big initial pieces: the decorations around the initial (set only for INITIAL_NAME, CHECK).
+  textDecor            TextDecor?
+  /// Added for every colour beyond the first (a multi-colour print), USD.
+  textExtraColourPrice Decimal      @default(0) @db.Decimal(10, 2)
+
   /// Made to order for the customer: requires the 50% deposit at checkout.
   isCustom  Boolean  @default(false)
   /// "Designed by …" on the product page: a studio or guest designer, by name.
@@ -39,6 +72,7 @@ model Product {
   optionValues   ProductOptionValue[]
   quotationLines QuotationLine[]
   sizes          ProductSize[]
+  stockMovements StockMovement[]
 
   @@index([active, id])
   @@index([categoryId])

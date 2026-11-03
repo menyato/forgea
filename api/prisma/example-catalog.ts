@@ -1,6 +1,7 @@
 // The development examples as a catalog file — the same format the dashboard exports and
 // imports (docs/CATALOG_IMPORT.md) — so the seed exercises the real import path.
 import { type CatalogFile, type CatalogProduct, scaledSize } from '@forgea/types';
+import { readFileSync } from 'node:fs';
 import { EXAMPLE_MODELS } from './example-models.ts';
 
 type ModelName = keyof typeof EXAMPLE_MODELS;
@@ -131,7 +132,39 @@ export function exampleCatalog(): CatalogFile {
         ],
       },
       { name: 'Name on it', kind: 'TEXT', maxLength: 12, textExtraPrice: '1.00', sortOrder: 4, active: true, values: [] },
+      // The filament colours personalised pieces are printed in (letters and backing).
+      {
+        name: 'Text colours', kind: 'CHOICE', maxLength: null, textExtraPrice: '0', sortOrder: 5, active: true,
+        values: [
+          value('Black', { swatchHex: '#1c1c1c' }, 0),
+          value('White', { swatchHex: '#f2f2ee' }, 1),
+          value('Sand', { swatchHex: '#d8c3a0' }, 2),
+          value('Red', { swatchHex: '#b3282d' }, 3),
+          value('Sky blue', { swatchHex: '#5aa9e6' }, 4),
+          value('Forest green', { swatchHex: '#2f5d3a' }, 5),
+          value('Gold silk', { swatchHex: '#c9a227' }, 6),
+          value('Copper silk', { swatchHex: '#b87333' }, 7),
+        ],
+      },
     ],
+    // Free fonts (SIL Open Font License: may be used to make and sell printed items), in
+    // prisma/example-fonts with their licences.
+    fonts: (
+      [
+        ['Cairo', 'Cairo.ttf'],
+        ['Lalezar', 'Lalezar.ttf'],
+        ['Pacifico', 'Pacifico.ttf'],
+        ['Aref Ruqaa', 'ArefRuqaa.ttf'],
+      ] as const
+    ).map(([name, file], sortOrder) => ({
+      name,
+      active: true,
+      sortOrder,
+      file: {
+        name: file,
+        base64: readFileSync(new URL(`./example-fonts/${file}`, import.meta.url)).toString('base64'),
+      },
+    })),
     products: [
       // The studio's own mark, as a desk plaque; it stands in the centre of the home page's bed.
       product({
@@ -181,8 +214,8 @@ export function exampleCatalog(): CatalogFile {
       product({
         slug: 'cable-clip-set', name: 'Cable clip set (6)', category: 'home-desk', material: 'PLA', grams: '25', printHours: '1.5',
         ...measured({ grams: '25', printHours: '1.5' }, cm(4, 2, 1.5)),
-        description: 'Desk-edge clips that keep chargers and cables where you left them.',
-        options: [colour(COLOURS, 'Black')],
+        description: 'Desk-edge clips that keep chargers and cables where you left them, each with the name you give it.',
+        options: [colour(COLOURS, 'Black'), { group: 'Name on it', required: true, values: [], default: null }],
       }),
       product({
         slug: 'phone-stand', name: 'Phone stand', category: 'home-desk', material: 'PLA', grams: '60', printHours: '3',
@@ -199,12 +232,49 @@ export function exampleCatalog(): CatalogFile {
           { group: 'Material', required: true, values: ['PETG (heat-resistant)', 'ASA (outdoor, UV-stable)'], default: 'PETG (heat-resistant)' },
         ],
       }),
+      // Personalised pieces: the customer types, picks fonts and colours, and sees it in 3D.
       product({
-        slug: 'name-keychain', name: 'Custom name keychain', category: 'personalised', material: 'PLA', grams: '10', printHours: '0.75',
-        ...measured({ grams: '10', printHours: '0.75' }, cm(6, 2, 0.4)),
-        isCustom: true,
-        description: 'Your name or logo, printed in the colour you choose.',
-        options: [colour(COLOURS, null), { group: 'Name on it', required: true, values: [], default: null }],
+        slug: 'name-keychain', name: 'Name keychain', category: 'personalised', material: 'PLA', grams: '8', printHours: '0.8',
+        description: 'Your name in raised letters on a backing that follows them, with a ring for your keys. Arabic or English, in the fonts and colours you choose.',
+        options: [],
+        text: { style: 'KEYCHAIN', maxChars: 12, letterHeightMm: '10', letterDepthMm: '1.6', baseDepthMm: '2.4', maxWidthMm: '75', colourGroup: 'Text colours', extraColourPrice: '1.00', sizesMm: ['13', '16'], defaultColour: 'Copper silk', defaultBaseColour: 'Black' },
+      }),
+      product({
+        slug: 'standing-name', name: 'Your name, standing', category: 'personalised', material: 'PLA', grams: '45', printHours: '3',
+        description: 'A big name for a desk or a shelf, its letters joined on one backing so it stands as one piece. Arabic or English.',
+        options: [],
+        text: { style: 'NAME', maxChars: 12, letterHeightMm: '30', letterDepthMm: '6', baseDepthMm: '3', maxWidthMm: '220', colourGroup: 'Text colours', extraColourPrice: '2.00', sizesMm: ['40', '50'], defaultColour: 'Copper silk', defaultBaseColour: 'Black' },
+      }),
+      product({
+        slug: 'curved-initials', name: 'Curved initials', category: 'personalised', material: 'PLA', grams: '35', printHours: '2.5',
+        description: 'Up to three initials curving together, the middle one larger and in front, each in its own font and colour.',
+        options: [],
+        text: { style: 'MONOGRAM', maxChars: 3, letterHeightMm: '40', letterDepthMm: '5', baseDepthMm: '3', maxWidthMm: '160', colourGroup: 'Text colours', extraColourPrice: '1.50', sizesMm: ['60', '80'], defaultColour: 'Copper silk', defaultBaseColour: 'Black' },
+      }),
+      product({
+        slug: 'single-letters', name: 'Single letters', category: 'personalised', material: 'PLA', grams: '25', printHours: '2',
+        description: 'Letters as separate pieces, each in its own font and colour: a word for a wall, a door, a shelf.',
+        options: [],
+        text: { style: 'LETTERS', maxChars: 10, letterHeightMm: '50', letterDepthMm: '8', baseDepthMm: '3', maxWidthMm: '400', colourGroup: 'Text colours', extraColourPrice: '1.00', sizesMm: ['80', '100'], defaultColour: 'Copper silk', defaultBaseColour: 'Black' },
+      }),
+      // Decorated templates: a big initial with the name across it, and two names with a heart.
+      product({
+        slug: 'baby-initial-name', name: "Baby's initial and name", category: 'personalised', material: 'PLA', grams: '60', printHours: '4',
+        description: "The baby's first letter big, the whole name across it, flowers and a heart around it. For a nursery shelf or a birth gift.",
+        options: [],
+        text: { style: 'INITIAL_NAME', maxChars: 12, letterHeightMm: '80', letterDepthMm: '4', baseDepthMm: '3', maxWidthMm: '200', colourGroup: 'Text colours', extraColourPrice: '2.00', sizesMm: ['100', '120'], decor: 'FLOWERS', defaultColour: 'Copper silk', defaultAccentColour: 'White', defaultBaseColour: 'Black' },
+      }),
+      product({
+        slug: 'boy-initial-name', name: "Boy's initial and name", category: 'personalised', material: 'PLA', grams: '60', printHours: '4',
+        description: 'His first letter big under a crown, his whole name across it and stars around it. For his room or his desk.',
+        options: [],
+        text: { style: 'INITIAL_NAME', maxChars: 12, letterHeightMm: '80', letterDepthMm: '4', baseDepthMm: '3', maxWidthMm: '200', colourGroup: 'Text colours', extraColourPrice: '2.00', sizesMm: ['100', '120'], decor: 'CROWN', defaultColour: 'Copper silk', defaultAccentColour: 'White', defaultBaseColour: 'Black' },
+      }),
+      product({
+        slug: 'couple-names', name: 'Two names and a heart', category: 'personalised', material: 'PLA', grams: '40', printHours: '3',
+        description: 'Your two names with a heart between them, standing as one piece. For an anniversary, a wedding table or a gift.',
+        options: [],
+        text: { style: 'COUPLE', maxChars: 10, letterHeightMm: '30', letterDepthMm: '5', baseDepthMm: '3', maxWidthMm: '250', colourGroup: 'Text colours', extraColourPrice: '2.00', sizesMm: ['40'], defaultColour: 'Copper silk', defaultAccentColour: 'Red', defaultBaseColour: 'Black' },
       }),
       product({
         slug: 'lamp-shade', name: 'Desk lamp shade', category: 'home-desk', material: 'PLA', grams: '150', printHours: '9',

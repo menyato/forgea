@@ -27,6 +27,14 @@ export const UPLOAD_POLICIES: Readonly<Record<UploadPurpose, UploadPolicy>> = {
   [UploadPurpose.PRODUCT_IMAGE]: { maxBytes: 15 * MB, types: rasterImages },
   [UploadPurpose.PRODUCT_MODEL]: { maxBytes: 100 * MB, types: models },
   // The ceiling; the owner's lower limit (store settings, 50 MB to start) is checked as well.
+  // Read by HarfBuzz in a worker with a time limit (TextShaper), never on the main thread.
+  [UploadPurpose.FONT]: {
+    maxBytes: 10 * MB,
+    types: new Map([
+      ['font/ttf', 'ttf'],
+      ['font/otf', 'otf'],
+    ]),
+  },
   [UploadPurpose.CUSTOM_REQUEST_FILE]: {
     maxBytes: 100 * MB,
     types: new Map([...models, ...rasterImages]),

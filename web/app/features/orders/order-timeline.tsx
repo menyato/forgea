@@ -1,10 +1,11 @@
 import { ORDER_STATUS_LABELS, type OrderHistoryEntry } from '@forgea/types';
+import { STUDIO_TIME_ZONE } from '~/lib/studio-time';
 
 // The studio is in Lebanon; a fixed time zone also keeps server and browser output identical.
 const when = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeStyle: 'short',
-  timeZone: 'Asia/Beirut',
+  timeZone: STUDIO_TIME_ZONE,
 });
 
 /** Every status the order has been through, oldest first, the current one emphasised. */
