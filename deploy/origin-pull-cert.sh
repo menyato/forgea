@@ -12,6 +12,8 @@
 #   origin-pull-ca.key     → keep it offline (a password manager): it can make new certificates
 # Delete the other files afterwards.
 set -eu
+# Git Bash would rewrite "-subj /CN=..." into a Windows path ("C:/Program Files/Git/CN=...").
+export MSYS_NO_PATHCONV=1
 
 openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
   -keyout origin-pull-ca.key -out origin-pull-ca.pem \

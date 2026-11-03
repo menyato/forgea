@@ -219,7 +219,12 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
 export function validateEnvironment(
   raw: Record<string, unknown>,
 ): EnvironmentVariables {
-  const env = plainToInstance(EnvironmentVariables, raw, {
+  // "NAME=" in an env file (as the deploy templates leave optional settings) means not set:
+  // @IsOptional() only skips undefined, so an empty string would fail e.g. MAIL_SENDER's pattern.
+  const set = Object.fromEntries(
+    Object.entries(raw).filter(([, value]) => value !== ''),
+  );
+  const env = plainToInstance(EnvironmentVariables, set, {
     enableImplicitConversion: true,
   });
   const errors = [

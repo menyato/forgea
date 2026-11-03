@@ -8,11 +8,20 @@ updates:
     directory: /
     target-branch: development
     schedule: { interval: weekly }
+  # Major versions are a planned upgrade, not a weekly bump: Node must match CI's node-version,
+  # and a new Postgres major can't open the old data volume without a dump and restore.
+  # Ignoring them also lets Dependabot propose the security patches within the current major.
   - package-ecosystem: docker
     directory: /
     target-branch: development
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
   - package-ecosystem: docker-compose
     directories: [/deploy/app, /deploy/edge]
     target-branch: development
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
