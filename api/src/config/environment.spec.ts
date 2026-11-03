@@ -47,6 +47,21 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment(production)).not.toThrow();
   });
 
+  it('treats an empty "NAME=" line as not set, as the deploy templates leave them', () => {
+    const env = validateEnvironment({
+      ...production,
+      MAIL_SENDER: '',
+      STUDIO_NOTIFY_EMAIL: '',
+      GOOGLE_SERVICE_ACCOUNT_KEY: '',
+      GOOGLE_CALENDAR_ID: '',
+    });
+    expect(env.MAIL_SENDER).toBeUndefined();
+    // A required setting left empty is still refused.
+    expect(() =>
+      validateEnvironment({ ...production, JWT_ACCESS_SECRET: '' }),
+    ).toThrow(/JWT_ACCESS_SECRET/);
+  });
+
   it.each([
     [{ DATABASE_URL: undefined }, /DATABASE_URL/],
     [{ DATABASE_URL: 'mysql://x' }, /postgres:\/\//],

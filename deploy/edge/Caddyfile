@@ -29,11 +29,19 @@
 (environment) {
 	import origin-tls
 	@google path /auth/google /auth/google/callback
+	# While a deploy restarts a container (a few seconds), hold the request and retry instead of
+	# answering 502. Caddy only retries when it couldn't connect at all, so nothing is sent twice.
 	handle @google {
-		reverse_proxy {args[0]}-api:3000
+		reverse_proxy {args[0]}-api:3000 {
+			lb_try_duration 20s
+			lb_try_interval 250ms
+		}
 	}
 	handle {
-		reverse_proxy {args[0]}-web:3000
+		reverse_proxy {args[0]}-web:3000 {
+			lb_try_duration 20s
+			lb_try_interval 250ms
+		}
 	}
 	# Request sizes per page: big files only where they are uploaded (the API's 100 MB ceiling;
 	# Cloudflare's free plan also stops at 100 MB), a picture on the idea form, 1 MB elsewhere.
