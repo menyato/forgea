@@ -14,7 +14,12 @@ import { modelVariantKey } from '@forgea/validation/constants';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
-import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
+import {
+  createProduct,
+  CSRF,
+  signedInAs,
+  signedInCustomer,
+} from './commerce-helpers.js';
 import { createApp } from './create-app.js';
 import { useRoundPricing } from './studio-helpers.js';
 import { TextShaper } from '../src/text-studio/text-shaper.js';
@@ -453,9 +458,7 @@ describe('Text studio (e2e)', () => {
     }).expect(200);
 
     // A design for a product that has none is refused, here as in the cart.
-    const regular = await prisma.product.findFirstOrThrow({
-      where: { textStyle: null, active: true },
-    });
+    const regular = await createProduct(app, {});
     await http()
       .post(`/products/${regular.slug}/price`)
       .set(CSRF)
