@@ -1,4 +1,4 @@
-import '~/features/model-viewer/three-console.client';
+import { prepareRenderer } from '~/features/model-viewer/three-console.client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -84,6 +84,7 @@ export default function BuildPlateScene(props: BuildPlateProps) {
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       onCreated={({ gl }) => {
+        prepareRenderer(gl);
         gl.localClippingEnabled = true;
       }}
       // Animates only while printing; afterwards it renders when the visitor turns the bed.

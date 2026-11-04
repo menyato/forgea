@@ -1,4 +1,4 @@
-import '~/features/model-viewer/three-console.client';
+import { prepareRenderer } from '~/features/model-viewer/three-console.client';
 import {
   buildDesign,
   type BuiltDesign,
@@ -150,6 +150,7 @@ export default function TextPreview({
         camera={{ fov: 35, near: 0.1, far: 10_000 }}
         dpr={[1, 2]}
         frameloop="demand"
+        onCreated={({ gl }) => prepareRenderer(gl)}
       >
         <StudioLight />
         <directionalLight position={[2, 4, 3]} intensity={1.4} />
