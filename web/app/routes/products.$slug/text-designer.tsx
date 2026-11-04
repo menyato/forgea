@@ -6,6 +6,7 @@ import {
   PER_LETTER_STYLES,
 } from '@forgea/text3d/design';
 import type {
+  DesignMeasurement,
   ProductDetail,
   ProductTextOffer,
   TextDesignInput,
@@ -143,24 +144,48 @@ export function TextDesigner({
     ? design
     : { ...design, text: SAMPLE[offer.style], letters: [] };
 
-  // The price, from the API, a moment after the design settles.
+  // What the preview built (in this browser), for the design it was built from.
+  const [measured, setMeasured] = useState<{
+    design: string;
+    json: string;
+  } | null>(null);
+  const onMeasured = useCallback(
+    (design: string, m: DesignMeasurement) =>
+      setMeasured({ design, json: JSON.stringify(m) }),
+    [],
+  );
+  const measuredJson = measured?.design === designJson ? measured.json : null;
+
+  // The price, from the API, a moment after the design settles: priced from what the
+  // browser built, so the server does no geometry while the customer types. If the preview
+  // can't build it (no WebGL, an old browser), the API builds it after a short wait.
   const pricing = useFetcher<{ unitPrice?: string; error?: string }>();
   const { submit: requestPrice } = pricing;
+  // The design the latest answer is for: until the current one is priced, it shows as updating.
+  const [pricedFor, setPricedFor] = useState<string | null>(null);
   useEffect(() => {
     if (!typed || !font) return;
     const timer = setTimeout(
-      () =>
+      () => {
+        setPricedFor(designJson);
         void requestPrice(
-          { options: '[]', design: designJson },
+          {
+            options: '[]',
+            design: designJson,
+            ...(measuredJson ? { measured: measuredJson } : {}),
+          },
           { method: 'post' },
-        ),
-      400,
+        );
+      },
+      measuredJson ? 250 : 2500,
     );
     return () => clearTimeout(timer);
-  }, [requestPrice, designJson, typed, font]);
+  }, [requestPrice, designJson, measuredJson, typed, font]);
+  const stale = pricedFor !== designJson || pricing.state !== 'idle';
   const price =
     typed && pricing.data?.unitPrice ? pricing.data.unitPrice : null;
-  const priceError = typed ? pricing.data?.error : undefined;
+  // A refusal counts only for the design on screen (the next change may fix it).
+  const priceError = typed && !stale ? pricing.data?.error : undefined;
 
   const cart = useFetcher<{ ok?: boolean; error?: string }>();
   const [addedFor, setAddedFor] = useState<string | null>(null);
@@ -185,6 +210,7 @@ export function TextDesigner({
                 design={shown}
                 label={`3D preview of ${product.name}: ${typed || 'a sample'}. Drag to turn it.`}
                 onProblem={onProblem}
+                onMeasured={typed ? onMeasured : undefined}
               />
             </Suspense>
           ) : (
@@ -489,7 +515,11 @@ export function TextDesigner({
           </fieldset>
         )}
 
-        <div aria-live="polite" className="grid gap-1">
+        <div
+          aria-live="polite"
+          aria-busy={typed !== '' && stale}
+          className="grid gap-1"
+        >
           <p className="text-3xl font-bold">
             {price ? (
               <Money amount={price} />
@@ -500,7 +530,7 @@ export function TextDesigner({
                   : 'Type your text to see the price'}
               </span>
             )}
-            {price && pricing.state !== 'idle' && (
+            {price && stale && (
               <span className="ml-2 text-sm font-normal text-text-muted">
                 updating…
               </span>
@@ -527,6 +557,9 @@ export function TextDesigner({
           <input type="hidden" name="productId" value={product.id} />
           <input type="hidden" name="options" value="[]" />
           <input type="hidden" name="design" value={designJson} />
+          {measuredJson && (
+            <input type="hidden" name="measured" value={measuredJson} />
+          )}
           <label className="grid gap-1 text-sm">
             <span>Quantity</span>
             <input

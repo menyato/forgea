@@ -58,13 +58,16 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   };
 }
 
-/** The live price for the current choices (the API prices; the browser never does). */
+/** The live price for the current choices (the API prices; the browser only measures). */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
   const design = jsonField(form, 'design');
+  const measured = jsonField(form, 'measured');
   const parsed = validateForm(ProductPriceDto, {
     options: jsonField(form, 'options') ?? [],
     ...(design ? { design } : {}),
+    // What the browser built for the 3D preview: priced without building it again.
+    ...(design && measured ? { measured } : {}),
   });
   if (!parsed.ok) return data({ error: 'Check your choices' }, { status: 400 });
   const r = await context.get(apiContext).post<{

@@ -95,7 +95,7 @@ export class ProductsController {
     @Param('slug') slug: string,
     @Body() dto: ProductPriceDto,
   ): Promise<{ unitPrice: string }> {
-    return this.products.price(slug, dto.options, dto.design);
+    return this.products.price(slug, dto.options, dto.design, dto.measured);
   }
 
   @RequirePermission('catalog.manage')

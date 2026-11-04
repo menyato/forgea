@@ -21,7 +21,7 @@ import { OptionSelectionDto } from './catalog.dto.js';
 import { MONEY_PATTERN } from './constants.js';
 import { Trim } from './email.js';
 import { CART_QUANTITY_MAX, PHONE_PATTERN } from './constants.js';
-import { TextDesignDto } from './text-studio.dto.js';
+import { DesignMeasurementDto, TextDesignDto } from './text-studio.dto.js';
 
 export class AddCartItemDto {
   @IsUUID()
@@ -46,6 +46,12 @@ export class AddCartItemDto {
   @ValidateNested()
   @Type(() => TextDesignDto)
   design?: TextDesignDto;
+
+  /** The browser's measurement of that design (see DesignMeasurementDto). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DesignMeasurementDto)
+  measured?: DesignMeasurementDto;
 }
 
 export class UpdateCartItemDto {

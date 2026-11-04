@@ -9,6 +9,7 @@ import type {
   CartView,
   ChosenOption,
   OptionSelection,
+  DesignMeasurement,
   TextDesignInput,
 } from '@forgea/types';
 import { PricingService } from '../pricing/pricing.service.js';
@@ -58,16 +59,18 @@ export class CartService {
     quantity: number,
     selections: readonly OptionSelection[],
     design?: TextDesignInput,
+    measured?: DesignMeasurement,
   ): Promise<CartResult> {
     const product = await this.products.findActive(productId);
     if (!product) throw new NotFoundException('This product is not available');
     // 400 with a message for the shopper when a choice is missing or not offered.
     const configuration = this.configurator.configure(product, selections);
-    // A personalised piece is made (in the worker) before it goes in: 400 if it can't be.
-    let measured: Measurement | null = null;
+    // A personalised piece is checked before it goes in (400 if it can't be made), priced from
+    // the browser's measurement when it sent one; checkout measures it again on the server.
+    let measurement: Measurement | null = null;
     if (product.textStyle) {
       if (!design) throw new BadRequestException('Type your text first');
-      measured = await this.studio.measure(product, design);
+      measurement = await this.studio.measure(product, design, measured);
     } else if (design) {
       throw new BadRequestException('This product has no text to design');
     }
@@ -85,11 +88,11 @@ export class CartService {
       {
         productId,
         // Another text, font or colour is another line.
-        configKey: measured
-          ? `${configuration.configKey}|${designKey(measured.design)}`
+        configKey: measurement
+          ? `${configuration.configKey}|${designKey(measurement.design)}`
           : configuration.configKey,
         selections: configuration.selections,
-        design: measured,
+        design: measurement,
       },
       quantity,
     );

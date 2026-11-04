@@ -15,6 +15,7 @@ import {
   type TextSettings,
 } from '@forgea/text3d/design';
 import type {
+  DesignMeasurement,
   DesignSummary,
   ProductTextOffer,
   ProductTextSettings,
@@ -28,7 +29,7 @@ import { StoreSettingsService } from '../store-settings/store-settings.service.j
 import { UploadsService } from '../uploads/uploads.service.js';
 import { FontsRepository } from './fonts.repository.js';
 import { sampleGlb } from './sample-glb.js';
-import { TextShaper } from './text-shaper.js';
+import { type Measured, TextShaper } from './text-shaper.js';
 
 /**
  * A personalised piece as measured: what it takes to print (server-only: grams and hours are
@@ -105,13 +106,17 @@ export class TextStudio {
   }
 
   /**
-   * Checks the design against the product (its fonts and colours) and makes it in the
-   * worker: the grams and hours it takes, and how it reads. 400 with the customer's reason
-   * when it can't be made.
+   * Checks the design against the product (its fonts and colours) and measures it: the grams
+   * and hours it takes, and how it reads. 400 with the customer's reason when it can't be made.
+   *
+   * `given` is the browser's own measurement (it built the same design for the preview): the
+   * live price and the cart use it, so a busy shop costs the server no geometry. Without it
+   * (checkout) the worker builds the design, and that is what an order is priced from.
    */
   async measure(
     p: ConfigurableProduct,
     design: TextDesignInput,
+    given?: DesignMeasurement,
   ): Promise<Measurement> {
     const base = this.settings(p);
     if (!base) {
@@ -188,14 +193,16 @@ export class TextStudio {
       ...(clean.accentFontId ? [clean.accentFontId] : []),
       ...letters.flatMap((l) => l.fontId ?? []),
     ]);
-    const measured = await this.shaper.measure(
-      [...used].map((id) => ({
-        id,
-        read: () => this.uploads.read(fonts.get(id)!.fileKey),
-      })),
-      clean,
-      settings,
-    );
+    const measured = given
+      ? plausible(given, clean, settings, perLetter ? letters : [])
+      : await this.shaper.measure(
+          [...used].map((id) => ({
+            id,
+            read: () => this.uploads.read(fonts.get(id)!.fileKey),
+          })),
+          clean,
+          settings,
+        );
     if (measured.problem !== null)
       throw new BadRequestException(measured.problem);
 
@@ -378,6 +385,41 @@ export class TextStudio {
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * The browser's measurement, if it could be this design's: its colours are the design's, and
+ * no part is bigger than the piece's box, which itself fits the product's limits. It is only
+ * ever a display price (checkout measures on the server), so this keeps out nonsense, not
+ * fraud.
+ */
+function plausible(
+  given: DesignMeasurement,
+  design: TextDesignInput,
+  settings: TextSettings,
+  letters: readonly { colour?: string | undefined }[],
+): Measured {
+  const allowed = new Set([
+    design.textColour,
+    ...(design.baseColour ? [design.baseColour] : []),
+    ...(design.accentColour ? [design.accentColour] : []),
+    ...letters.flatMap((l) => l.colour ?? []),
+  ]);
+  const { x, y, z } = given.size;
+  // Generous: decorations, a keyring loop and a backing plate stand out past the letters.
+  const reach = 2 * settings.maxWidthMm + 4 * settings.letterHeightMm + 40;
+  const box = x * y * z;
+  const fits =
+    given.parts.length > 0 &&
+    given.parts.every((part) => allowed.has(part.colour)) &&
+    Math.max(x, y, z) <= reach &&
+    given.parts.reduce((s, part) => s + part.volumeMm3, 0) <= box &&
+    given.parts.some((part) => part.volumeMm3 > 0);
+  if (!fits)
+    throw new BadRequestException(
+      'The price could not be worked out. Reload the page and try again.',
+    );
+  return { problem: null, parts: given.parts, size: given.size };
+}
 
 /**
  * The original names generated sample models are stored under (the owner's own models never

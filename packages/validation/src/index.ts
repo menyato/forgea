@@ -102,6 +102,7 @@ export {
   ProductTextDto,
   SaveFontDto,
   TEXT_MAX_CHARS,
+  DesignMeasurementDto,
   TextDesignDto,
   UpdateFontDto,
 } from './text-studio.dto.js';

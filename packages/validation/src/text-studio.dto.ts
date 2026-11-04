@@ -2,10 +2,12 @@ import { TextDecor, TextStyle } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -79,6 +81,52 @@ export class TextDesignDto {
   @ValidateNested({ each: true })
   @Type(() => DesignLetterDto)
   letters?: DesignLetterDto[];
+}
+
+/** One colour's solid, as the browser measured it. */
+export class MeasuredPartDto {
+  @IsUUID()
+  colour!: string;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(10_000_000)
+  volumeMm3!: number;
+}
+
+/** The piece's size as the browser measured it (mm). */
+export class MeasuredSizeDto {
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(2000)
+  x!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(2000)
+  y!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(2000)
+  z!: number;
+}
+
+/**
+ * The browser's measurement of the design it built for the preview: lets the live price and
+ * the cart skip building it again on the server. Checkout always builds it on the server.
+ */
+export class DesignMeasurementDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(TEXT_MAX_CHARS + 4)
+  @ValidateNested({ each: true })
+  @Type(() => MeasuredPartDto)
+  parts!: MeasuredPartDto[];
+
+  @ValidateNested()
+  @Type(() => MeasuredSizeDto)
+  size!: MeasuredSizeDto;
 }
 
 /** A personalised product's settings (Dashboard → product → Personalised text). */

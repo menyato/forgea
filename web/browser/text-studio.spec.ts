@@ -27,10 +27,10 @@ function watch(page: Page) {
   return faults;
 }
 
-/** The live price (the first line of the block that announces it), once there is one. */
+/** The live price (the first line of the block that announces it), once it is for the design on screen. */
 const price = (page: Page) =>
   page
-    .locator('[aria-live="polite"] > p')
+    .locator('[aria-live="polite"]:not([aria-busy="true"]) > p')
     .first()
     .getByText(/^\$\d+\.\d{2}$/);
 
@@ -99,7 +99,16 @@ test('a customer designs a name keychain in 3D, in English and Arabic; the studi
       .getByRole('radiogroup', { name: 'Backing colour' })
       .getByRole('radio', { name: 'Black' }),
   ).toBeChecked();
+  // The price is asked for with what this browser built: the server builds nothing while
+  // the customer types.
+  const measuredPrice = page.waitForRequest(
+    (r) =>
+      r.method() === 'POST' &&
+      r.url().includes(`/products/`) &&
+      (r.postData() ?? '').includes('measured='),
+  );
   await page.getByLabel(/Your text/).fill('Sara');
+  await measuredPrice;
   // One colour first (the backing as the letters), to compare against.
   await page
     .getByRole('radiogroup', { name: 'Backing colour' })

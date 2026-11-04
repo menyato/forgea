@@ -203,7 +203,7 @@ the cookies the API sets. API addresses and tokens never reach browser code.
 | Sign-in, register, refresh | 5/min, 30/hour | Slows password guessing |
 | Custom-design form | 3 per 10 min, 10/hour | Spam |
 | Quotes, cart | 30/min and 60/min | Bounded work per client |
-| A product page's live price | 60/min, 900/hour | Asked at each choice; mobile customers share addresses. Studio designs are also bounded by the worker pool (2 at a time, 200 waiting at most, cached) |
+| A product page's live price | 60/min, 900/hour | Asked at each choice; mobile customers share addresses. Studio designs are built in the customer's browser and priced from its measurement (checked for plausibility); the server builds a design only at checkout (and for reorders without one), bounded by the worker pool (2 at a time, 200 waiting at most, cached), so a checkout always prices the real piece |
 | Checkout | 5/min, 20/hour | A person places a few orders at most |
 | Product models and photos | 900/min, 20000/hour | A shop page shows dozens; shoppers share office and mobile addresses |
 

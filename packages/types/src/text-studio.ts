@@ -46,6 +46,17 @@ export interface ProductTextOffer extends Omit<
   fonts: Pick<FontView, 'id' | 'name' | 'fileKey' | 'latin' | 'arabic'>[];
 }
 
+/**
+ * What the browser measured when it built the design for its 3D preview (the same
+ * @forgea/text3d code the studio prints from): each colour's volume and the piece's size.
+ * The live price and the cart use it, so typing costs the server no geometry; checkout
+ * builds the design on the server once and prices what it measures there.
+ */
+export interface DesignMeasurement {
+  parts: { colour: string; volumeMm3: number }[];
+  size: { x: number; y: number; z: number };
+}
+
 /** The customer's design, as sent (colours are option value ids from `colours`). */
 export interface TextDesignInput {
   text: string;

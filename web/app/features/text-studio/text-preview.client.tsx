@@ -5,7 +5,11 @@ import {
   FontSet,
   type TextSettings,
 } from '@forgea/text3d';
-import type { ProductTextOffer, TextDesignInput } from '@forgea/types';
+import type {
+  DesignMeasurement,
+  ProductTextOffer,
+  TextDesignInput,
+} from '@forgea/types';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useState } from 'react';
 import { Box3, Color, PerspectiveCamera, Vector3 } from 'three';
@@ -73,11 +77,17 @@ export default function TextPreview({
   design,
   label,
   onProblem,
+  onMeasured,
 }: {
   offer: ProductTextOffer;
   design: TextDesignInput;
   label: string;
   onProblem: (problem: string | null) => void;
+  /**
+   * What was built for this design (its JSON as the key): the page prices from it, so the
+   * server never has to build the piece while the customer types.
+   */
+  onMeasured?: (designJson: string, measured: DesignMeasurement) => void;
 }) {
   const [built, setBuilt] = useState<BuiltDesign | null>(null);
   const key = JSON.stringify(design);
@@ -98,9 +108,17 @@ export default function TextPreview({
           const problem = designProblem(set, d, settings);
           onProblem(problem);
           if (problem) return;
+          const next = buildDesign(set, d, settings);
           setBuilt((old) => {
             for (const p of old?.parts ?? []) p.geometry.dispose();
-            return buildDesign(set, d, settings);
+            return next;
+          });
+          onMeasured?.(key, {
+            parts: next.parts.map((p) => ({
+              colour: p.colour,
+              volumeMm3: p.volumeMm3,
+            })),
+            size: { x: next.size.x, y: next.size.y, z: next.size.z },
           });
         })
         .catch((error: unknown) => {
@@ -112,7 +130,7 @@ export default function TextPreview({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [key, offer, onProblem]);
+  }, [key, offer, onProblem, onMeasured]);
   useEffect(
     () => () => {
       for (const p of built?.parts ?? []) p.geometry.dispose();

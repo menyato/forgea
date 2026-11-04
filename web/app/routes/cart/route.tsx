@@ -52,7 +52,13 @@ export async function action({ request, context }: Route.ActionArgs) {
       options: jsonField(form, 'options') ?? [],
       // A personalised piece's design (text, fonts, colours), also as JSON.
       ...(jsonField(form, 'design')
-        ? { design: jsonField(form, 'design') }
+        ? {
+            design: jsonField(form, 'design'),
+            // The browser's measurement of it, when the preview built it.
+            ...(jsonField(form, 'measured')
+              ? { measured: jsonField(form, 'measured') }
+              : {}),
+          }
         : {}),
     });
     if (!parsed.ok)
