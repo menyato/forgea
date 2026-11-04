@@ -59,6 +59,12 @@ test('a customer asks for something custom, the studio quotes it, the customer o
   await admin.goto('/admin/requests?status=SUBMITTED');
   await admin.getByRole('link', { name: new RegExp(title) }).click();
   await expect(admin.getByRole('heading', { name: title })).toBeVisible();
+  // The studio saves the customer's file under the name they sent it with.
+  const download = admin.waitForEvent('download');
+  await admin
+    .getByRole('link', { name: "Download the customer's file" })
+    .click();
+  expect((await download).suggestedFilename()).toBe('bracket.stl');
   await admin.getByLabel('Price (USD, for everything)').fill('30');
   await admin
     .getByLabel('Note for the customer (optional)')
