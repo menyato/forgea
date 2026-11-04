@@ -1,79 +1,78 @@
 import type { Profile } from '@forgea/types';
-import { data, Form, Link, useNavigation } from 'react-router';
+import { ConfirmEmailDto } from '@forgea/validation';
+import { data, Form, Link, redirect, useNavigation } from 'react-router';
 import { PrintingLogo } from '~/components/brand/printing-logo';
 import { PAGE_WIDTH } from '~/components/layout/page-width';
 import { Button, buttonClass } from '~/components/ui/button';
+import { Field, FormAlert } from '~/components/ui/field';
+import {
+  clearPending,
+  readPending,
+} from '~/features/auth/pending-confirmation.server';
+import { textFields, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 export function meta(_: Route.MetaArgs) {
   return [
-    { title: 'Confirm your email — Forgea' },
+    { title: 'Enter your code — Forgea' },
     { name: 'robots', content: 'noindex' },
   ];
 }
 
-/**
- * The link from the "confirm your email address" message. Opening it confirms nothing: the
- * person presses the button. Mail scanners and link previews open every link in a message,
- * and would otherwise confirm an address on behalf of whoever registered it.
- */
-export function loader({ url }: Route.LoaderArgs) {
-  const token = url.searchParams.get('token');
-  return { token, email: token ? addressIn(token) : null };
+/** The address the code went to, from the ticket this browser holds (or none: start again). */
+export async function loader({ request }: Route.LoaderArgs) {
+  const pending = await readPending(request);
+  return { email: pending?.email ?? null };
 }
 
-/**
- * The address the link was made for, read from the token only to show it (the API checks the
- * token itself when the button is pressed).
- */
-function addressIn(token: string): string | null {
-  try {
-    const payload: unknown = JSON.parse(
-      Buffer.from(token.split('.')[1] ?? '', 'base64url').toString(),
-    );
-    const email =
-      typeof payload === 'object' && payload !== null && 'email' in payload
-        ? payload.email
-        : null;
-    return typeof email === 'string' ? email : null;
-  } catch {
-    return null;
-  }
-}
+type ActionResult = { error?: string; sent?: boolean };
 
-type ActionResult =
-  | { confirmed: true }
-  | { confirmed: false; sent: boolean; error: string | null };
-
-/** confirm (the button, with the link's token) | resend (signed in) */
+/** confirm (the 6-digit code) | resend (a new code, at most once a minute) */
 export async function action({ request, context }: Route.ActionArgs) {
+  const pending = await readPending(request);
+  if (!pending)
+    return data<ActionResult>(
+      { error: 'This page has expired. Sign in again to get a new code.' },
+      { status: 400 },
+    );
   const api = context.get(apiContext);
   const form = await request.formData();
-  const token = form.get('token');
-  if (form.get('intent') === 'confirm' && typeof token === 'string') {
-    const r = await api.post<Profile>('/auth/verify-email', { token });
-    return r.ok
-      ? data<ActionResult>({ confirmed: true })
-      : data<ActionResult>(
-          { confirmed: false, sent: false, error: r.message },
-          { status: r.status },
-        );
+
+  if (form.get('intent') === 'resend') {
+    const r = await api.post<{ sent: boolean }>('/auth/email-code/resend', {
+      ticket: pending.ticket,
+    });
+    if (!r.ok)
+      return data<ActionResult>({ error: r.message }, { status: r.status });
+    return data<ActionResult>(
+      r.data.sent
+        ? { sent: true }
+        : {
+            error:
+              'A code went out less than a minute ago. Check your inbox, or try again shortly.',
+          },
+    );
   }
-  const r = await api.post('/auth/verify-email/resend');
-  return r.ok
-    ? data<ActionResult>({ confirmed: false, sent: true, error: null })
-    : data<ActionResult>(
-        {
-          confirmed: false,
-          sent: false,
-          error:
-            r.status === 401
-              ? 'Sign in first, then ask for a new link.'
-              : r.message,
-        },
-        { status: r.status },
-      );
+
+  const parsed = validateForm(ConfirmEmailDto, {
+    ticket: pending.ticket,
+    ...textFields(form, ['code'] as const),
+  });
+  if (!parsed.ok)
+    return data<ActionResult>(
+      {
+        error: parsed.errors['code'] ?? 'Enter the 6-digit code from the email',
+      },
+      { status: 400 },
+    );
+  const r = await api.post<Profile>('/auth/email-code', parsed.value);
+  if (!r.ok)
+    return data<ActionResult>({ error: r.message }, { status: r.status });
+  // Signed in (the API's cookies ride along on this response): forget the ticket.
+  return redirect(pending.next, {
+    headers: { 'Set-Cookie': await clearPending() },
+  });
 }
 
 export default function VerifyEmail({
@@ -81,77 +80,70 @@ export default function VerifyEmail({
   actionData,
 }: Route.ComponentProps) {
   const busy = useNavigation().state === 'submitting';
-  if (actionData?.confirmed) {
+  if (!loaderData.email) {
     return (
       <main className={`${PAGE_WIDTH} grid max-w-2xl gap-5 py-16`}>
         <PrintingLogo className="w-20" />
         <h1 className="font-display text-4xl font-extrabold">
-          Address confirmed
+          This page has expired
         </h1>
         <p className="text-text-muted">
-          We will send your order updates and quotes here.
+          Codes work for 10 minutes. Sign in with your email and password and we
+          will send you a new one.
         </p>
         <Link
-          to="/shop"
+          to="/sign-in"
           className={buttonClass('primary', 'justify-self-start')}
         >
-          Go to the shop
+          Sign in
         </Link>
       </main>
     );
   }
-  const failed = actionData && !actionData.confirmed ? actionData : null;
   return (
-    <main className={`${PAGE_WIDTH} grid max-w-2xl gap-5 py-16`}>
+    <main className="mx-auto grid max-w-sm gap-6 px-4 py-16">
       <PrintingLogo className="w-20" />
-      {loaderData.token && !failed?.error ? (
-        <>
-          <h1 className="font-display text-4xl font-extrabold">
-            Confirm your email address
-          </h1>
-          <p className="text-text-muted">
-            {loaderData.email ? (
-              <>
-                Confirm{' '}
-                <strong className="text-text">{loaderData.email}</strong> for
-                your Forgea account: order updates and quotes then come here.
-              </>
-            ) : (
-              'One click and your order updates and quotes come to this address.'
-            )}
-          </p>
-          <p className="text-sm text-text-muted">
-            Didn't create a Forgea account? Don't press the button: just close
-            this page, and nobody can use your address.
-          </p>
-          <Form method="post">
-            <input type="hidden" name="intent" value="confirm" />
-            <input type="hidden" name="token" value={loaderData.token} />
-            <Button type="submit" disabled={busy}>
-              Confirm my email address
-            </Button>
-          </Form>
-        </>
-      ) : (
-        <>
-          <h1 className="font-display text-4xl font-extrabold">
-            This link didn't work
-          </h1>
-          <p className="text-text-muted">
-            {failed?.error ?? 'This link is incomplete.'}
-          </p>
-          {failed?.sent ? (
-            <p className="font-medium">A new link is on its way.</p>
-          ) : (
-            <Form method="post">
-              <input type="hidden" name="intent" value="resend" />
-              <Button type="submit" disabled={busy}>
-                Send me a new link
-              </Button>
-            </Form>
-          )}
-        </>
+      <h1 className="font-display text-4xl font-bold">Check your email</h1>
+      <p className="text-sm text-text-muted">
+        We sent a 6-digit code to{' '}
+        <strong className="text-text">{loaderData.email}</strong>. Enter it here
+        to finish creating your account.
+      </p>
+      <FormAlert message={actionData?.error} />
+      {actionData?.sent && (
+        <p role="status" className="text-sm font-medium">
+          A new code is on its way.
+        </p>
       )}
+      <Form method="post" className="grid gap-4" noValidate>
+        <Field
+          label="Code"
+          name="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="\d{6}"
+          maxLength={6}
+          required
+          autoFocus
+        />
+        <Button type="submit" name="intent" value="confirm" disabled={busy}>
+          {busy ? 'Checking…' : 'Confirm and continue'}
+        </Button>
+      </Form>
+      <Form method="post">
+        <input type="hidden" name="intent" value="resend" />
+        <p className="text-sm text-text-muted">
+          Nothing arrived? Check your spam folder, or{' '}
+          <button
+            type="submit"
+            disabled={busy}
+            className="underline underline-offset-4"
+          >
+            send a new code
+          </button>
+          .
+        </p>
+      </Form>
     </main>
   );
 }

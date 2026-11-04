@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { finishSignUp } from './mail';
 import { cube } from '../../api/prisma/example-models';
 import { signInAsAdmin } from './admin-session';
 
@@ -151,6 +152,7 @@ test('customers cannot open the dashboard', async ({ page }) => {
   await page.getByLabel('Email').fill(`curious-${Date.now()}@example.com`);
   await page.getByLabel('Password').fill('correct-horse-battery-9');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
   await expect(
     page.getByRole('heading', { name: 'Not allowed' }),
   ).toBeVisible();

@@ -16,6 +16,16 @@ export interface Profile {
   permissions: Permission[];
 }
 
+/**
+ * A new email + password account (or a sign-in that still needs confirming) is not signed in
+ * yet: the browser keeps this ticket and sends it back with the 6-digit code that was emailed.
+ */
+export interface PendingConfirmation {
+  ticket: string;
+  /** Where the code went, to show on the page that asks for it. */
+  email: string;
+}
+
 /** A team member's access, for the access page: their role's share and their own changes. */
 export interface TeamAccess {
   id: string;

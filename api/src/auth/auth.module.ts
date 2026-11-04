@@ -5,6 +5,7 @@ import { MailModule } from '../mail/mail.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { EmailCodes } from './email-codes.js';
 import { ExpiredSessionsCleaner } from './expired-sessions-cleaner.js';
 import { LoginAttempts } from './login-attempts.js';
 import { GoogleAuthGuard, GoogleOidc } from './google-oidc.js';
@@ -28,6 +29,7 @@ import { SessionsRepository } from './sessions.repository.js';
     PasswordHasher,
     SessionService,
     SessionsRepository,
+    EmailCodes,
     GoogleOidc,
     GoogleAuthGuard,
   ],

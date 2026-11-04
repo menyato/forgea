@@ -34,11 +34,25 @@ export class RegisterDto {
   name?: string;
 }
 
-/** The token from an email-verification link. */
-export class VerifyEmailDto {
+/**
+ * Confirms a new account's address: the ticket the API gave the browser at sign-up (or at a
+ * sign-in that still needs confirming), and the 6-digit code that was emailed.
+ */
+export class ConfirmEmailDto {
   @IsString()
   @MaxLength(2048)
-  token!: string;
+  ticket!: string;
+
+  @Trim()
+  @Matches(/^\d{6}$/, { message: 'Enter the 6-digit code from the email' })
+  code!: string;
+}
+
+/** Asks for a new code for the account a confirmation ticket names. */
+export class ResendEmailCodeDto {
+  @IsString()
+  @MaxLength(2048)
+  ticket!: string;
 }
 
 export class LoginDto {

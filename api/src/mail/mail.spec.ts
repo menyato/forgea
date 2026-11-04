@@ -94,14 +94,11 @@ describe('MailTemplates', () => {
     expect(email.text).toContain('+961 70 904 044 with FG-2 in the note');
   });
 
-  it('puts the verification token in a link to the site', () => {
-    const email = templates.verifyEmail({
-      to: 'r@example.com',
-      token: 'a.b+c',
-    });
-    expect(email.text).toContain(
-      'https://forgea-lab.com/verify-email?token=a.b%2Bc',
-    );
+  it('puts the sign-up code in the subject and the text, with no link to follow', () => {
+    const email = templates.emailCode({ to: 'r@example.com', code: '042917' });
+    expect(email.subject).toBe('042917 is your Forgea code');
+    expect(email.text).toContain('Your code is 042917.');
+    expect(email.text).not.toContain('http');
   });
 
   it('lays out a quotation with sizes, in the owner words, and escapes whatever was typed', () => {
@@ -159,10 +156,10 @@ describe('Notifications', () => {
       },
     } as Mailer;
     const notifications = new Notifications(mailer, templates, config);
-    notifications.send('verifyEmail', { to: 'a@example.com', token: 't' });
+    notifications.send('emailCode', { to: 'a@example.com', code: '111111' });
     fail = true;
     expect(() =>
-      notifications.send('verifyEmail', { to: 'b@example.com', token: 't' }),
+      notifications.send('emailCode', { to: 'b@example.com', code: '111111' }),
     ).not.toThrow();
     await notifications.settled();
     expect(sent.map((e) => e.to)).toEqual(['a@example.com']);
@@ -200,9 +197,9 @@ describe('Notifications', () => {
     const mailer = { send: async (e: Email) => void sent.push(e) } as Mailer;
     const notifications = new Notifications(mailer, templates, config);
     const results = [1, 2, 3, 4].map(() =>
-      notifications.sendAtMost('password-reset:u1', 3, 'verifyEmail', {
+      notifications.sendAtMost('password-reset:u1', 3, 'emailCode', {
         to: 'a@example.com',
-        token: 't',
+        code: '111111',
       }),
     );
     await notifications.settled();

@@ -111,10 +111,14 @@ Locally the database runs on `localhost` with credentials in the gitignored `api
   only while the password is unchanged, so it works once; using it confirms the address and
   signs out every session. Changing the password on `/account` needs the current one and signs
   out every other device. Staff never have passwords, so they get no reset links.
-- **Email verification** (Phase 9): a new account gets a signed, single-purpose link
-  (`/verify-email`); the address is confirmed when the person presses the button on that page.
-  Opening the link alone confirms nothing, since mail scanners and link previews open every
-  link in a message.
+- **Email code at sign-up:** an email + password account is not signed in until the 6-digit
+  code emailed to the address is entered on `/verify-email`. The browser holds a 15-minute
+  ticket (a JWT with its own audience, in an httpOnly cookie) naming the account; the ticket
+  alone signs nobody in. The code is stored only as an HMAC under a server key, lives 10
+  minutes, allows 5 wrong tries (checked under a row lock), is resent at most once a minute
+  and at most 6 times an hour per address. The right password on an account that was never
+  confirmed sends a new code instead of signing in. Google sign-ups skip this: Google has
+  already confirmed the address.
 - **Known gap:** registering an already-used email still says so. Rate limiting bounds how fast
   anyone can probe; answering "check your email" in both cases is the next step.
 

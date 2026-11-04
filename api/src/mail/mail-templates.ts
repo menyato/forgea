@@ -259,16 +259,13 @@ Forgea — design and 3D printing, made in Lebanon · WhatsApp ${escape(q.whatsa
     };
   }
 
-  verifyEmail(v: { to: string; token: string }): Email {
-    return this.email(v.to, 'Confirm your email address', {
+  /** The 6-digit code that finishes a new account (no link: it is typed into the open page). */
+  emailCode(v: { to: string; code: string }): Email {
+    return this.email(v.to, `${v.code} is your Forgea code`, {
       paragraphs: [
-        'Confirm this address so we can send you order updates and quotes.',
-        'The link works for two days. If you did not create a Forgea account, ignore this email.',
+        `Your code is ${v.code}. Enter it on the page where you created your account.`,
+        'It works for 10 minutes. If you did not create a Forgea account, ignore this email.',
       ],
-      action: {
-        label: 'Confirm my address',
-        url: `${this.site}/verify-email?token=${encodeURIComponent(v.token)}`,
-      },
     });
   }
 

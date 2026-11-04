@@ -20,7 +20,7 @@ model User {
   googleId           String?   @unique
   /// argon2id. Only CUSTOMER accounts may have one (CHECK constraint): staff sign in with Google only.
   passwordHash       String?
-  /// Set when Google confirms the email, or (Phase 9) when the customer clicks the verification link.
+  /// Set when Google confirms the email, or when the customer enters the code emailed at sign-up.
   emailVerifiedAt    DateTime? @db.Timestamptz(3)
   role               Role      @default(CUSTOMER)
   /// Permissions given to this team member on top of their role (keys from @forgea/types).
@@ -38,6 +38,7 @@ model User {
   auditEntries        AuditLog[]
   pricingEdits        PricingSettings[]
   sessions            Session[]
+  emailCode           EmailCode?
   uploads             Upload[]
   ratesSet            ExchangeRate[]
   storeSettingsEdits  StoreSettings[]

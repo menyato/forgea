@@ -20,3 +20,19 @@ model Session {
   @@index([expiresAt])
   @@map("sessions")
 }
+
+/// The 6-digit code emailed to confirm a new email + password account (and again when an
+/// unconfirmed account signs in). One live code per account; only its HMAC is stored, so a copy
+/// of the database can't reveal it. Deleted when used; useless once expired or out of tries.
+model EmailCode {
+  userId       String   @id @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash     String
+  expiresAt    DateTime @db.Timestamptz(3)
+  /// Wrong codes left before this one stops working (CHECK >= 0).
+  attemptsLeft Int
+  /// When it was emailed: a new one is sent at most once a minute.
+  sentAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("email_codes")
+}

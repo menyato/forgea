@@ -15,6 +15,7 @@ import type {
   UsersRepository,
 } from '../users/users.repository.js';
 import { AuthService } from './auth.service.js';
+import type { CodeCheck, EmailCodes } from './email-codes.js';
 import type { TeamPermissions } from '../authorization/team-permissions.js';
 import { PasswordResetTokens } from '../authorization/password-reset-tokens.js';
 import { LoginAttempts } from './login-attempts.js';
@@ -81,6 +82,32 @@ class FakeUsers {
   };
 }
 
+/** In-memory stand-in for EmailCodes: one code per account, three tries, a minute between sends. */
+class FakeCodes {
+  private live = new Map<
+    string,
+    { code: string; tries: number; sentAt: number }
+  >();
+  private seq = 100000;
+  now = Date.now();
+  issue = async (userId: string) => {
+    const last = this.live.get(userId);
+    if (last && this.now - last.sentAt < 60_000) return null;
+    const code = String(++this.seq);
+    this.live.set(userId, { code, tries: 3, sentAt: this.now });
+    return code;
+  };
+  check = async (userId: string, code: string): Promise<CodeCheck> => {
+    const row = this.live.get(userId);
+    if (!row || row.tries <= 0) return 'expired';
+    if (row.code === code) {
+      this.live.delete(userId);
+      return 'ok';
+    }
+    return --row.tries > 0 ? 'wrong' : 'expired';
+  };
+}
+
 const config = new ConfigService({
   ACCESS_TOKEN_TTL_SECONDS: 900,
   WORKSPACE_DOMAIN: 'forgea-lab.com',
@@ -89,7 +116,7 @@ const config = new ConfigService({
 const ctx = { ip: '1.2.3.4', userAgent: 'test' };
 
 describe('AuthService', () => {
-  let sent: { template: string; to: string; token?: string }[] = [];
+  let sent: { template: string; to: string; code?: string }[] = [];
   let users: FakeUsers;
   let audit: AuditEntry[];
   let service: AuthService;
@@ -97,7 +124,11 @@ describe('AuthService', () => {
 
   beforeAll(() => passwords.onModuleInit());
 
+  let fakeCodes: FakeCodes;
+  const codes = () => fakeCodes;
+
   beforeEach(() => {
+    fakeCodes = new FakeCodes();
     users = new FakeUsers();
     audit = [];
     const sessions = {
@@ -110,8 +141,14 @@ describe('AuthService', () => {
     const tokens = new AccessTokenService(jwt, config);
     sent = [];
     const notifications = {
-      send: (template: string, data: { to: string; token?: string }) =>
+      send: (template: string, data: { to: string; code?: string }) =>
         void sent.push({ template, ...data }),
+      sendAtMost: (
+        _key: string,
+        _max: number,
+        template: string,
+        data: { to: string; code?: string },
+      ) => (sent.push({ template, ...data }), true),
     } as unknown as Notifications;
     service = new AuthService(
       users as unknown as UsersRepository,
@@ -120,6 +157,7 @@ describe('AuthService', () => {
       tokens,
       auditLog,
       new EmailVerificationTokens(jwt),
+      fakeCodes as unknown as EmailCodes,
       notifications,
       new LoginAttempts(),
       new PasswordResetTokens(jwt),
@@ -143,11 +181,13 @@ describe('AuthService', () => {
         email: 'a@b.co',
         role: Role.CUSTOMER,
         passwordHash: await passwords.hash('right password!'),
+        emailVerifiedAt: new Date(),
       });
       const session = await service.loginWithPassword(
         { email: 'a@b.co', password: 'right password!' },
         ctx,
       );
+      if ('ticket' in session) throw new Error('expected a signed-in session');
       expect(session.profile.role).toBe(Role.CUSTOMER);
       expect(session.landingPath).toBe('customer');
     });
@@ -172,49 +212,85 @@ describe('AuthService', () => {
     });
   });
 
-  describe('email verification', () => {
+  describe('sign-up email code', () => {
     const register = () =>
-      service.register(
-        {
-          email: 'nadia@example.com',
-          password: 'correct-horse-battery-9',
-          name: 'Nadia',
-        },
-        ctx,
-      );
+      service.register({
+        email: 'nadia@example.com',
+        password: 'correct-horse-battery-9',
+        name: 'Nadia',
+      });
 
-    it('emails a link when a customer registers; the link confirms the address', async () => {
-      const { profile } = await register();
+    it('emails a code at sign-up and signs in only once the code is entered', async () => {
+      const pending = await register();
+      expect(pending.email).toBe('nadia@example.com');
+      expect(pending).not.toHaveProperty('accessToken');
       expect(sent).toEqual([
         expect.objectContaining({
-          template: 'verifyEmail',
+          template: 'emailCode',
           to: 'nadia@example.com',
         }),
       ]);
-      const verified = await service.verifyEmail(sent[0]!.token!);
-      expect(verified.id).toBe(profile.id);
+      expect(users.rows[0]!.emailVerifiedAt).toBeNull();
+      const session = await service.confirmEmail(
+        { ticket: pending.ticket, code: sent[0]!.code! },
+        ctx,
+      );
+      expect(session.profile.email).toBe('nadia@example.com');
       expect(users.rows[0]!.emailVerifiedAt).not.toBeNull();
     });
 
-    it('refuses a tampered link, and a link for an address the account no longer has', async () => {
-      await register();
-      const token = sent[0]!.token!;
-      await expect(service.verifyEmail(`${token}x`)).rejects.toThrow(
-        /expired or is not valid/,
-      );
+    it('refuses a wrong code, and stops after too many', async () => {
+      const { ticket } = await register();
+      await expect(
+        service.confirmEmail({ ticket, code: '000000' }, ctx),
+      ).rejects.toThrow(/not right/);
+      await expect(
+        service.confirmEmail({ ticket, code: '000000' }, ctx),
+      ).rejects.toThrow(/not right/);
+      await expect(
+        service.confirmEmail({ ticket, code: '000000' }, ctx),
+      ).rejects.toThrow(/expired/);
+      // Even the right code no longer works: a new one has to be sent.
+      await expect(
+        service.confirmEmail({ ticket, code: sent[0]!.code! }, ctx),
+      ).rejects.toThrow(/expired/);
+    });
+
+    it('refuses a tampered ticket, and one for an address the account no longer has', async () => {
+      const { ticket } = await register();
+      const code = sent[0]!.code!;
+      await expect(
+        service.confirmEmail({ ticket: `${ticket}x`, code }, ctx),
+      ).rejects.toThrow(/Sign in again/);
       users.rows[0]!.email = 'changed@example.com';
-      await expect(service.verifyEmail(token)).rejects.toThrow(
-        /expired or is not valid/,
+      await expect(service.confirmEmail({ ticket, code }, ctx)).rejects.toThrow(
+        /Sign in again/,
       );
     });
 
-    it('sends a new link only while the address is unconfirmed', async () => {
-      const { profile } = await register();
-      await service.resendVerification(profile.id);
+    it('sends a new code at most once a minute, and none once confirmed', async () => {
+      const { ticket } = await register();
+      expect(await service.resendEmailCode(ticket)).toEqual({ sent: false });
+      codes().now += 61_000;
+      expect(await service.resendEmailCode(ticket)).toEqual({ sent: true });
+      await service.confirmEmail({ ticket, code: sent[1]!.code! }, ctx);
+      codes().now += 61_000;
+      expect(await service.resendEmailCode(ticket)).toEqual({ sent: false });
       expect(sent).toHaveLength(2);
-      await service.verifyEmail(sent[0]!.token!);
-      await service.resendVerification(profile.id);
-      expect(sent).toHaveLength(2);
+      // The ticket can't sign in again once the address is confirmed.
+      await expect(
+        service.confirmEmail({ ticket, code: sent[1]!.code! }, ctx),
+      ).rejects.toThrow(/already confirmed/);
+    });
+
+    it('a right password on an unconfirmed account asks for the code instead of signing in', async () => {
+      await register();
+      const result = await service.loginWithPassword(
+        { email: 'nadia@example.com', password: 'correct-horse-battery-9' },
+        ctx,
+      );
+      expect(result).toHaveProperty('ticket');
+      expect(result).not.toHaveProperty('accessToken');
     });
   });
 

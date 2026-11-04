@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { finishSignUp } from './mail';
 
 const uniqueEmail = (tag: string) =>
   `${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -30,10 +31,11 @@ test('a customer edits their details and finds "forgot your password"', async ({
   await page.getByLabel('Email').fill(uniqueEmail('account'));
   await page.getByLabel('Password').fill('correct-horse-battery-9');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
   await expect(page).not.toHaveURL(/\/register/);
 
   await page.goto('/account');
-  await expect(page.getByText('not confirmed yet')).toBeVisible();
+  await expect(page.getByText('· confirmed')).toBeVisible();
   await page.getByLabel('Phone').fill('70 222 333');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved')).toBeVisible();
