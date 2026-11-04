@@ -124,12 +124,16 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
               )}
             </p>
             {r.file && (
-              <RequestFileView file={r.file} label="the customer's file" />
+              <RequestFileView
+                file={r.file}
+                label="the customer's file"
+                download
+              />
             )}
           </Panel>
           <Panel title="Our design">
             {r.design ? (
-              <RequestFileView file={r.design} label="our design" />
+              <RequestFileView file={r.design} label="our design" download />
             ) : (
               <p className="text-sm text-text-muted">
                 No design yet. The customer sees it next to the quote.

@@ -102,6 +102,16 @@ describe('Custom requests (e2e)', () => {
 
     // Staff see it in the inbox and quote it; it stays open for the owner's 7 days.
     const staff = await signedInAs(app, Role.STAFF);
+    // The dashboard's Download button: the original file, under the name it was sent with.
+    const saved = await as(staff.cookie)
+      .get(`/media/${file.body.key}?download=1`)
+      .expect(200);
+    expect(saved.headers['content-disposition']).toBe(
+      `attachment; filename="cube.stl"; filename*=UTF-8''cube.stl`,
+    );
+    // Only for staff: the customer's own copy still opens in place.
+    const own = await me.get(`/media/${file.body.key}?download=1`).expect(200);
+    expect(own.headers['content-disposition']).toMatch(/^inline/);
     await me.get('/custom-requests').expect(403);
     const inbox = await as(staff.cookie)
       .get(`/custom-requests?status=SUBMITTED&q=${number}`)

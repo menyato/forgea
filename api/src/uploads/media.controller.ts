@@ -3,6 +3,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Query,
   Res,
   StreamableFile,
 } from '@nestjs/common';
@@ -14,6 +15,12 @@ import { OptionalUser, Public } from '../authorization/decorators.js';
 import { Role } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UploadsService } from './uploads.service.js';
+
+/** "Save as" with the original name: ASCII for old clients, UTF-8 (RFC 5987) for the rest. */
+export function attachment(name: string): string {
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
 
 /**
  * Serves accepted files (product models and photos) to the storefront's server, which relays
@@ -30,6 +37,8 @@ export class MediaController {
     @Param('file') file: string,
     @OptionalUser() user: AuthenticatedUser | undefined,
     @Res({ passthrough: true }) res: Response,
+    /** "1": as a download under its original name (the dashboard's Download button; staff). */
+    @Query('download') download?: string,
   ): Promise<StreamableFile> {
     const key = `clean/${file}`;
     if (!isMediaKey(key)) throw new NotFoundException('File not found');
@@ -48,7 +57,8 @@ export class MediaController {
     return new StreamableFile(media.stream, {
       type: media.mimeType,
       length: media.size,
-      disposition: 'inline',
+      disposition:
+        download === '1' && staff ? attachment(media.name) : 'inline',
     });
   }
 }

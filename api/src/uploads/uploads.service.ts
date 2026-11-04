@@ -187,7 +187,13 @@ export class UploadsService {
   async media(
     requestedKey: string,
     viewer: { staff: boolean; userId: string | null },
-  ): Promise<{ stream: Readable; size: number; mimeType: string }> {
+  ): Promise<{
+    stream: Readable;
+    size: number;
+    mimeType: string;
+    /** The name it was uploaded under (sanitised), for "Download". */
+    name: string;
+  }> {
     const copy = parseModelVariantKey(requestedKey);
     const upload = await this.prisma.upload.findFirst({
       where: {
@@ -198,7 +204,12 @@ export class UploadsService {
           : requestedKey,
         status: UploadStatus.CLEAN,
       },
-      select: { storageKey: true, mimeType: true, uploadedById: true },
+      select: {
+        storageKey: true,
+        mimeType: true,
+        uploadedById: true,
+        originalName: true,
+      },
     });
     const key = upload?.storageKey ?? requestedKey;
     const visible =
@@ -224,7 +235,11 @@ export class UploadsService {
     if (!copy) {
       const file = await this.storage.open(key);
       if (!file) throw new NotFoundException('File not found');
-      return { ...file, mimeType: upload.mimeType };
+      return {
+        ...file,
+        mimeType: upload.mimeType,
+        name: sanitizeName(upload.originalName),
+      };
     }
     if (!isModelKey(key)) throw new NotFoundException('File not found');
     let file = await this.storage.open(requestedKey);
@@ -234,7 +249,11 @@ export class UploadsService {
       file = await this.storage.open(requestedKey);
     }
     if (!file) throw new NotFoundException('File not found');
-    return { ...file, mimeType: 'model/gltf-binary' };
+    return {
+      ...file,
+      mimeType: 'model/gltf-binary',
+      name: `${sanitizeName(upload.originalName).replace(/\.[^.]*$/, '')}.glb`,
+    };
   }
 }
 
