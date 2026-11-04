@@ -141,3 +141,15 @@ export interface RequestEstimate {
   printHours: string;
   material: { code: string; name: string };
 }
+
+/**
+ * A record connected to the one on screen (its lead, quotation, order, custom request, or the
+ * customer), for the dashboard's "Related" links. A customer is named by email: people without
+ * an account (leads, quotations sent to an address) are customers too.
+ */
+export interface RelatedRecord {
+  kind: 'lead' | 'quotation' | 'order' | 'request' | 'customer';
+  /** The record's id; for a customer, their email address. */
+  id: string;
+  label: string;
+}

@@ -36,6 +36,7 @@ import { SiteThemeModule } from './site-theme/site-theme.module.js';
 import { CustomRequestsModule } from './custom-requests/custom-requests.module.js';
 import { CatalogTransferModule } from './catalog-transfer/catalog-transfer.module.js';
 import { MailModule } from './mail/mail.module.js';
+import { RelatedModule } from './related/related.module.js';
 import { QuotationsModule } from './quotations/quotations.module.js';
 import { AccountingModule } from './accounting/accounting.module.js';
 import { StockModule } from './stock/stock.module.js';
@@ -72,6 +73,7 @@ import { InsightsModule } from './insights/insights.module.js';
     CatalogTransferModule,
     MailModule,
     QuotationsModule,
+    RelatedModule,
     AccountingModule,
     StockModule,
     TextStudioModule,
