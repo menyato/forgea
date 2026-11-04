@@ -25,6 +25,7 @@ import {
 } from '~/components/ui/field';
 import { signInFor } from '~/features/auth/sign-in-links.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
+import { seoMeta, siteOrigin } from '~/features/seo/seo';
 import { text } from '~/features/admin/staff.server';
 import { type FieldErrors, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
@@ -33,15 +34,14 @@ import type { loader as rootLoader } from '~/root';
 import type { Route } from './+types/route';
 import { RequestFile } from './request-file';
 
-export function meta(_: Route.MetaArgs) {
-  return [
-    { title: 'Custom order — Forgea' },
-    {
-      name: 'description',
-      content:
-        'Describe what you need or send a 3D file: we quote it and print it in our studio.',
-    },
-  ];
+export function meta({ matches }: Route.MetaArgs) {
+  return seoMeta({
+    origin: siteOrigin(matches),
+    path: '/custom',
+    title: 'Custom order — Forgea',
+    description:
+      'Describe what you need or send a 3D file: we quote it and print it in our studio.',
+  });
 }
 
 export async function loader({ url, context }: Route.LoaderArgs) {

@@ -16,6 +16,7 @@ import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { ModelViewer } from '~/features/model-viewer/model-viewer';
+import { productJsonLd, seoMeta, siteOrigin } from '~/features/seo/seo';
 import { jsonField, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { loader as rootLoader } from '~/root';
@@ -23,13 +24,20 @@ import type { Route } from './+types/route';
 import { type Choices, OptionPicker } from './option-picker';
 import { TextDesigner } from './text-designer';
 
-export function meta({ loaderData: d }: Route.MetaArgs) {
-  return d
-    ? [
-        { title: `${d.product.name} — Forgea` },
-        { name: 'description', content: d.product.description.slice(0, 160) },
-      ]
-    : [{ title: 'Product not found — Forgea' }];
+export function meta({ loaderData: d, matches }: Route.MetaArgs) {
+  if (!d) return [{ title: 'Product not found — Forgea' }];
+  const origin = siteOrigin(matches);
+  return [
+    ...seoMeta({
+      origin,
+      path: `/products/${d.product.slug}`,
+      title: `${d.product.name} — Forgea`,
+      description: d.product.description.slice(0, 160),
+      // The first photo, when the product has one; otherwise the brand card.
+      image: d.product.imageKeys[0] && `/media/${d.product.imageKeys[0]}`,
+    }),
+    ...(origin ? [productJsonLd(d.product, origin)] : []),
+  ];
 }
 
 export async function loader({ params, context }: Route.LoaderArgs) {

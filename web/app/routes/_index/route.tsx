@@ -14,9 +14,10 @@ import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { BuildPlate } from '~/features/build-plate/build-plate';
 import { modelSource } from '~/features/model-viewer/model-source';
+import { seoMeta, siteOrigin } from '~/features/seo/seo';
 import type { PlateItem } from '~/features/build-plate/build-plate-scene.client';
 
-export function meta({ loaderData }: Route.MetaArgs) {
+export function meta({ loaderData, matches }: Route.MetaArgs) {
   return [
     // The bed's model files start downloading with the page, alongside three.js rather than
     // after it, so the models are ready when the scene is and printing starts at once.
@@ -27,12 +28,13 @@ export function meta({ loaderData }: Route.MetaArgs) {
       crossOrigin: 'anonymous' as const,
       href: modelSource(p.modelKey, 'lite').src,
     })),
-    { title: 'Forgea — 3D printing, design and customization' },
-    {
-      name: 'description',
-      content:
+    ...seoMeta({
+      origin: siteOrigin(matches),
+      path: '/',
+      title: 'Forgea — 3D printing, design and customization',
+      description:
         'Custom 3D printing, product design and electronics, made in Lebanon.',
-    },
+    }),
   ];
 }
 

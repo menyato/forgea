@@ -9,17 +9,21 @@ import { PAGE_WIDTH } from '~/components/layout/page-width';
 import { Field } from '~/components/ui/field';
 import { buttonClass } from '~/components/ui/button';
 import { ProductCard } from '~/features/catalog/product-card';
+import { seoMeta, siteOrigin } from '~/features/seo/seo';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
-export function meta(_: Route.MetaArgs) {
-  return [
-    { title: 'Shop — Forgea' },
-    {
-      name: 'description',
-      content: '3D-printed products, designed and made in Lebanon.',
-    },
-  ];
+export function meta({ location, matches }: Route.MetaArgs) {
+  // A category is its own page for search engines; searches and later pages of a list are not.
+  const category = new URLSearchParams(location.search).get('category');
+  return seoMeta({
+    origin: siteOrigin(matches),
+    path: category
+      ? `/shop?${new URLSearchParams({ category }).toString()}`
+      : '/shop',
+    title: 'Shop — Forgea',
+    description: '3D-printed products, designed and made in Lebanon.',
+  });
 }
 
 const PAGE_SIZE = 24;
