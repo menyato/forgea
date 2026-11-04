@@ -1,0 +1,30 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "96170444555",
+  "type": "template",
+  "template": {
+    "name": "forgea_update",
+    "language": {
+      "code": "en"
+    },
+    "components": [
+      {
+        "type": "body",
+        "parameters": [
+          {
+            "type": "text",
+            "text": "Quotation Q-2026-0030"
+          },
+          {
+            "type": "text",
+            "text": "Ready for you: $12.00. Open it to see every line and accept it."
+          },
+          {
+            "type": "text",
+            "text": "http://localhost:5173/q/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExYTg0NS0xMzI1LTc1OTktYTYwOS03Y2RjZmQzZGYzMTUiLCJlbWFpbCI6InN0YWdlcy0xNzkzODI0NDYxNTc5LW5qYzFwakBleGFtcGxlLmNvbSIsImlhdCI6MTc5MzgyNDQ2MSwiZXhwIjo0MTA3NTQyMzk5LCJhdWQiOiJmb3JnZWEtcXVvdGF0aW9uIiwiaXNzIjoiZm9yZ2VhLWFwaSJ9.Xr7o555oJC14z75a-LM06ckVvsKewd09hr2h7CWqJ50"
+          }
+        ]
+      }
+    ]
+  }
+}

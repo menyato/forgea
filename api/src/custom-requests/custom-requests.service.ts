@@ -8,6 +8,7 @@ import {
   type CheckoutResult,
   type CustomRequestListItem,
   type CustomRequestView,
+  CUSTOM_REQUEST_STATUS_LABELS,
   isRequestExpired,
   type Page,
   type RequestEstimate,
@@ -258,6 +259,11 @@ export class CustomRequestsService {
       note: dto.note ?? null,
       expiresAt: new Date(r.quote!.expiresAt),
     });
+    this.notifications.whatsapp(r.customer.phone, {
+      about: `Request ${r.requestNumber}, "${r.title}"`,
+      update: `Your quote is ready: $${dto.price}. Accept it to place the order.`,
+      path: `/requests/${r.requestNumber}`,
+    });
     this.notifications.alertStudio(
       `Quote sent for ${r.requestNumber}: ${r.title}`,
       [`${r.customer.email} was quoted $${dto.price} for "${r.title}".`],
@@ -296,6 +302,11 @@ export class CustomRequestsService {
       status: r.status,
       note: note ?? null,
     });
+    this.notifications.whatsapp(r.customer.phone, {
+      about: `Request ${r.requestNumber}, "${r.title}"`,
+      update: `Closed by the studio.${note ? ` ${note}` : ''}`,
+      path: `/requests/${r.requestNumber}`,
+    });
     this.notifications.alertStudio(
       `Request ${r.requestNumber} closed`,
       [
@@ -325,7 +336,7 @@ export class CustomRequestsService {
   /** The customer's copy of a step: what it means for them, with the note if any. */
   private tellCustomer(
     r: Pick<RequestRow, 'requestNumber' | 'title'> & {
-      user: { email: string };
+      user: { email: string; phone: string | null };
     },
     status: CustomRequestStatus,
     note: string | null,
@@ -336,6 +347,12 @@ export class CustomRequestsService {
       title: r.title,
       status,
       note,
+    });
+    const label = CUSTOM_REQUEST_STATUS_LABELS[status];
+    this.notifications.whatsapp(r.user.phone, {
+      about: `Request ${r.requestNumber}, "${r.title}"`,
+      update: `${label.title}. ${label.detail}${note ? ` ${note}` : ''}`,
+      path: `/requests/${r.requestNumber}`,
     });
   }
 

@@ -4,11 +4,14 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import type { Email } from './mailer.js';
 import { Mailer } from './mailer.js';
 import { MailTemplates } from './mail-templates.js';
+import { WhatsApp, type WhatsAppUpdate } from './whatsapp.js';
 
 type Templates = MailTemplates;
 
 const HOUR_MS = 60 * 60 * 1000;
 const STUDIO_ALERTS_PER_HOUR = 60;
+/** WhatsApp updates to one number an hour: each costs money, and nobody wants a flood. */
+const WHATSAPP_PER_NUMBER_PER_HOUR = 10;
 
 /**
  * Sends the site's emails. Each is sent after the change it reports has been saved, without
@@ -24,14 +27,46 @@ export class Notifications {
   /** Where the studio's own alerts go; none configured: no alerts. */
   private readonly studioEmail: string | undefined;
 
+  private readonly site: string;
+
   constructor(
     private readonly mailer: Mailer,
     readonly templates: MailTemplates,
+    private readonly whatsApp: WhatsApp,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.studioEmail =
       config.get('STUDIO_NOTIFY_EMAIL', { infer: true }) ??
       config.get('MAIL_SENDER', { infer: true });
+    this.site = config.get('PUBLIC_WEB_URL', { infer: true });
+  }
+
+  /**
+   * The same step on the customer's WhatsApp, when we have their phone: in the background,
+   * never blocking or failing what it reports (like email). `path` is the page on the site.
+   */
+  whatsapp(
+    phone: string | null | undefined,
+    message: Omit<WhatsAppUpdate, 'link'> & { path: string },
+  ): void {
+    if (!phone?.trim()) return;
+    if (!this.allow(`whatsapp:${phone}`, WHATSAPP_PER_NUMBER_PER_HOUR)) {
+      this.logger.warn(`WhatsApp not sent (hourly limit): ${message.about}`);
+      return;
+    }
+    const sending = this.whatsApp
+      .send(phone, {
+        about: message.about,
+        update: message.update,
+        link: new URL(message.path, this.site).href,
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(
+          `Could not send WhatsApp "${message.about}": ${String(error)}`,
+        );
+      })
+      .finally(() => this.pending.delete(sending));
+    this.pending.add(sending);
   }
 
   /**

@@ -47,6 +47,7 @@ export {
   formatSizeCm,
   PAYMENT_METHOD_LABELS,
   QUOTATION_EMAIL_DEFAULTS,
+  whatsappNumber,
   whatsappUrl,
 } from './store.js';
 export { safeNext } from './safe-next.js';

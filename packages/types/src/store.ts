@@ -32,6 +32,11 @@ export const PAYMENT_METHOD_LABELS: Readonly<Record<PaymentMethod, string>> = {
  * leading 0 and gets +961 (70 904 044 → 96170904044, 01 234 567 → 9611234567).
  */
 export function whatsappUrl(phone: string, message: string): string {
+  return `https://wa.me/${whatsappNumber(phone)}?text=${encodeURIComponent(message)}`;
+}
+
+/** The number in international form, digits only (a local one is Lebanese: 70 123 456 → 96170123456). */
+export function whatsappNumber(phone: string): string {
   let digits = phone.replace(/\D/g, '');
   const international = phone.trim().startsWith('+') || digits.startsWith('00');
   if (digits.startsWith('00')) digits = digits.slice(2);
@@ -41,7 +46,7 @@ export function whatsappUrl(phone: string, message: string): string {
   ) {
     digits = `961${digits.replace(/^0/, '')}`;
   }
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  return digits;
 }
 
 /** The quotation email as the owner wrote it (empty: the standard wording below). */

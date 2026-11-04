@@ -6,6 +6,7 @@ import { GoogleServiceAccount } from '../google/google-service-account.js';
 import { MailTemplates } from './mail-templates.js';
 import { GmailMailer, Mailer, OutboxMailer } from './mailer.js';
 import { Notifications } from './notifications.service.js';
+import { WhatsApp } from './whatsapp.js';
 
 /**
  * Email (Phase 9). Gmail API when the Workspace service account is configured; otherwise the
@@ -16,6 +17,7 @@ import { Notifications } from './notifications.service.js';
   providers: [
     MailTemplates,
     Notifications,
+    WhatsApp,
     GmailMailer,
     OutboxMailer,
     {

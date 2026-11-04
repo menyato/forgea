@@ -85,6 +85,11 @@ export class OrderStatusService {
         status: to,
         note: note ?? null,
       });
+      this.notifications.whatsapp(contact.phone, {
+        about: `Order ${contact.orderNumber}`,
+        update: `${ORDER_STATUS_LABELS[to].title}. ${ORDER_STATUS_LABELS[to].detail}${note ? ` ${note}` : ''}`,
+        path: '/orders',
+      });
       // Both sides hear of every step: the studio too, whoever made it.
       const label = ORDER_STATUS_LABELS[to].title;
       this.notifications.alertStudio(
