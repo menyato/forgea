@@ -4,7 +4,7 @@ import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
-import { inbox } from './mail-helpers.js';
+import { inbox, whatsappTo } from './mail-helpers.js';
 
 const STUDIO = 'studio-e2e@forgea-lab.com';
 
@@ -141,5 +141,48 @@ describe('Stage emails to the customer and the studio (e2e)', () => {
         expect.stringMatching(new RegExp(`^Order ${orderNumber}: `)),
       ]),
     );
+  });
+
+  it('each step also reaches the customer on WhatsApp, with the page to open', async () => {
+    const staff = await signedInAs(app, Role.STAFF);
+    // A number of its own, so other tests' messages don't mix in.
+    const local = `71 ${String(Date.now()).slice(-6)}`;
+    const number = `961${local.replace(/\D/g, '')}`;
+    const q = (
+      await as(staff.cookie)
+        .post('/quotations', {
+          customerEmail: uniqueEmail('wa'),
+          validUntil: '2099-12-31',
+          customerName: 'Sami WhatsApp',
+          phone: local,
+          paymentMethod: 'COD',
+          delivery: false,
+          lines: [{ description: 'Keyring', quantity: 3, unitPrice: '4.00' }],
+        })
+        .expect(201)
+    ).body as { id: string; number: string };
+    await as(staff.cookie).post(`/quotations/${q.id}/send`).expect(200);
+    const placed = await as(staff.cookie)
+      .post(`/quotations/${q.id}/confirm`)
+      .expect(200);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: placed.body.orderNumber as string },
+    });
+    await as(staff.cookie)
+      .patch(`/orders/${order.id}/status`, { status: 'CONFIRMED' })
+      .expect(200);
+
+    const messages = await whatsappTo(app, number);
+    expect(messages[0]).toMatchObject({
+      about: `Quotation ${q.number}`,
+      update: expect.stringContaining('$12.00'),
+      link: expect.stringMatching(/\/q\/[\w.-]+$/),
+    });
+    expect(messages.map((m) => m.about)).toEqual([
+      `Quotation ${q.number}`,
+      `Order ${order.orderNumber}`,
+      `Order ${order.orderNumber}`,
+    ]);
+    expect(messages.at(-1)!.link).toMatch(/\/orders$/);
   });
 });

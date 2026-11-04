@@ -238,12 +238,18 @@ export class OrdersRepository {
   /** Who to tell about the order, and its number. */
   async contactOf(
     id: string,
-  ): Promise<{ email: string; orderNumber: string } | null> {
+  ): Promise<{ email: string; phone: string; orderNumber: string } | null> {
     const o = await this.prisma.order.findUnique({
       where: { id },
-      select: { orderNumber: true, user: { select: { email: true } } },
+      select: {
+        orderNumber: true,
+        phone: true,
+        user: { select: { email: true } },
+      },
     });
-    return o ? { email: o.user.email, orderNumber: o.orderNumber } : null;
+    return o
+      ? { email: o.user.email, phone: o.phone, orderNumber: o.orderNumber }
+      : null;
   }
 
   findStatus(id: string): Promise<Pick<Order, 'id' | 'status'> | null> {

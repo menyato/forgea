@@ -1,8 +1,12 @@
+import type { WhatsApp } from './whatsapp.js';
 import { ConfigService } from '@nestjs/config';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { MailTemplates } from './mail-templates.js';
 import { type Email, Mailer, toMime } from './mailer.js';
 import { Notifications } from './notifications.service.js';
+
+/** WhatsApp is tested on its own (whatsapp.spec.ts). */
+const noWhatsApp = { send: async () => undefined } as unknown as WhatsApp;
 
 const config = new ConfigService<EnvironmentVariables, true>({
   PUBLIC_WEB_URL: 'https://forgea-lab.com',
@@ -155,7 +159,12 @@ describe('Notifications', () => {
         sent.push(e);
       },
     } as Mailer;
-    const notifications = new Notifications(mailer, templates, config);
+    const notifications = new Notifications(
+      mailer,
+      templates,
+      noWhatsApp,
+      config,
+    );
     notifications.send('emailCode', { to: 'a@example.com', code: '111111' });
     fail = true;
     expect(() =>
@@ -172,7 +181,12 @@ describe('Notifications', () => {
       PUBLIC_WEB_URL: 'https://forgea-lab.com',
       MAIL_SENDER: 'hello@forgea-lab.com',
     });
-    const notifications = new Notifications(mailer, templates, studio);
+    const notifications = new Notifications(
+      mailer,
+      templates,
+      noWhatsApp,
+      studio,
+    );
     notifications.alertStudio(
       'New order FG-1',
       ['Rana placed it.'],
@@ -186,7 +200,7 @@ describe('Notifications', () => {
     expect(sent[0]!.text).toContain('https://forgea-lab.com/admin/orders/o-1');
 
     // No studio address configured: no alert.
-    const silent = new Notifications(mailer, templates, config);
+    const silent = new Notifications(mailer, templates, noWhatsApp, config);
     silent.alertStudio('x', [], '/admin');
     await silent.settled();
     expect(sent).toHaveLength(1);
@@ -195,7 +209,12 @@ describe('Notifications', () => {
   it('caps an email per key and hour', async () => {
     const sent: Email[] = [];
     const mailer = { send: async (e: Email) => void sent.push(e) } as Mailer;
-    const notifications = new Notifications(mailer, templates, config);
+    const notifications = new Notifications(
+      mailer,
+      templates,
+      noWhatsApp,
+      config,
+    );
     const results = [1, 2, 3, 4].map(() =>
       notifications.sendAtMost('password-reset:u1', 3, 'emailCode', {
         to: 'a@example.com',

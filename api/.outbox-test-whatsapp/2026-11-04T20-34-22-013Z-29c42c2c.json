@@ -1,0 +1,30 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "96170444555",
+  "type": "template",
+  "template": {
+    "name": "forgea_update",
+    "language": {
+      "code": "en"
+    },
+    "components": [
+      {
+        "type": "body",
+        "parameters": [
+          {
+            "type": "text",
+            "text": "Order FG-KQ3NWJY0S6"
+          },
+          {
+            "type": "text",
+            "text": "Received, $12.00. We will confirm it shortly."
+          },
+          {
+            "type": "text",
+            "text": "http://localhost:5173/orders"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -163,6 +163,26 @@ export class EnvironmentVariables {
   @IsOptional()
   @Matches(/^[^@\s]+@[^@\s]+$/)
   STUDIO_NOTIFY_EMAIL?: string;
+
+  /**
+   * WhatsApp Business Cloud API (Meta): a permanent access token of the business's system
+   * user, and the id of the studio's WhatsApp number there. Both unset: WhatsApp updates are
+   * written next to the email outbox instead.
+   */
+  @IsOptional()
+  @IsString()
+  WHATSAPP_ACCESS_TOKEN?: string;
+
+  @IsOptional()
+  @Matches(/^\d{5,30}$/)
+  WHATSAPP_PHONE_NUMBER_ID?: string;
+
+  /** The approved message template: {{1}} what it is about, {{2}} what happened, {{3}} a link. */
+  @Matches(/^[a-z0-9_]{1,512}$/)
+  WHATSAPP_TEMPLATE: string = 'forgea_update';
+
+  @Matches(/^[a-z]{2}(_[A-Z]{2})?$/)
+  WHATSAPP_TEMPLATE_LANGUAGE: string = 'en';
 }
 
 /** Rules that only make sense together, or only in production. */
@@ -171,6 +191,13 @@ function crossFieldErrors(env: EnvironmentVariables): string[] {
   if (Boolean(env.GOOGLE_CLIENT_ID) !== Boolean(env.GOOGLE_CLIENT_SECRET)) {
     errors.push(
       'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together',
+    );
+  }
+  if (
+    Boolean(env.WHATSAPP_ACCESS_TOKEN) !== Boolean(env.WHATSAPP_PHONE_NUMBER_ID)
+  ) {
+    errors.push(
+      'WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set together',
     );
   }
   if (env.GOOGLE_SERVICE_ACCOUNT_KEY && !env.MAIL_SENDER) {

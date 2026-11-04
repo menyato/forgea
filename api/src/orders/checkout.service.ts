@@ -278,6 +278,11 @@ export class CheckoutService {
       depositRequired: order.depositRequired.toFixed(2),
       transferPhone: (await this.store.get()).transferPhone,
     });
+    this.notifications.whatsapp(dto.phone, {
+      about: `Order ${order.orderNumber}`,
+      update: `Received, $${order.total.toFixed(2)}. We will confirm it shortly.`,
+      path: '/orders',
+    });
     this.notifications.alertStudio(
       `New order ${order.orderNumber} (${order.total.toFixed(2)})`,
       [

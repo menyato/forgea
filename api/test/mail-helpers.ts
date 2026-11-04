@@ -73,3 +73,28 @@ export async function registerCustomer(
     .map((c) => c.split(';')[0])
     .join('; ');
 }
+
+/** WhatsApp updates written for this number (international digits), oldest first. */
+export async function whatsappTo(
+  app: NestExpressApplication,
+  number: string,
+): Promise<{ about: string; update: string; link: string }[]> {
+  await app.get(Notifications).settled();
+  const dir = `${OUTBOX}-whatsapp`;
+  const files = (await readdir(dir).catch(() => [] as string[])).sort();
+  const bodies = await Promise.all(
+    files.map(async (f) => JSON.parse(await readFile(join(dir, f), 'utf8'))),
+  );
+  return bodies
+    .filter((b: { to: string }) => b.to === number)
+    .map(
+      (b: {
+        template: { components: { parameters: { text: string }[] }[] };
+      }) => {
+        const [about, update, link] = b.template.components[0]!.parameters.map(
+          (p) => p.text,
+        );
+        return { about: about!, update: update!, link: link! };
+      },
+    );
+}

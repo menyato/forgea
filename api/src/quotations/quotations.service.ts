@@ -139,6 +139,11 @@ export class QuotationsService {
       wording,
       whatsappPhone: store.whatsappPhone,
     });
+    this.notifications.whatsapp(q.phone, {
+      about: `Quotation ${q.number}`,
+      update: `Ready for you: $${detail.total}. Open it to see every line and accept it.`,
+      path: `/q/${token}`,
+    });
     this.notifications.alertStudio(
       `Quotation ${q.number} sent`,
       [
@@ -265,6 +270,13 @@ export class QuotationsService {
         number: q.number,
         status: QuotationStatus.CANCELLED,
       });
+    if (q.status !== QuotationStatus.DRAFT)
+      this.notifications.whatsapp(q.phone, {
+        about: `Quotation ${q.number}`,
+        update:
+          'Withdrawn: it can no longer be accepted. Ask us for a new one.',
+        path: '/',
+      });
     this.notifications.alertStudio(
       `Quotation ${q.number} cancelled`,
       [`Quotation ${q.number} for ${q.customerEmail} was cancelled.`],
@@ -302,6 +314,12 @@ export class QuotationsService {
       name: q.customerName,
       number: q.number,
       status: QuotationStatus.DECLINED,
+    });
+    this.notifications.whatsapp(q.phone, {
+      about: `Quotation ${q.number}`,
+      update:
+        'Declined. Thank you for letting us know; tell us if a change would help.',
+      path: '/',
     });
     this.notifications.alertStudio(
       `Quotation ${q.number} declined`,
