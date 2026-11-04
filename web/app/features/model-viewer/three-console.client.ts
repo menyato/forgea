@@ -1,4 +1,4 @@
-import { setConsoleFunction } from 'three';
+import { setConsoleFunction, type WebGLRenderer } from 'three';
 
 /**
  * three.js's own console, minus one notice: @react-three/fiber 9 still creates a THREE.Clock
@@ -21,3 +21,13 @@ setConsoleFunction((type: string, message: string, ...params: unknown[]) => {
   }
   console[method](message, ...params);
 });
+
+/**
+ * Every canvas's renderer: outside development, shaders aren't re-checked after compiling.
+ * three.js recommends it for production (each check stalls the GPU), and it stops Windows'
+ * shader compiler printing its harmless rounding notes ("Program Info Log … X4122") for every
+ * visitor. Development still checks, so a broken shader shows up while working on it.
+ */
+export function prepareRenderer(gl: WebGLRenderer): void {
+  gl.debug.checkShaderErrors = import.meta.env.DEV;
+}

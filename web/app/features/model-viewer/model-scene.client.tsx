@@ -1,4 +1,4 @@
-import './three-console.client';
+import { prepareRenderer } from './three-console.client';
 import { meshVolume } from '@forgea/pricing';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
@@ -43,6 +43,7 @@ export default function ModelScene(props: SceneProps) {
       camera={{ fov: 35, near: 0.1, far: 10_000 }}
       dpr={[1, 2]}
       gl={{ antialias: true, preserveDrawingBuffer: false }}
+      onCreated={({ gl }) => prepareRenderer(gl)}
       // Rendered only when something changes, except while it spins: kind to phone batteries.
       frameloop={props.spin ? 'always' : 'demand'}
     >
