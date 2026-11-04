@@ -28,6 +28,7 @@ import {
 } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { StatusBar } from '~/features/admin/views';
+import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -50,6 +51,7 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
     .slice(0, 10);
   return {
     quotation: quotation?.ok ? quotation.data : null,
+    related: isNew ? [] : await relatedOf(api, 'quotation', params.id),
     products: products.ok ? products.data.items : [],
     // Coming from a lead: who it's for.
     prefill: {
@@ -177,6 +179,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         trail={[{ label: 'Quotations', to: '/admin/quotations' }]}
+        related={loaderData.related}
         title={q ? q.number : 'New quotation'}
         intro={
           q

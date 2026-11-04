@@ -147,6 +147,38 @@ describe('Leads and their quotations (e2e)', () => {
     expect(won.notes.at(-1)!.body).toBe(
       `Quotation ${quotation.number} accepted: order ${placed.body.orderNumber as string}. Won (moved to Won).`,
     );
+
+    // Each record leads to the others and to the customer.
+    const orderNumber = placed.body.orderNumber as string;
+    const fromLead = (
+      await as(admin.cookie).get(`/related/lead/${leadId}`).expect(200)
+    ).body as { kind: string; id: string; label: string }[];
+    expect(fromLead.map((r) => r.label)).toEqual([
+      `Quotation ${quotation.number}`,
+      `Order ${orderNumber}`,
+      `Customer: ${email}`,
+    ]);
+    const orderId = fromLead.find((r) => r.kind === 'order')!.id;
+    const fromOrder = (
+      await as(admin.cookie).get(`/related/order/${orderId}`).expect(200)
+    ).body as { label: string }[];
+    expect(fromOrder.map((r) => r.label)).toEqual([
+      'Lead: Nour Saleh',
+      `Quotation ${quotation.number}`,
+      `Customer: ${email}`,
+    ]);
+    const fromQuotation = (
+      await as(admin.cookie)
+        .get(`/related/quotation/${quotation.id}`)
+        .expect(200)
+    ).body as { label: string }[];
+    expect(fromQuotation.map((r) => r.label)).toEqual([
+      'Lead: Nour Saleh',
+      `Order ${orderNumber}`,
+      `Customer: ${email}`,
+    ]);
+    // Customers can't read it.
+    await as(owner).get(`/related/lead/${leadId}`).expect(403);
   });
 
   it('declined from the account: the studio is told, and marking the lead lost settles it', async () => {

@@ -23,20 +23,24 @@ import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { RequestFileView } from '~/features/custom-requests/request-file-view';
 import { RequestTimeline } from '~/features/custom-requests/request-timeline';
 import { StatusBar } from '~/features/admin/views';
+import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  const r = await context
-    .get(apiContext)
-    .get<StaffCustomRequest>(
+  const api = context.get(apiContext);
+  const [r, related] = await Promise.all([
+    api.get<StaffCustomRequest>(
       `/custom-requests/${encodeURIComponent(params.id)}`,
-    );
+    ),
+    relatedOf(api, 'request', params.id),
+  ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
   // Only what their permissions allow is offered (the API checks it too).
   const staff = context.get(staffContext);
   return {
     request: r.data,
+    related,
     canQuote: can(staff, 'requests.quote'),
     canDesign: can(staff, 'requests.design'),
   };
@@ -82,6 +86,7 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         trail={[{ label: 'Custom requests', to: '/admin/requests' }]}
+        related={loaderData.related}
         title={r.title}
         intro={`${r.requestNumber} · ${r.expired ? 'Quote expired' : CUSTOM_REQUEST_STATUS_LABELS[r.status].title} · ${new Date(r.createdAt).toLocaleString('en-GB')}`}
         action={

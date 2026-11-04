@@ -13,19 +13,22 @@ import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { StatusBar } from '~/features/admin/views';
+import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [lead, stages, reasons] = await Promise.all([
+  const [lead, stages, reasons, related] = await Promise.all([
     api.get<LeadDetail>(`/leads/${encodeURIComponent(params.id)}`),
     api.get<LeadStageView[]>('/lead-stages'),
     api.get<LostReasonView[]>('/lost-reasons'),
+    relatedOf(api, 'lead', params.id),
   ]);
   if (!lead.ok) throw new Response(lead.message, { status: lead.status });
   return {
     lead: lead.data,
+    related,
     stages: stages.ok ? stages.data.filter((s) => s.active) : [],
     reasons: reasons.ok ? reasons.data.filter((r) => r.active) : [],
   };
@@ -100,6 +103,7 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         trail={[{ label: 'Leads', to: '/admin/leads' }]}
+        related={loaderData.related}
         title={l.name}
         intro={`${l.email}${l.phone ? ` · ${l.phone}` : ''} · ${l.state === 'open' ? `${l.stage.name}, ${l.probability}%` : l.state === 'won' ? 'Won' : `Lost: ${l.lostReason}`}`}
         action={

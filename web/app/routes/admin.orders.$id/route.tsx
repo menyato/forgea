@@ -15,16 +15,19 @@ import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { StatusBar } from '~/features/admin/views';
+import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  const r = await context
-    .get(apiContext)
-    .get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`);
+  const api = context.get(apiContext);
+  const [r, related] = await Promise.all([
+    api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
+    relatedOf(api, 'order', params.id),
+  ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { order: r.data };
+  return { order: r.data, related };
 }
 
 /** status (the next step) | deposit-invoice | final-invoice | payment */
@@ -104,6 +107,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         trail={[{ label: 'Orders', to: '/admin/orders' }]}
+        related={loaderData.related}
         title={o.orderNumber}
         intro={`${ORDER_STATUS_LABELS[o.status].title} · placed ${new Date(o.createdAt).toLocaleString('en-GB')}`}
         action={

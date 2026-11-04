@@ -1,6 +1,17 @@
+import type { RelatedRecord } from '@forgea/types';
+import { Link } from 'react-router';
 import { type ReactNode, useId } from 'react';
 import { Busy } from '~/components/brand/busy';
 import { Breadcrumbs, type Crumb, RecordPager } from './breadcrumbs';
+
+/** Where each kind of related record opens in the dashboard. */
+const RELATED_PATH: Record<RelatedRecord['kind'], (id: string) => string> = {
+  lead: (id) => `/admin/leads/${id}`,
+  quotation: (id) => `/admin/quotations/${id}`,
+  order: (id) => `/admin/orders/${id}`,
+  request: (id) => `/admin/requests/${id}`,
+  customer: (email) => `/admin/customers/${encodeURIComponent(email)}`,
+};
 
 /**
  * A dashboard page's breadcrumbs, title, one-line explanation and main action. `trail` is
@@ -12,11 +23,14 @@ export function AdminHeader({
   intro,
   action,
   trail = [],
+  related = [],
 }: {
   title: string;
   intro: string;
   action?: ReactNode;
   trail?: readonly Crumb[] | null;
+  /** The records this one connects to (its lead, quotations, order, request, customer). */
+  related?: readonly RelatedRecord[];
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -24,6 +38,19 @@ export function AdminHeader({
         {trail && <Breadcrumbs trail={trail} current={title} />}
         <h1 className="font-display text-3xl font-bold">{title}</h1>
         <p className="max-w-2xl text-text-muted">{intro}</p>
+        {related.length > 0 && (
+          <nav aria-label="Related" className="flex flex-wrap gap-2 pt-1">
+            {related.map((r) => (
+              <Link
+                key={`${r.kind}:${r.id}`}
+                to={RELATED_PATH[r.kind](r.id)}
+                className="rounded-pill border border-border px-3 py-0.5 text-sm hover:border-accent"
+              >
+                {r.label}
+              </Link>
+            ))}
+          </nav>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         {trail && trail.length > 0 && <RecordPager list={trail.at(-1)!.to} />}
