@@ -96,19 +96,35 @@ export function paint(model: Object3D, color: string): void {
   });
 }
 
-const environments = new WeakMap<WebGLRenderer, Texture>();
+const environments = new WeakMap<WebGLRenderer, Texture | null>();
+
+/**
+ * WebGL drawn by the CPU (no GPU, or one the browser blocks): SwiftShader, Mesa's llvmpipe,
+ * Windows' Basic Render Driver. Browsers that hide the renderer's name count as GPU.
+ */
+function softwareRendered(renderer: WebGLRenderer): boolean {
+  const gl = renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const name = info
+    ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL))
+    : '';
+  return /swiftshader|llvmpipe|softpipe|basic render driver/i.test(name);
+}
 
 /**
  * Soft studio reflections generated in the browser (no HDR file to download), so dark
- * filament reads as plastic instead of a black silhouette.
+ * filament reads as plastic instead of a black silhouette. Skipped where WebGL runs on the
+ * CPU: generating them there takes seconds per scene (about 6 s on two cores), during which
+ * the model stays hidden; the scene's own lights still show it.
  */
-export function studioEnvironment(renderer: WebGLRenderer): Texture {
-  let texture = environments.get(renderer);
-  if (!texture) {
+export function studioEnvironment(renderer: WebGLRenderer): Texture | null {
+  if (environments.has(renderer)) return environments.get(renderer) ?? null;
+  let texture: Texture | null = null;
+  if (!softwareRendered(renderer)) {
     const pmrem = new PMREMGenerator(renderer);
     texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
-    environments.set(renderer, texture);
   }
+  environments.set(renderer, texture);
   return texture;
 }
