@@ -4,6 +4,7 @@ import request from 'supertest';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
+import { registerCustomer } from './mail-helpers.js';
 
 /** Customers as people: with an account or known only by email, and all they did. */
 describe('Customers (e2e)', () => {
@@ -108,5 +109,27 @@ describe('Customers (e2e)', () => {
       .expect(404);
     await as(staff.cookie).get('/customers/one?email=not-an-email').expect(400);
     await as(shopper.cookie).get('/customers').expect(403);
+  });
+
+  it('each sign-in is tracked: when, on what, still signed in; the Overview counts customers', async () => {
+    const email = uniqueEmail('tracked');
+    await registerCustomer(app, { email, password: 'correct-horse-battery-9' });
+    const one = (
+      await as(staff.cookie)
+        .get(`/customers/one?email=${encodeURIComponent(email)}`)
+        .expect(200)
+    ).body as CustomerDetail;
+    expect(one.lastSeen).not.toBeNull();
+    expect(one.signIns).toEqual([
+      expect.objectContaining({ active: true, device: expect.any(String) }),
+    ]);
+    const summary = (
+      await as(staff.cookie).get('/customers/summary').expect(200)
+    ).body as Record<string, number>;
+    expect(summary['accounts']).toBeGreaterThanOrEqual(1);
+    expect(summary['newThisWeek']).toBeGreaterThanOrEqual(1);
+    expect(summary['seenThisWeek']).toBeGreaterThanOrEqual(1);
+    expect(summary).toHaveProperty('withoutAccount');
+    expect(summary).toHaveProperty('guestCarts');
   });
 });

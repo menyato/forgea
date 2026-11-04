@@ -3,6 +3,7 @@ import type {
   CustomerDetail,
   CustomerList,
   CustomerListItem,
+  CustomerSummary,
 } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -35,6 +36,7 @@ interface Row {
   requests: number;
   leads: number;
   lastActivity: Date;
+  lastSeen: Date | null;
   total: number;
 }
 
@@ -152,6 +154,7 @@ export class CustomersService {
           })
         : null,
     ]);
+    const signIns = row.userId ? await this.signIns(row.userId) : [];
     return {
       ...toItem(row),
       history: {
@@ -191,7 +194,65 @@ export class CustomersService {
               updatedAt: cart.updatedAt.toISOString(),
             }
           : null,
+      signIns,
     };
+  }
+
+  /** The dashboard Overview's numbers: accounts, who is new, who came back, who has none. */
+  async summary(now = new Date()): Promise<CustomerSummary> {
+    const week = new Date(now.getTime() - 7 * 86_400_000);
+    const [accounts, newThisWeek, seen, withoutAccount, guestCarts] =
+      await Promise.all([
+        this.prisma.user.count({ where: { role: Role.CUSTOMER } }),
+        this.prisma.user.count({
+          where: { role: Role.CUSTOMER, createdAt: { gte: week } },
+        }),
+        this.prisma.$queryRaw<{ n: number }[]>`
+          SELECT count(DISTINCT s."userId")::int AS n FROM sessions s
+          JOIN users u ON u.id = s."userId" AND u.role = ${Role.CUSTOMER}::"Role"
+          WHERE s."createdAt" >= ${week}`,
+        this.prisma.$queryRaw<{ n: number }[]>`${PEOPLE}
+          SELECT count(*)::int AS n FROM people p
+          WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.email = p.email AND u.role = ${Role.CUSTOMER}::"Role")`,
+        this.prisma.cart.count({
+          where: { userId: null, items: { some: {} } },
+        }),
+      ]);
+    return {
+      accounts,
+      newThisWeek,
+      seenThisWeek: seen[0]?.n ?? 0,
+      withoutAccount: withoutAccount[0]?.n ?? 0,
+      guestCarts,
+    };
+  }
+
+  /**
+   * One row per sign-in (a session keeps one family through its refreshes): when it began,
+   * when it was last refreshed, the browser it came from, and whether it is still signed in.
+   */
+  private async signIns(userId: string): Promise<CustomerDetail['signIns']> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        startedAt: Date;
+        lastSeen: Date;
+        userAgent: string | null;
+        ipAddress: string | null;
+        active: boolean;
+      }[]
+    >`SELECT min(s."createdAt") AS "startedAt", max(s."createdAt") AS "lastSeen",
+        (array_agg(s."userAgent" ORDER BY s."createdAt" DESC))[1] AS "userAgent",
+        (array_agg(host(s."ipAddress") ORDER BY s."createdAt" DESC))[1] AS "ipAddress",
+        bool_or(s."revokedAt" IS NULL AND s."expiresAt" > now()) AS active
+      FROM sessions s WHERE s."userId" = ${userId}::uuid
+      GROUP BY s."familyId" ORDER BY "lastSeen" DESC LIMIT 10`;
+    return rows.map((r) => ({
+      startedAt: r.startedAt.toISOString(),
+      lastSeen: r.lastSeen.toISOString(),
+      device: deviceOf(r.userAgent),
+      ipAddress: r.ipAddress,
+      active: r.active,
+    }));
   }
 }
 
@@ -223,6 +284,7 @@ const SUMMARY = Prisma.sql`
     (SELECT count(*) FROM quotations q WHERE q."customerEmail" = p.email)::int AS quotations,
     (SELECT count(*) FROM custom_requests r WHERE r."userId" = u.id)::int AS requests,
     (SELECT count(*) FROM leads l WHERE l.email = p.email OR l."customerId" = u.id)::int AS leads,
+    (SELECT max(s."createdAt") FROM sessions s WHERE s."userId" = u.id) AS "lastSeen",
     GREATEST(
       u."createdAt",
       (SELECT max(o."createdAt") FROM orders o WHERE o."userId" = u.id),
@@ -232,6 +294,40 @@ const SUMMARY = Prisma.sql`
     ) AS "lastActivity"
   FROM people p
   LEFT JOIN users u ON u.email = p.email AND u.role = ${Role.CUSTOMER}::"Role"`;
+
+/** "Chrome on Windows", "Safari on iPhone"…: enough to recognise a device, from its User-Agent. */
+export function deviceOf(userAgent: string | null): string {
+  if (!userAgent) return 'Unknown device';
+  const ua = userAgent;
+  const os = /iPhone/.test(ua)
+    ? 'iPhone'
+    : /iPad/.test(ua)
+      ? 'iPad'
+      : /Android/.test(ua)
+        ? 'Android'
+        : /Windows/.test(ua)
+          ? 'Windows'
+          : /Mac OS X|Macintosh/.test(ua)
+            ? 'Mac'
+            : /Linux/.test(ua)
+              ? 'Linux'
+              : null;
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\/|Opera/.test(ua)
+      ? 'Opera'
+      : /SamsungBrowser/.test(ua)
+        ? 'Samsung Internet'
+        : /Firefox\/|FxiOS/.test(ua)
+          ? 'Firefox'
+          : /Chrome\/|CriOS/.test(ua)
+            ? 'Chrome'
+            : /Safari\//.test(ua)
+              ? 'Safari'
+              : null;
+  if (!os && !browser) return 'Unknown device';
+  return [browser ?? 'A browser', os && `on ${os}`].filter(Boolean).join(' ');
+}
 
 function toItem(r: Row): CustomerListItem {
   return {
@@ -256,5 +352,6 @@ function toItem(r: Row): CustomerListItem {
     requests: r.requests,
     leads: r.leads,
     lastActivity: r.lastActivity.toISOString(),
+    lastSeen: r.lastSeen?.toISOString() ?? null,
   };
 }

@@ -1,5 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import type { CustomerDetail, CustomerList } from '@forgea/types';
+import type {
+  CustomerDetail,
+  CustomerList,
+  CustomerSummary,
+} from '@forgea/types';
 import { CustomerEmailQuery, CustomerListQuery } from '@forgea/validation';
 import { RequirePermission } from '../authorization/decorators.js';
 import { CustomersService } from './customers.service.js';
@@ -13,6 +17,13 @@ export class CustomersController {
   @Get()
   list(@Query() query: CustomerListQuery): Promise<CustomerList> {
     return this.customers.list(query);
+  }
+
+  /** The Overview's numbers: accounts, new this week, seen this week, without an account. */
+  @RequirePermission('customers.view')
+  @Get('summary')
+  summary(): Promise<CustomerSummary> {
+    return this.customers.summary();
   }
 
   /** One customer, by email address (people without an account have nothing else). */

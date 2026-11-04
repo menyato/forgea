@@ -8,8 +8,12 @@ export const ACCESS_COOKIE = HTTP.ACCESS_COOKIE;
 export const REFRESH_COOKIE = HTTP.REFRESH_COOKIE;
 
 /**
- * Session cookies for every sign-in method: httpOnly (scripts can't read them),
- * Secure, SameSite=Strict (never sent on cross-site requests).
+ * Session cookies for every sign-in method: httpOnly (scripts can't read them), Secure, and
+ * SameSite=Lax: sent when a person arrives from another site (back from Google's sign-in, a
+ * link in an email or a search result), so the page they land on is already signed in; never
+ * sent with another site's form posts or background requests. Strict would show those pages
+ * signed out until a refresh. Every change also needs the CSRF header and our origin
+ * (CsrfGuard), so this costs no protection.
  */
 @Injectable()
 export class AuthCookies {
@@ -21,7 +25,7 @@ export class AuthCookies {
     this.base = {
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
       ...(domain ? { domain } : {}),
     };

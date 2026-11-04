@@ -31,7 +31,7 @@ describe('Auth (e2e)', () => {
       .map(([k, v]) => `${k}=${v.value}`)
       .join('; ');
 
-  it('register emails a code; the code signs in with httpOnly, Secure, SameSite=Strict cookies', async () => {
+  it('register emails a code; the code signs in with httpOnly, Secure, SameSite=Lax cookies', async () => {
     const pending = await http()
       .post('/auth/register')
       .set(CSRF)
@@ -60,7 +60,7 @@ describe('Auth (e2e)', () => {
         expect.arrayContaining([
           'httponly',
           'secure',
-          'samesite=strict',
+          'samesite=lax',
           'path=/',
         ]),
       );

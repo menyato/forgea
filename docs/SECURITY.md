@@ -129,7 +129,10 @@ Locally the database runs on `localhost` with credentials in the gitignored `api
   It rotates on every refresh; **presenting an old one revokes the whole login**, because only a
   thief would still hold it.
 - **Both live in cookies that are** `HttpOnly` (scripts can't read them), `Secure` and
-  `SameSite=Strict` (never sent on cross-site requests), for every sign-in method.
+  `SameSite=Lax`, for every sign-in method: never sent with another site's form posts or
+  background requests, but sent when a person arrives by a link (back from Google's sign-in, an
+  email, a search result), so they land signed in. `Strict` showed those pages signed out until
+  a refresh. Changes are protected by the CSRF check below either way.
 - Role changes take effect at the next refresh (at most 15 minutes).
 
 ## Every request
@@ -140,7 +143,7 @@ Global guards run in this order on every route:
 2. **CSRF check** on every state-changing request: a custom `X-Forgea-CSRF: 1` header is
    required (HTML forms can't send one, and cross-origin scripts can't without a CORS preflight,
    which is refused), `Origin` must be on the allowlist when present, and `Sec-Fetch-Site:
-   cross-site` is refused. This sits on top of the `SameSite=Strict` cookies.
+   cross-site` is refused. This sits on top of the `SameSite=Lax` cookies.
 3. **Authentication:** every route requires a signed-in user unless it is explicitly marked
    `@Public()`. A forgotten decorator fails closed.
 4. **Permissions:** `PermissionsGuard` lets a team member through only with the route's

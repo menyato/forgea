@@ -27,7 +27,7 @@ await context.addCookies(
     value: value!,
     url: web,
     httpOnly: true,
-    sameSite: 'Strict' as const,
+    sameSite: 'Lax' as const,
   })),
 );
 const page = await context.newPage();

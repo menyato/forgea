@@ -180,6 +180,8 @@ export interface CustomerListItem {
   requests: number;
   leads: number;
   lastActivity: string;
+  /** When they last used the site signed in (null: never, or no account). */
+  lastSeen: string | null;
 }
 
 export interface CustomerList {
@@ -225,4 +227,24 @@ export interface CustomerDetail extends CustomerListItem {
   };
   /** What is in their cart now (signed in), if anything. */
   cart: { lines: number; updatedAt: string } | null;
+  /** Their sign-ins, newest first (the last 10): when, on what, and whether still signed in. */
+  signIns: {
+    startedAt: string;
+    lastSeen: string;
+    /** e.g. "Chrome on Windows", "Safari on iPhone". */
+    device: string;
+    ipAddress: string | null;
+    active: boolean;
+  }[];
+}
+
+/** The dashboard Overview's customer numbers. */
+export interface CustomerSummary {
+  accounts: number;
+  newThisWeek: number;
+  seenThisWeek: number;
+  /** People known only by email (the website form, a quotation sent to them). */
+  withoutAccount: number;
+  /** Visitors with something in a cart who never signed in. */
+  guestCarts: number;
 }

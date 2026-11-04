@@ -76,11 +76,6 @@ function Links({ user, whatsappPhone, cartCount }: HeaderProps) {
           My requests
         </NavLink>
       )}
-      {user && (
-        <NavLink to="/account" className={navLink}>
-          My account
-        </NavLink>
-      )}
       {whatsappPhone && (
         <WhatsAppLink
           phone={whatsappPhone}
@@ -111,9 +106,7 @@ function Account({ user, theme }: HeaderProps) {
           action="/sign-out"
           className="flex items-center gap-3"
         >
-          <span className="max-w-[16ch] truncate text-text-muted">
-            {user.name ?? user.email}
-          </span>
+          <ProfileLink user={user} />
           <button
             type="submit"
             className="text-text-muted underline-offset-4 hover:text-text hover:underline"
@@ -133,6 +126,34 @@ function Account({ user, theme }: HeaderProps) {
     </>
   );
 }
+
+/** Who is signed in: their initial in a circle and their name, opening their account. */
+function ProfileLink({ user }: { user: Profile }) {
+  const shown = user.name ?? user.email;
+  return (
+    <NavLink
+      to="/account"
+      className={({ isActive }) =>
+        `flex min-w-0 items-center gap-2 rounded-pill py-0.5 pr-3 pl-0.5 hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus-ring ${
+          isActive ? 'bg-surface font-semibold' : ''
+        }`
+      }
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-on-accent uppercase"
+      >
+        {initial(shown)}
+      </span>
+      {/* Read as "My account: Rana" (a label would also match form fields named alike). */}
+      <span className="sr-only">My account: </span>
+      <span className="max-w-[16ch] truncate">{shown}</span>
+    </NavLink>
+  );
+}
+
+/** The first letter of a name or address (any script), for the profile circle. */
+const initial = (text: string) => Array.from(text.trim())[0] ?? '?';
 
 function CartLink({ count }: { count: number }) {
   return (

@@ -54,7 +54,7 @@ async function useSession(
       value: value!,
       url: baseURL,
       httpOnly: true,
-      sameSite: 'Strict' as const,
+      sameSite: 'Lax' as const,
     })),
   );
 }
