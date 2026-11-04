@@ -28,6 +28,9 @@ export default defineConfig({
     // The Chrome already installed on the machine (or the CI image): no browser download.
     channel: 'chrome',
     trace: 'retain-on-failure',
+    // CI runners have no GPU, and Chrome (137+) no longer falls back to software WebGL by
+    // itself: without this the 3D canvases never draw there. No effect where a GPU exists.
+    launchOptions: { args: ['--enable-unsafe-swiftshader'] },
   },
   projects: [
     {
