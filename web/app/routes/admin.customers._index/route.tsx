@@ -80,6 +80,16 @@ const COLUMNS: ListColumn<CustomerListItem>[] = [
     cell: (c) => `${c.quotations} · ${c.requests} · ${c.leads}`,
   },
   {
+    key: 'lastSeen',
+    label: 'Last signed in',
+    cell: (c) =>
+      c.lastSeen ? (
+        date(c.lastSeen)
+      ) : (
+        <span className="text-text-muted">{c.account ? 'Not yet' : '—'}</span>
+      ),
+  },
+  {
     key: 'lastActivity',
     label: 'Last activity',
     sort: 'lastActivity',

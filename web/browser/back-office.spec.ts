@@ -151,4 +151,12 @@ test('a customer declines a quotation; the lead waits for the team, who decide i
   await expect(page.getByText('Quotations (1)')).toBeVisible();
   await expect(page.getByRole('link', { name: number! })).toBeVisible();
   await expect(page.getByText('Leads (1)')).toBeVisible();
+  // Their sign-in is tracked: on what, and that they are still signed in.
+  await expect(page.getByText('Sign-ins (1)')).toBeVisible();
+  await expect(page.getByText('Signed in now')).toBeVisible();
+
+  // The Overview counts customers too.
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+  await expect(page.getByText('signed in this week')).toBeVisible();
 });

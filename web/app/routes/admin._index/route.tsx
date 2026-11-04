@@ -1,5 +1,6 @@
 import type {
   AdminProductListItem,
+  CustomerSummary,
   CustomRequestStatus,
   InvoiceCounts,
   MaterialView,
@@ -39,40 +40,49 @@ export async function loader({ context }: Route.LoaderArgs) {
   const ok = <T,>(r: { ok: true; data: T } | { ok: false }) =>
     r.ok ? r.data : null;
 
-  const [orders, requests, leads, quotations, invoices, materials, products] =
-    await Promise.all([
-      may('orders.view')
-        ? api
-            .get<Partial<Record<OrderStatus, number>>>('/orders/counts')
-            .then(ok)
-        : null,
-      may('requests.view')
-        ? api
-            .get<Partial<Record<CustomRequestStatus, number>>>(
-              '/custom-requests/counts',
-            )
-            .then(ok)
-        : null,
-      may('leads.view')
-        ? api.get<{ unopened: number }>('/leads/counts').then(ok)
-        : null,
-      may('quotations.view')
-        ? api
-            .get<Partial<Record<QuotationStatus, number>>>('/quotations/counts')
-            .then(ok)
-        : null,
-      may('invoices.view')
-        ? api.get<InvoiceCounts>('/accounting/invoices/counts').then(ok)
-        : null,
-      may('materials.view')
-        ? api.get<MaterialView[]>('/materials').then(ok)
-        : null,
-      may('catalog.view')
-        ? api
-            .get<Page<AdminProductListItem>>('/products/manage?limit=100')
-            .then(ok)
-        : null,
-    ]);
+  const [
+    orders,
+    requests,
+    leads,
+    quotations,
+    invoices,
+    materials,
+    products,
+    customers,
+  ] = await Promise.all([
+    may('orders.view')
+      ? api.get<Partial<Record<OrderStatus, number>>>('/orders/counts').then(ok)
+      : null,
+    may('requests.view')
+      ? api
+          .get<Partial<Record<CustomRequestStatus, number>>>(
+            '/custom-requests/counts',
+          )
+          .then(ok)
+      : null,
+    may('leads.view')
+      ? api.get<{ unopened: number }>('/leads/counts').then(ok)
+      : null,
+    may('quotations.view')
+      ? api
+          .get<Partial<Record<QuotationStatus, number>>>('/quotations/counts')
+          .then(ok)
+      : null,
+    may('invoices.view')
+      ? api.get<InvoiceCounts>('/accounting/invoices/counts').then(ok)
+      : null,
+    may('materials.view')
+      ? api.get<MaterialView[]>('/materials').then(ok)
+      : null,
+    may('catalog.view')
+      ? api
+          .get<Page<AdminProductListItem>>('/products/manage?limit=100')
+          .then(ok)
+      : null,
+    may('customers.view')
+      ? api.get<CustomerSummary>('/customers/summary').then(ok)
+      : null,
+  ]);
 
   const cards: Card[] = [];
   if (orders) {
@@ -165,11 +175,11 @@ export async function loader({ context }: Route.LoaderArgs) {
       urgent: false,
     });
   }
-  return { cards, name: staff.name ?? staff.email };
+  return { cards, customers, name: staff.name ?? staff.email };
 }
 
 export default function Overview({ loaderData }: Route.ComponentProps) {
-  const { cards, name } = loaderData;
+  const { cards, customers, name } = loaderData;
   const waiting = cards.filter((c) => c.urgent);
   return (
     <>
@@ -204,7 +214,55 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
           </Link>
         ))}
       </div>
-      {cards.length === 0 && (
+      {customers && (
+        <section
+          aria-labelledby="customers-heading"
+          className="mt-8 grid gap-3"
+        >
+          <h2 id="customers-heading" className="font-display text-xl font-bold">
+            Customers
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              {
+                n: customers.accounts,
+                label: 'customer accounts',
+                to: '/admin/customers?filter=account',
+              },
+              {
+                n: customers.newThisWeek,
+                label: 'new accounts this week',
+                to: '/admin/customers?filter=account&sort=lastActivity',
+              },
+              {
+                n: customers.seenThisWeek,
+                label: 'signed in this week',
+                to: '/admin/customers?filter=account',
+              },
+              {
+                n: customers.withoutAccount,
+                label: 'known only by email (no account)',
+                to: '/admin/customers?filter=guest',
+              },
+              {
+                n: customers.guestCarts,
+                label: 'visitors with a cart, not signed in',
+                to: '/admin/customers',
+              },
+            ].map((c) => (
+              <Link
+                key={c.label}
+                to={c.to}
+                className="grid gap-1 rounded-lg border border-border bg-surface p-5 hover:border-accent"
+              >
+                <span className="text-3xl font-bold">{c.n}</span>
+                <span className="text-sm text-text-muted">{c.label}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+      {cards.length === 0 && !customers && (
         <Panel>
           <p className="text-text-muted">
             Your pages are in the menu on the left.

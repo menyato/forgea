@@ -13,7 +13,7 @@ export const CSRF_HEADER = HTTP.CSRF_HEADER;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * CSRF defense in depth, on top of SameSite=Strict auth cookies:
+ * CSRF defense in depth, on top of SameSite=Lax auth cookies (never sent on cross-site posts):
  * 1. A custom header is required. HTML forms can't set one, and cross-origin scripts
  *    can't either without a CORS preflight, which the allowlist refuses.
  * 2. If the browser sends Origin, it must be on the allowlist.

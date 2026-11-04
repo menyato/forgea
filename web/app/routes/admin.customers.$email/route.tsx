@@ -30,6 +30,16 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   return { customer: r.data };
 }
 
+/** Day and time, in the studio's own time zone (Beirut). */
+const when = (iso: string) =>
+  new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Beirut',
+  });
+
 const date = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -98,6 +108,13 @@ export default function Customer({ loaderData }: Route.ComponentProps) {
           spent
         </p>
         <p>Last activity {date(c.lastActivity)}</p>
+        {c.account && (
+          <p>
+            {c.lastSeen
+              ? `Last signed in ${when(c.lastSeen)}`
+              : 'Never signed in'}
+          </p>
+        )}
         {c.cart && (
           <p>
             {c.cart.lines} item{c.cart.lines === 1 ? '' : 's'} in their cart (
@@ -158,6 +175,35 @@ export default function Customer({ loaderData }: Route.ComponentProps) {
             detail: `${r.title} · ${CUSTOM_REQUEST_STATUS_LABELS[r.status].title} · ${date(r.createdAt)}`,
           })}
         />
+        {c.account && (
+          <Panel title={`Sign-ins (${c.signIns.length})`}>
+            {c.signIns.length === 0 ? (
+              <p className="text-sm text-text-muted">
+                {c.account.signIn.length === 0
+                  ? 'The studio made this account; they have not signed in yet.'
+                  : 'No sign-ins kept.'}
+              </p>
+            ) : (
+              <ul className="grid gap-1 text-sm">
+                {c.signIns.map((s) => (
+                  <li key={s.startedAt} className="flex flex-wrap gap-x-2">
+                    <span className="font-medium">{s.device}</span>
+                    <span className="text-text-muted">
+                      signed in {when(s.startedAt)} · last seen{' '}
+                      {when(s.lastSeen)}
+                      {s.ipAddress ? ` · ${s.ipAddress}` : ''}
+                    </span>
+                    {s.active && (
+                      <span className="rounded-pill border border-accent px-2 text-xs">
+                        Signed in now
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        )}
         <History
           title="Leads"
           rows={c.history.leads}

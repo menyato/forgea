@@ -6,6 +6,7 @@ import { Field, FormAlert } from '~/components/ui/field';
 import { GoogleButton } from '~/features/auth/google-button';
 import {
   googleSignInUrl,
+  leaveIfSignedIn,
   nextPath,
 } from '~/features/auth/sign-in-links.server';
 import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
@@ -17,7 +18,9 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: 'Create an account — Forgea' }];
 }
 
-export function loader({ url }: Route.LoaderArgs) {
+export async function loader({ url, context }: Route.LoaderArgs) {
+  // Already signed in: straight on, never the form again.
+  await leaveIfSignedIn(context.get(apiContext), url);
   return {
     googleUrl: googleSignInUrl(url),
     minLength: PASSWORD_MIN_LENGTH,

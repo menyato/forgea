@@ -13,6 +13,7 @@ import { Field, FormAlert } from '~/components/ui/field';
 import { GoogleButton } from '~/features/auth/google-button';
 import {
   googleSignInUrl,
+  leaveIfSignedIn,
   nextPath,
 } from '~/features/auth/sign-in-links.server';
 import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
@@ -24,7 +25,9 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: 'Sign in — Forgea' }];
 }
 
-export function loader({ url }: Route.LoaderArgs) {
+export async function loader({ url, context }: Route.LoaderArgs) {
+  // Already signed in (back from Google, or an old tab): straight on, never the form again.
+  await leaveIfSignedIn(context.get(apiContext), url);
   // Google sends errors back here as ?error=… (e.g. an unverified email).
   const error = url.searchParams.get('error');
   return {
