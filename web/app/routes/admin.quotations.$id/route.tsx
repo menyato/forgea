@@ -140,7 +140,9 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
     mayManage &&
     (!q ||
       q.status === QuotationStatus.DRAFT ||
-      q.status === QuotationStatus.SENT);
+      q.status === QuotationStatus.SENT ||
+      // Declined: change it, then send it again.
+      q.status === QuotationStatus.DECLINED);
   const [delivery, setDelivery] = useState(q?.delivery ?? false);
   const [lines, setLines] = useState<Line[]>(
     q?.lines.map((l) => ({
@@ -201,9 +203,11 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           aside={
             q.status === 'CANCELLED'
               ? 'Cancelled'
-              : q.expired && q.status !== 'CONFIRMED'
-                ? 'Expired'
-                : undefined
+              : q.status === 'DECLINED'
+                ? 'Declined by the customer'
+                : q.expired && q.status !== 'CONFIRMED'
+                  ? 'Expired'
+                  : undefined
           }
         />
       )}
@@ -489,7 +493,13 @@ function QuotationActions({
 }) {
   const fetcher = useFetcher<ActionResult>();
   const open =
-    q.status === QuotationStatus.DRAFT || q.status === QuotationStatus.SENT;
+    q.status === QuotationStatus.DRAFT ||
+    q.status === QuotationStatus.SENT ||
+    q.status === QuotationStatus.DECLINED;
+  const declinedWhy =
+    q.status === QuotationStatus.DECLINED
+      ? q.history.findLast((h) => h.status === QuotationStatus.DECLINED)?.note
+      : undefined;
   return (
     <Panel title="Next" className="mt-6">
       {fetcher.data?.order && (
@@ -497,11 +507,21 @@ function QuotationActions({
           Order {fetcher.data.order.orderNumber} created; it is in Orders.
         </p>
       )}
+      {q.status === QuotationStatus.DECLINED && (
+        <p role="status" className="rounded-md bg-surface p-3 text-sm">
+          <strong>The customer declined it.</strong>{' '}
+          {declinedWhy ? `Their reason: "${declinedWhy}". ` : ''}
+          Change it and send it again, confirm it if they said yes another way,
+          or cancel it.
+        </p>
+      )}
       {open && !mayManage ? (
         <p className="text-sm text-text-muted">
           {q.status === QuotationStatus.SENT
             ? 'Sent to the customer.'
-            : 'Draft.'}
+            : q.status === QuotationStatus.DECLINED
+              ? 'Declined by the customer.'
+              : 'Draft.'}
         </p>
       ) : open ? (
         <fetcher.Form method="post" className="flex flex-wrap gap-3">
@@ -514,7 +534,9 @@ function QuotationActions({
           >
             {q.status === QuotationStatus.SENT
               ? 'Send it again'
-              : 'Send to the customer'}
+              : q.status === QuotationStatus.DECLINED
+                ? 'Send the new version'
+                : 'Send to the customer'}
           </Button>
           <Button
             type="submit"

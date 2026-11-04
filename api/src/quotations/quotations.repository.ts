@@ -100,7 +100,13 @@ export class QuotationsRepository {
       const { count } = await tx.quotation.updateMany({
         where: {
           id,
-          status: { in: [QuotationStatus.DRAFT, QuotationStatus.SENT] },
+          status: {
+            in: [
+              QuotationStatus.DRAFT,
+              QuotationStatus.SENT,
+              QuotationStatus.DECLINED,
+            ],
+          },
         },
         data: {
           customerId: q.customerId,
@@ -146,7 +152,8 @@ export class QuotationsRepository {
     id: string,
     from: QuotationStatus[],
     to: QuotationStatus,
-    actorId: string,
+    /** Null: the customer, from the emailed link without an account. */
+    actorId: string | null,
     note: string | null,
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {

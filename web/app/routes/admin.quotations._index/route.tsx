@@ -23,6 +23,7 @@ const LABELS: Record<QuotationStatus, string> = {
   SENT: 'Sent',
   CONFIRMED: 'Confirmed',
   CANCELLED: 'Cancelled',
+  DECLINED: 'Declined by the customer',
 };
 
 /** Filters by status (several together add up); their keys are the statuses, lower case. */

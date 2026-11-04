@@ -47,6 +47,7 @@ const CUSTOMER_ROUTES = [
   'POST /custom-requests/mine/:number/decline',
   'GET /quotations/mine/:number',
   'POST /quotations/mine/:number/accept',
+  'POST /quotations/mine/:number/decline',
   'POST /quotations/link/:token/accept',
 ];
 

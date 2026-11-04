@@ -5,6 +5,8 @@ model LeadStage {
   name               String   @unique
   sortOrder          Int      @default(0)
   isWon              Boolean  @default(false)
+  /// Where a lead moves when one of its quotations is sent (from an earlier stage).
+  isQuoted           Boolean  @default(false)
   /// The chance a lead in this stage is won, 0–100, filled in when a lead moves here.
   defaultProbability Int      @default(10)
   active             Boolean  @default(true)
@@ -71,6 +73,9 @@ model Lead {
   lostReasonId    String?        @db.Uuid
   lostReason      LostReason?    @relation(fields: [lostReasonId], references: [id], onDelete: Restrict)
   stageChangedAt  DateTime       @default(now()) @db.Timestamptz(3)
+  /// Something the team must decide on, e.g. "The customer declined Q-2026-0004": whether the
+  /// lead is lost is theirs to say. Cleared once they move it, lose it or keep it open.
+  decisionNeeded  String?
 
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   /// When someone in the team first opened it: unopened leads are the "New" tab.

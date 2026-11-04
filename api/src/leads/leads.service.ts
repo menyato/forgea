@@ -173,6 +173,7 @@ export class LeadsService {
         stageChangedAt: new Date(),
         probability: stage.isWon ? 100 : stage.defaultProbability,
         closedAt: stage.isWon ? new Date() : null,
+        decisionNeeded: null,
       },
       {
         body: stage.isWon
@@ -197,7 +198,12 @@ export class LeadsService {
       throw new BadRequestException('Choose a reason');
     await this.leads.change(
       id,
-      { closedAt: new Date(), probability: 0, lostReasonId: reason.id },
+      {
+        closedAt: new Date(),
+        probability: 0,
+        lostReasonId: reason.id,
+        decisionNeeded: null,
+      },
       {
         body: `Lost: ${reason.name}.${dto.note ? ` ${dto.note}` : ''}`,
         authorId: actorId,
@@ -219,10 +225,108 @@ export class LeadsService {
         stageId: stage.id,
         stageChangedAt: new Date(),
         probability: stage.defaultProbability,
+        decisionNeeded: null,
       },
       { body: `Reopened in ${stage.name}.`, authorId: actorId },
     );
     return this.detail(id);
+  }
+
+  /** The team decided the lead is not lost (e.g. after a declined quotation): it stays open. */
+  async keepOpen(id: string, actorId: string): Promise<LeadDetail> {
+    const lead = await this.require(id);
+    if (!lead.decisionNeeded || lead.closedAt)
+      throw new BadRequestException('Nothing is waiting on a decision here');
+    await this.leads.change(
+      id,
+      { decisionNeeded: null },
+      { body: 'Kept open.', authorId: actorId },
+    );
+    return this.detail(id);
+  }
+
+  /**
+   * One of the lead's quotations changed: written in its log, and the lead follows. Sent: on
+   * to the "quoted" stage (if it was earlier). Accepted: won. Declined by the customer: it
+   * stays open and waits for the team to say whether it is lost. Never reopens a closed lead.
+   * `actorId` null: the customer did it.
+   */
+  async quotationChanged(
+    leadId: string,
+    event: QuotationEvent,
+    actorId: string | null,
+  ): Promise<void> {
+    const lead = await this.leads.findById(leadId);
+    if (!lead) return;
+    const open = lead.closedAt === null;
+    const authorId = actorId;
+    if (event.kind === 'sent') {
+      const quoted = open ? await this.leads.markedStage('isQuoted') : null;
+      const current = await this.leads.stage(lead.stageId);
+      const moves =
+        quoted !== null &&
+        current !== null &&
+        !current.isWon &&
+        current.sortOrder < quoted.sortOrder;
+      const moved = moves ? `: moved to ${quoted.name}` : '';
+      await this.leads.change(
+        leadId,
+        moves
+          ? {
+              stageId: quoted.id,
+              stageChangedAt: new Date(),
+              probability: quoted.defaultProbability,
+            }
+          : {},
+        {
+          authorId,
+          body: `Quotation ${event.number} sent (${usd(event.total)})${moved}.`,
+        },
+      );
+      return;
+    }
+    if (event.kind === 'accepted') {
+      const won = open ? await this.leads.markedStage('isWon') : null;
+      const result = won ? `. Won (moved to ${won.name})` : '';
+      await this.leads.change(
+        leadId,
+        won
+          ? {
+              stageId: won.id,
+              stageChangedAt: new Date(),
+              probability: 100,
+              closedAt: new Date(),
+              decisionNeeded: null,
+            }
+          : {},
+        {
+          authorId,
+          body: `Quotation ${event.number} accepted: order ${event.orderNumber}${result}.`,
+        },
+      );
+      return;
+    }
+    if (event.kind === 'declined') {
+      const why = event.reason ? ` Their reason: "${event.reason}".` : '';
+      await this.leads.change(
+        leadId,
+        open
+          ? {
+              decisionNeeded: `The customer declined quotation ${event.number}.${why} Mark the lead as lost, or keep it open.`,
+            }
+          : {},
+        {
+          authorId,
+          body: `The customer declined quotation ${event.number}.${why}`,
+        },
+      );
+      return;
+    }
+    await this.leads.change(
+      leadId,
+      {},
+      { authorId, body: `Quotation ${event.number} cancelled.` },
+    );
   }
 
   async addActivity(
@@ -269,6 +373,7 @@ export class LeadsService {
       name: s.name,
       sortOrder: s.sortOrder,
       isWon: s.isWon,
+      isQuoted: s.isQuoted,
       defaultProbability: s.defaultProbability,
       active: s.active,
     }));
@@ -309,6 +414,15 @@ export class LeadsService {
   }
 }
 
+/** What happened to one of a lead's quotations (see LeadsService.quotationChanged). */
+export type QuotationEvent =
+  | { kind: 'sent'; number: string; total: string }
+  | { kind: 'accepted'; number: string; orderNumber: string }
+  | { kind: 'declined'; number: string; reason: string | null }
+  | { kind: 'cancelled'; number: string };
+
+const usd = (amount: string) => '$' + amount;
+
 function stateOf(l: { closedAt: Date | null; lostReasonId: string | null }) {
   if (!l.closedAt) return 'open' as const;
   return l.lostReasonId ? ('lost' as const) : ('won' as const);
@@ -340,6 +454,7 @@ function toListItem(l: LeadRow): LeadListItem {
           dueAt: next.dueAt.toISOString(),
         }
       : null,
+    decisionNeeded: l.decisionNeeded,
     createdAt: l.createdAt.toISOString(),
   };
 }

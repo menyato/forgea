@@ -2,6 +2,7 @@ import type { CheckoutResult, QuotationDetail } from '@forgea/types';
 import { data, redirect } from 'react-router';
 import { signInFor } from '~/features/auth/sign-in-links.server';
 import { QuotationDocument } from '~/features/quotations/quotation-document';
+import { declineBody } from '~/features/quotations/decline.server';
 import { quotationExtras } from '~/features/quotations/quotation-extras.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -29,12 +30,27 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
   return { quotation: q.data, ...(await quotationExtras(api, q.data)) };
 }
 
-export async function action({ params, url, context }: Route.ActionArgs) {
-  const r = await context
-    .get(apiContext)
-    .post<CheckoutResult>(
-      `/quotations/mine/${encodeURIComponent(params.number)}/accept`,
+/** accept (places the order) | decline (with an optional reason) */
+export async function action({
+  request,
+  params,
+  url,
+  context,
+}: Route.ActionArgs) {
+  const api = context.get(apiContext);
+  const form = await request.formData();
+  const base = `/quotations/mine/${encodeURIComponent(params.number)}`;
+  if (form.get('intent') === 'decline') {
+    const r = await api.post<QuotationDetail>(
+      `${base}/decline`,
+      declineBody(form),
     );
+    if (r.status === 401) throw redirect(signInFor(url));
+    return r.ok
+      ? { result: null, error: null }
+      : data({ result: null, error: r.message }, { status: r.status });
+  }
+  const r = await api.post<CheckoutResult>(`${base}/accept`);
   if (r.status === 401) throw redirect(signInFor(url));
   return r.ok
     ? { result: r.data, error: null }

@@ -16,7 +16,8 @@ import type { loader as rootLoader } from '~/root';
 
 /**
  * A quotation as the customer reads it — on their account page or from the emailed link:
- * every line with its printed size, delivery, the amount to pay, and the accept button.
+ * every line with its printed size, delivery, the amount to pay, and the accept button (or
+ * declining it, with a reason if they like).
  */
 export function QuotationDocument({
   quotation: q,
@@ -61,9 +62,11 @@ export function QuotationDocument({
             ? `Accepted: order ${q.orderNumber}.`
             : q.status === QuotationStatus.CANCELLED
               ? 'This quotation was withdrawn.'
-              : q.expired
-                ? 'This quotation has expired. Ask us for a new date.'
-                : `Valid until ${new Date(q.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}.`}
+              : q.status === QuotationStatus.DECLINED
+                ? 'You declined this quotation. Thank you for letting us know; we may send you a new one.'
+                : q.expired
+                  ? 'This quotation has expired. Ask us for a new date.'
+                  : `Valid until ${new Date(q.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}.`}
         </p>
       </header>
       <div className="overflow-x-auto rounded-lg bg-surface p-5">
@@ -167,6 +170,33 @@ export function QuotationDocument({
       </div>
       {open && signInNote && (
         <p className="text-sm text-text-muted">{signInNote}</p>
+      )}
+      {open && (
+        <details className="grid gap-3 text-sm">
+          <summary className="cursor-pointer text-text-muted underline underline-offset-4">
+            Not right for you? Decline it
+          </summary>
+          <Form method="post" className="mt-3 grid max-w-xl gap-3">
+            <input type="hidden" name="intent" value="decline" />
+            <label className="grid gap-1.5">
+              <span className="font-medium">Why not? (optional)</span>
+              <textarea
+                name="reason"
+                maxLength={500}
+                rows={3}
+                className="rounded-md border border-border bg-bg px-3 py-2"
+              />
+            </label>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={accepting}
+              className="justify-self-start"
+            >
+              Decline this quotation
+            </Button>
+          </Form>
+        </details>
       )}
     </main>
   );

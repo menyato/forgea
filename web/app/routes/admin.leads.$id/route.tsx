@@ -31,7 +31,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   };
 }
 
-/** stage | lose | restore | activity | done | note */
+/** stage | lose | restore | keep-open | activity | done | note */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const base = `/leads/${encodeURIComponent(params.id)}`;
@@ -47,8 +47,11 @@ export async function action({ request, params, context }: Route.ActionArgs) {
         { lostReasonId: text(form, 'lostReasonId'), note: text(form, 'note') },
         (dto) => api.post(`${base}/lose`, dto),
       );
+    case 'keep-open':
     case 'restore': {
-      const r = await api.post(`${base}/restore`);
+      const r = await api.post(
+        `${base}/${form.get('intent') === 'keep-open' ? 'keep-open' : 'restore'}`,
+      );
       return r.ok
         ? data<SaveResult>({ ok: true })
         : data<SaveResult>({ error: r.message }, { status: r.status });
@@ -115,6 +118,13 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">
+          {l.decisionNeeded && l.state === 'open' && (
+            <DecisionPanel
+              text={l.decisionNeeded}
+              reasons={reasons}
+              mayWork={mayWork}
+            />
+          )}
           <Panel title="Stage">
             {!mayWork ? (
               <p className="text-sm">
@@ -336,6 +346,67 @@ function NoteForm() {
         Save the note
       </Button>
     </fetcher.Form>
+  );
+}
+
+/**
+ * Something the team must decide (the customer declined a quotation): lost, with a reason, or
+ * kept open. Nothing happens to the lead until they say.
+ */
+function DecisionPanel({
+  text,
+  reasons,
+  mayWork,
+}: {
+  text: string;
+  reasons: LostReasonView[];
+  mayWork: boolean;
+}) {
+  const fetcher = useFetcher<SaveResult>();
+  const busy = fetcher.state !== 'idle';
+  return (
+    <section
+      role="status"
+      aria-label="Needs your decision"
+      className="grid gap-3 rounded-lg border-2 border-accent bg-surface p-5"
+    >
+      <h2 className="font-display text-lg font-bold">Needs your decision</h2>
+      <p className="text-sm">{text}</p>
+      {mayWork && (
+        <fetcher.Form method="post" className="flex flex-wrap items-end gap-3">
+          {reasons.length > 0 && (
+            <SelectField label="Lost because" name="lostReasonId">
+              {reasons.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </SelectField>
+          )}
+          {reasons.length > 0 && (
+            <Button
+              type="submit"
+              name="intent"
+              value="lose"
+              variant="secondary"
+              disabled={busy}
+            >
+              Mark as lost
+            </Button>
+          )}
+          <Button
+            type="submit"
+            name="intent"
+            value="keep-open"
+            variant="quiet"
+            disabled={busy}
+          >
+            Not lost: keep it open
+          </Button>
+        </fetcher.Form>
+      )}
+      <SaveStatus state={fetcher.state} result={fetcher.data} />
+    </section>
   );
 }
 
