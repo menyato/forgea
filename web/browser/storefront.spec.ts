@@ -166,6 +166,8 @@ test('the home page and the shop show each product as its 3D model', async ({
   ).toBe(0);
   // three.js's notice about the Clock @react-three/fiber still makes is filtered out.
   expect(warnings.filter((w) => w.includes('THREE.Clock'))).toEqual([]);
+  // Nor are shaders re-checked outside development (Windows' compiler notes, X4122).
+  expect(warnings.filter((w) => w.includes('Program Info Log'))).toEqual([]);
 
   // Other tests add products to this database; search for the seeded one.
   await page.goto('/shop?q=Phone%20stand');
