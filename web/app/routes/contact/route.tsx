@@ -10,20 +10,20 @@ import {
   SelectField,
   TextAreaField,
 } from '~/components/ui/field';
+import { seoMeta, siteOrigin } from '~/features/seo/seo';
 import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import { readUploadForm } from '~/lib/upload-guard.server';
 import type { Route } from './+types/route';
 
-export function meta(_: Route.MetaArgs) {
-  return [
-    { title: 'Tell us your idea — Forgea' },
-    {
-      name: 'description',
-      content:
-        'A gift, a part, a prototype: describe it and the studio gets back to you. No account needed.',
-    },
-  ];
+export function meta({ matches }: Route.MetaArgs) {
+  return seoMeta({
+    origin: siteOrigin(matches),
+    path: '/contact',
+    title: 'Tell us your idea — Forgea',
+    description:
+      'A gift, a part, a prototype: describe it and the studio gets back to you. No account needed.',
+  });
 }
 
 const BUDGET_LABELS: Record<BudgetRange, string> = {

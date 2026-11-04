@@ -23,6 +23,7 @@ import { SiteFooter } from './components/layout/site-footer';
 import { SiteHeader } from './components/layout/site-header';
 import { useOptimisticTheme } from './features/theme/theme-toggle';
 import { readTheme } from './features/theme/theme.server';
+import { serverEnv } from './lib/env.server';
 import {
   apiContext,
   apiMiddleware,
@@ -61,6 +62,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     store: store.ok ? store.data : null,
     paletteCss: isPalette(palette) ? paletteCss(palette) : null,
     theme,
+    // The real public address, for canonical links and link previews (features/seo).
+    siteUrl: serverEnv().PUBLIC_WEB_URL,
   };
 }
 
