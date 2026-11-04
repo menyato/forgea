@@ -51,6 +51,12 @@ export const PAGES: readonly {
     group: 'Sales',
   },
   { path: '/admin/quotations/new', access: 'quotations.manage' },
+  {
+    path: '/admin/customers',
+    access: 'customers.view',
+    label: 'Customers',
+    group: 'Sales',
+  },
   // The old address of the stages page: it now leads to Lead stages.
   { path: '/admin/pipeline', access: 'pipeline.manage' },
   {

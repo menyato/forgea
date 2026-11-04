@@ -48,6 +48,10 @@ export const PERMISSION_GROUPS = [
       },
       { key: 'quotations.view', label: 'See quotations' },
       {
+        key: 'customers.view',
+        label: 'See customers: with or without an account, and all they did',
+      },
+      {
         key: 'quotations.manage',
         label: 'Write, send, confirm and cancel quotations',
         sensitive: true,
@@ -169,6 +173,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<
     'leads.manage',
     'quotations.view',
     'quotations.manage',
+    'customers.view',
     'invoices.view',
     'invoices.create',
     'payments.record',

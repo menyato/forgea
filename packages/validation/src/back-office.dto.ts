@@ -471,3 +471,36 @@ export class EntryListQuery extends CursorPageQuery {
   @IsUUID()
   orderId?: string;
 }
+
+/** GET /customers: search, account or not, sort, and the page (an offset). */
+export class CustomerListQuery {
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @IsOptional()
+  @IsIn(['account', 'guest'])
+  kind?: 'account' | 'guest';
+
+  @IsOptional()
+  @IsIn(['lastActivity', 'spent', 'orders', 'email'])
+  sort?: 'lastActivity' | 'spent' | 'orders' | 'email';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  order?: 'asc' | 'desc';
+
+  @IsOptional()
+  @Matches(/^\d{1,7}$/)
+  cursor?: string;
+}
+
+/** GET /customers/one: the customer's email address. */
+export class CustomerEmailQuery {
+  @NormalizeEmail()
+  @IsEmail({}, { message: 'Enter a valid email address' })
+  @MaxLength(EMAIL_MAX_LENGTH)
+  email!: string;
+}

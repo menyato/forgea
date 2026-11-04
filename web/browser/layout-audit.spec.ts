@@ -91,6 +91,7 @@ const DASHBOARD = [
   '/admin/orders?view=kanban',
   '/admin/production',
   '/admin/requests',
+  '/admin/customers',
   '/admin/leads',
   '/admin/leads?view=list&group=stage',
   '/admin/leads/new',

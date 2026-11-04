@@ -3,6 +3,7 @@ import type {
   CustomRequestStatus,
   OrderStatus,
   PaymentMethod,
+  QuotationStatus,
   Role,
 } from './generated/prisma/enums.js';
 import type { Money } from './lists.js';
@@ -152,4 +153,76 @@ export interface RelatedRecord {
   /** The record's id; for a customer, their email address. */
   id: string;
   label: string;
+}
+
+/**
+ * A customer as the dashboard lists them: a person known by their email address, with an
+ * account or without one (someone who sent the website form, or was sent a quotation).
+ */
+export interface CustomerListItem {
+  /** Their email address (a customer without an account has no other id). */
+  id: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  /** Null: no account (yet). */
+  account: {
+    id: string;
+    /** How they sign in; empty for an account the studio made (a quotation confirmed for them). */
+    signIn: ('password' | 'Google')[];
+    confirmed: boolean;
+    since: string;
+  } | null;
+  orders: number;
+  /** USD, orders not cancelled. */
+  spent: Money;
+  quotations: number;
+  requests: number;
+  leads: number;
+  lastActivity: string;
+}
+
+export interface CustomerList {
+  items: CustomerListItem[];
+  nextCursor: string | null;
+  /** Everyone matching the search and filter. */
+  total: number;
+  /** Carts of visitors who never signed in (no address to know them by), with something in them. */
+  guestCarts: number;
+}
+
+/** One customer: everything they did with the studio, newest first. */
+export interface CustomerDetail extends CustomerListItem {
+  history: {
+    orders: {
+      id: string;
+      number: string;
+      status: OrderStatus;
+      total: Money;
+      createdAt: string;
+    }[];
+    quotations: {
+      id: string;
+      number: string;
+      status: QuotationStatus;
+      total: Money;
+      createdAt: string;
+    }[];
+    requests: {
+      id: string;
+      number: string;
+      title: string;
+      status: CustomRequestStatus;
+      createdAt: string;
+    }[];
+    leads: {
+      id: string;
+      name: string;
+      stage: string;
+      state: 'open' | 'won' | 'lost';
+      createdAt: string;
+    }[];
+  };
+  /** What is in their cart now (signed in), if anything. */
+  cart: { lines: number; updatedAt: string } | null;
 }

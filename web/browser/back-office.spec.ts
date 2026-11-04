@@ -136,4 +136,19 @@ test('a customer declines a quotation; the lead waits for the team, who decide i
     .click();
   await expect(decision).toBeHidden();
   await expect(page.getByText('Kept open.')).toBeVisible();
+
+  // The lead leads to its quotation and its customer, with everything they did.
+  const related = page.getByRole('navigation', { name: 'Related' });
+  await expect(
+    related.getByRole('link', { name: `Quotation ${number}` }),
+  ).toBeVisible();
+  await related.getByRole('link', { name: `Customer: ${email}` }).click();
+  // No name on the account: the one from their lead.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'Omar Decline',
+  );
+  await expect(page.getByText(email).first()).toBeVisible();
+  await expect(page.getByText('Quotations (1)')).toBeVisible();
+  await expect(page.getByRole('link', { name: number! })).toBeVisible();
+  await expect(page.getByText('Leads (1)')).toBeVisible();
 });

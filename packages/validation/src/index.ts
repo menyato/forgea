@@ -67,6 +67,8 @@ export {
 export {
   AddActivityDto,
   AddNoteDto,
+  CustomerEmailQuery,
+  CustomerListQuery,
   DeclineQuotationDto,
   EntryListQuery,
   InvoiceListQuery,
