@@ -13,21 +13,11 @@ import { ProductCard } from '~/features/catalog/product-card';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { BuildPlate } from '~/features/build-plate/build-plate';
-import { modelSource } from '~/features/model-viewer/model-source';
 import { seoMeta, siteOrigin } from '~/features/seo/seo';
 import type { PlateItem } from '~/features/build-plate/build-plate-scene.client';
 
 export function meta({ loaderData, matches }: Route.MetaArgs) {
   return [
-    // The bed's model files start downloading with the page, alongside three.js rather than
-    // after it, so the models are ready when the scene is and printing starts at once.
-    ...(loaderData?.plate ?? []).map((p) => ({
-      tagName: 'link' as const,
-      rel: 'preload',
-      as: 'fetch',
-      crossOrigin: 'anonymous' as const,
-      href: modelSource(p.modelKey, 'lite').src,
-    })),
     ...seoMeta({
       origin: siteOrigin(matches),
       path: '/',

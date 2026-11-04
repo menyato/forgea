@@ -1,3 +1,4 @@
+import '~/features/model-viewer/three-console.client';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
