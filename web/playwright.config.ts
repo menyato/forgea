@@ -31,6 +31,10 @@ export default defineConfig({
     // CI runners have no GPU, and Chrome (137+) no longer falls back to software WebGL by
     // itself: without this the 3D canvases never draw there. No effect where a GPU exists.
     launchOptions: { args: ['--enable-unsafe-swiftshader'] },
+    // Software WebGL redraws every frame of an animated scene on the CPU; with reduced motion the
+    // scenes draw only when something changes (frameloop "demand"), which a small CI runner can
+    // keep up with. Locally the animations stay on, so they are still exercised.
+    ...(process.env['CI'] ? { reducedMotion: 'reduce' as const } : {}),
   },
   projects: [
     {
