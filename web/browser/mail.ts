@@ -1,3 +1,4 @@
+import { expect, type Page } from '@playwright/test';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,4 +28,20 @@ export async function lastEmailTo(to: string): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`No email to ${to}`);
+}
+
+/**
+ * After "Create account": reads the address from the code page, takes the code from the
+ * email we just sent there, and enters it (the real sign-up flow, end to end).
+ */
+export async function finishSignUp(page: Page): Promise<void> {
+  await expect(
+    page.getByRole('heading', { name: 'Check your email' }),
+  ).toBeVisible();
+  const email = (await page.locator('main strong').first().textContent())!;
+  const code = /Your code is (\d{6})\./.exec(await lastEmailTo(email))?.[1];
+  if (!code) throw new Error(`No sign-up code in the email to ${email}`);
+  await page.getByLabel('Code').fill(code);
+  await page.getByRole('button', { name: 'Confirm and continue' }).click();
+  await expect(page).not.toHaveURL(/\/verify-email/);
 }

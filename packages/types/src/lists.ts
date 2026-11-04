@@ -73,12 +73,7 @@ export interface PrintJobCounts {
 
 /** A JSON value as stored (an audit entry's details). */
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 export interface AuditLogListItem {
   id: string;

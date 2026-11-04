@@ -1,4 +1,5 @@
 import { expect, test, newVisitor } from './fixtures';
+import { finishSignUp } from './mail';
 import { signInAsAdmin } from './admin-session';
 
 test.skip(({ isMobile }) => isMobile, 'Back-office flow: one run is enough');
@@ -20,6 +21,7 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   await shopper.getByLabel('Email').fill(email);
   await shopper.getByLabel('Password').fill('correct-horse-battery-9');
   await shopper.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(shopper);
   await expect(shopper).not.toHaveURL(/\/register/);
 
   // Staff log the lead, then write a quotation from it.

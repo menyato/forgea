@@ -7,6 +7,7 @@ import {
   REFRESH_COOKIE,
 } from '../src/authorization/auth-cookies.js';
 import { cookiesFrom, createApp, uniqueEmail } from './create-app.js';
+import { latestCode } from './mail-helpers.js';
 
 const CSRF = { 'x-forgea-csrf': '1' };
 const PASSWORD = 'a long enough passphrase';
@@ -30,13 +31,28 @@ describe('Auth (e2e)', () => {
       .map(([k, v]) => `${k}=${v.value}`)
       .join('; ');
 
-  it('register creates a customer and sets httpOnly, Secure, SameSite=Strict cookies', async () => {
-    const res = await http()
+  it('register emails a code; the code signs in with httpOnly, Secure, SameSite=Strict cookies', async () => {
+    const pending = await http()
       .post('/auth/register')
       .set(CSRF)
       .send({ email: email.toUpperCase(), password: PASSWORD, name: 'Test' })
-      .expect(201);
+      .expect(202);
+    // Not signed in yet: only a ticket that works together with the emailed code.
+    expect(pending.body).toEqual({ email, ticket: expect.any(String) });
+    expect(pending.headers['set-cookie']).toBeUndefined();
 
+    const wrong = await http()
+      .post('/auth/email-code')
+      .set(CSRF)
+      .send({ ticket: pending.body.ticket, code: '000000' })
+      .expect(400);
+    expect(wrong.body.message).toMatch(/not right/);
+
+    const res = await http()
+      .post('/auth/email-code')
+      .set(CSRF)
+      .send({ ticket: pending.body.ticket, code: await latestCode(app, email) })
+      .expect(200);
     expect(res.body).toMatchObject({ email, role: 'CUSTOMER', name: 'Test' });
     const jar = cookiesFrom(res.headers['set-cookie']);
     for (const name of [ACCESS_COOKIE, REFRESH_COOKIE]) {
@@ -156,7 +172,7 @@ describe('Auth (e2e)', () => {
       .post('/auth/register')
       .set(CSRF)
       .send({ email: victim, password: PASSWORD })
-      .expect(201);
+      .expect(202);
     const user = await prisma.user.findUniqueOrThrow({
       where: { email: victim },
     });

@@ -1,6 +1,6 @@
 import { signInAsAdmin } from './admin-session';
 import { closeDashboardMenu, dashboardMenu, expect, test } from './fixtures';
-import { lastEmailTo } from './mail';
+import { finishSignUp, lastEmailTo } from './mail';
 
 const uniqueEmail = (tag: string) =>
   `${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -67,6 +67,7 @@ test('a quotation reaches someone without an account by email, with sizes, and t
     await visitor.getByLabel('Email').fill(email);
     await visitor.getByLabel('Password').fill('correct-horse-battery-9');
     await visitor.getByRole('button', { name: 'Create account' }).click();
+    await finishSignUp(visitor);
     await expect(visitor).toHaveURL(/\/q\//);
     await visitor
       .getByRole('button', { name: 'Accept and place the order' })

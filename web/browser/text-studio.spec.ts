@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { finishSignUp } from './mail';
 import type { Page } from '@playwright/test';
 import { signInAsAdmin } from './admin-session';
 import { closeDashboardMenu, expect, newVisitor, test } from './fixtures';
@@ -159,6 +160,7 @@ test('a customer designs a name keychain in 3D, in English and Arabic; the studi
   await page.getByLabel('Email').fill(`studio-${tag()}@example.com`);
   await page.getByLabel('Password').fill('correct-horse-battery-9');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
   await expect(page).toHaveURL(/\/checkout/);
   await page.getByLabel('Phone').fill('70 222 111');
   await page.getByLabel('Pick up from the studio (no delivery fee)').check();

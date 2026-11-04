@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { signInAsAdmin } from './admin-session';
 import { expect, test, newVisitor } from './fixtures';
-import { lastEmailTo } from './mail';
+import { finishSignUp, lastEmailTo } from './mail';
 
 /**
  * The studio's side of the work, button by button: a lead's whole life, a quotation confirmed
@@ -160,6 +160,7 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
   await c.getByLabel('Email').fill(email);
   await c.getByLabel('Password').fill('correct-horse-battery-9');
   await c.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(c);
   await expect(c).not.toHaveURL(/\/register/);
   await c.goto('/custom');
   await c.getByLabel('What is it?').fill(title);
@@ -342,6 +343,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await c.getByLabel('Email').fill(`stand-${tag()}@example.com`);
   await c.getByLabel('Password').fill('correct-horse-battery-9');
   await c.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(c);
   await expect(c).not.toHaveURL(/\/register/);
   await c.goto('/products/phone-stand');
   await c.getByRole('radio', { name: 'Forest green' }).check({ force: true });

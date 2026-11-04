@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { signInAsAdmin } from './admin-session';
 import { closeDashboardMenu, expect, test, newVisitor } from './fixtures';
-import { lastEmailTo } from './mail';
+import { finishSignUp, lastEmailTo } from './mail';
 
 /**
  * Five customers, each with their own goal, and the studio receiving them. Every browser
@@ -49,6 +49,7 @@ async function register(page: Page, name: string, email: string) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
   await expect(page).not.toHaveURL(/\/register/);
 }
 
@@ -130,6 +131,7 @@ test('Maya, on her phone: two sizes of a vase, delivered, cash on delivery; the 
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
   await expect(page).toHaveURL(/\/checkout/);
   await page.getByLabel('Deliver to me').check();
   await page.getByRole('button', { name: 'Place order' }).click();

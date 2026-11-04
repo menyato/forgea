@@ -33,7 +33,6 @@ const CUSTOMER_ROUTES = [
   'GET /auth/me',
   'PATCH /auth/me',
   'POST /auth/password/change',
-  'POST /auth/verify-email/resend',
   'POST /orders/checkout',
   'GET /orders/mine',
   'POST /orders/mine/:number/cancel',

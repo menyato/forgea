@@ -1,3 +1,4 @@
+import type { PendingConfirmation, Profile } from '@forgea/types';
 import { LoginDto } from '@forgea/validation';
 import {
   data,
@@ -15,6 +16,7 @@ import {
   nextPath,
 } from '~/features/auth/sign-in-links.server';
 import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
+import { toCodePage } from '~/features/auth/pending-confirmation.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -42,9 +44,13 @@ export async function action({ request, url, context }: Route.ActionArgs) {
   if (!parsed.ok)
     return data({ errors: parsed.errors, message: undefined }, { status: 400 });
 
-  const r = await context.get(apiContext).post('/auth/login', parsed.value);
+  const r = await context
+    .get(apiContext)
+    .post<Profile | PendingConfirmation>('/auth/login', parsed.value);
   if (!r.ok)
     return data({ errors: {}, message: r.message }, { status: r.status });
+  // The right password, but the address was never confirmed: a code is on its way.
+  if ('ticket' in r.data) return toCodePage(r.data, nextPath(url));
   return redirect(nextPath(url));
 }
 

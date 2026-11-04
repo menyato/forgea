@@ -5,7 +5,7 @@ import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
-import { inbox } from './mail-helpers.js';
+import { inbox, registerCustomer } from './mail-helpers.js';
 
 /** Quotations for anyone with an email address, sent as a full document with a private link. */
 describe('Quotations by email (e2e)', () => {
@@ -53,14 +53,10 @@ describe('Quotations by email (e2e)', () => {
 
   /** Signs up (or in) as a customer with this address: a session cookie. */
   async function customerCookie(email: string) {
-    const res = await http()
-      .post('/auth/register')
-      .set(CSRF)
-      .send({ email, password: 'correct-horse-battery-9' })
-      .expect(201);
-    return (res.headers['set-cookie'] as unknown as string[])
-      .map((c) => c.split(';')[0])
-      .join('; ');
+    return registerCustomer(app, {
+      email,
+      password: 'correct-horse-battery-9',
+    });
   }
 
   beforeAll(async () => {

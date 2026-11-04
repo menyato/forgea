@@ -6,8 +6,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Profile } from '@forgea/types';
-import type { LoginDto, RegisterDto } from '@forgea/validation';
+import type { PendingConfirmation, Profile } from '@forgea/types';
+import type {
+  ConfirmEmailDto,
+  LoginDto,
+  RegisterDto,
+} from '@forgea/validation';
 import { AccessTokenService } from '../authorization/access-token.service.js';
 import { EmailVerificationTokens } from '../authorization/email-verification-tokens.js';
 import { Notifications } from '../mail/notifications.service.js';
@@ -16,6 +20,7 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import type { User } from '../generated/prisma/client.js';
 import { Role } from '../generated/prisma/enums.js';
 import { UsersRepository } from '../users/users.repository.js';
+import { EmailCodes } from './email-codes.js';
 import type { GoogleClaims } from './google-oidc.js';
 import { PasswordHasher } from './password-hasher.js';
 import type { RequestContext } from './request-context.js';
@@ -36,6 +41,11 @@ export interface IssuedSession {
 }
 
 const INVALID_LOGIN = 'Email or password is incorrect';
+const WRONG_CODE = 'That code is not right. Check the latest email from us.';
+const ALREADY_CONFIRMED = 'This address is already confirmed. Sign in instead.';
+const CODE_EXPIRED = 'This code has expired. Ask for a new one.';
+/** New codes per address an hour, on top of the one-a-minute limit. */
+const CODES_PER_HOUR = 6;
 
 @Injectable()
 export class AuthService {
@@ -49,6 +59,7 @@ export class AuthService {
     private readonly accessTokens: AccessTokenService,
     private readonly audit: AuditLogService,
     private readonly verification: EmailVerificationTokens,
+    private readonly codes: EmailCodes,
     private readonly notifications: Notifications,
     private readonly attempts: LoginAttempts,
     private readonly resetTokens: PasswordResetTokens,
@@ -61,11 +72,11 @@ export class AuthService {
       ?.toLowerCase();
   }
 
-  /** Customer sign-up with email + password. Staff addresses must use Google. */
-  async register(
-    dto: RegisterDto,
-    ctx: RequestContext,
-  ): Promise<IssuedSession> {
+  /**
+   * Customer sign-up with email + password. Staff addresses must use Google. Nobody is signed
+   * in yet: a code goes to the address, and confirmEmail() signs them in once it is entered.
+   */
+  async register(dto: RegisterDto): Promise<PendingConfirmation> {
     if (this.isWorkspaceEmail(dto.email)) {
       throw new BadRequestException(
         `@${this.workspaceDomain} accounts sign in with Google`,
@@ -73,7 +84,6 @@ export class AuthService {
     }
     if (await this.users.findByEmail(dto.email)) {
       // Reveals that the address is registered; rate limiting bounds probing.
-      // Phase 9 replaces this with an emailed verification link (no difference in response).
       throw new ConflictException(
         'An account with this email already exists. Sign in instead.',
       );
@@ -83,8 +93,7 @@ export class AuthService {
       name: dto.name,
       passwordHash: await this.passwords.hash(dto.password),
     });
-    await this.sendVerification(user);
-    return this.issue(user, ctx);
+    return this.startConfirmation(user);
   }
 
   /**
@@ -94,7 +103,7 @@ export class AuthService {
   async loginWithPassword(
     dto: LoginDto,
     ctx: RequestContext,
-  ): Promise<IssuedSession> {
+  ): Promise<IssuedSession | PendingConfirmation> {
     this.attempts.check(dto.email, ctx.ip);
     const user = await this.users.findByEmail(dto.email);
     const ok =
@@ -106,6 +115,8 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_LOGIN);
     }
     this.attempts.succeeded(dto.email, ctx.ip);
+    // A sign-up that never entered its code: the right password asks for a (new) code.
+    if (!user.emailVerifiedAt) return this.startConfirmation(user);
     return this.issue(user, ctx);
   }
 
@@ -142,31 +153,61 @@ export class AuthService {
     return this.sign(user, token);
   }
 
-  /** Confirms the address the link was sent to (only if the account still has that address). */
-  async verifyEmail(token: string): Promise<Profile> {
-    const claims = await this.verification.verify(token);
+  /**
+   * The code from the email, with the ticket the browser kept: confirms the address and signs
+   * the customer in. The ticket only names the account; without the code it does nothing.
+   */
+  async confirmEmail(
+    dto: ConfirmEmailDto,
+    ctx: RequestContext,
+  ): Promise<IssuedSession> {
+    const user = await this.ticketHolder(dto.ticket);
+    // Already confirmed: the code is gone, and the ticket alone never signs anyone in.
+    if (user.emailVerifiedAt) throw new BadRequestException(ALREADY_CONFIRMED);
+    const check = await this.codes.check(user.id, dto.code);
+    if (check === 'wrong') throw new BadRequestException(WRONG_CODE);
+    if (check === 'expired') throw new BadRequestException(CODE_EXPIRED);
+    return this.issue(await this.users.markEmailVerified(user.id), ctx);
+  }
+
+  /** A new code for the ticket's account; false when one went out less than a minute ago. */
+  async resendEmailCode(ticket: string): Promise<{ sent: boolean }> {
+    const user = await this.ticketHolder(ticket);
+    if (user.emailVerifiedAt) return { sent: false };
+    return { sent: await this.sendCode(user) };
+  }
+
+  /** The account a confirmation ticket names, while it still has that address. */
+  private async ticketHolder(ticket: string): Promise<User> {
+    const claims = await this.verification.verify(ticket);
     const user = claims && (await this.users.findById(claims.userId));
-    if (!claims || !user || user.email !== claims.email) {
+    if (!claims || !user || user.email !== claims.email || user.disabledAt) {
       throw new BadRequestException(
-        'This link has expired or is not valid. Ask for a new one from your account.',
+        'This page has expired. Sign in again to get a new code.',
       );
     }
-    return this.toProfile(
-      user.emailVerifiedAt ? user : await this.users.markEmailVerified(user.id),
+    return user;
+  }
+
+  /** Emails a code and hands the browser the ticket that goes with it. */
+  private async startConfirmation(user: User): Promise<PendingConfirmation> {
+    await this.sendCode(user);
+    return {
+      ticket: await this.verification.issue(user.id, user.email),
+      email: user.email,
+    };
+  }
+
+  /** At most one code a minute (EmailCodes) and a few an hour per address. */
+  private async sendCode(user: User): Promise<boolean> {
+    const code = await this.codes.issue(user.id);
+    if (!code) return false;
+    return this.notifications.sendAtMost(
+      `email-code:${user.email}`,
+      CODES_PER_HOUR,
+      'emailCode',
+      { to: user.email, code },
     );
-  }
-
-  /** Sends a new link; nothing happens for an address that is already confirmed. */
-  async resendVerification(userId: string): Promise<void> {
-    const user = await this.users.findById(userId);
-    if (user && !user.emailVerifiedAt) await this.sendVerification(user);
-  }
-
-  private async sendVerification(user: User): Promise<void> {
-    this.notifications.send('verifyEmail', {
-      to: user.email,
-      token: await this.verification.issue(user.id, user.email),
-    });
   }
 
   /**

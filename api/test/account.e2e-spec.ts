@@ -2,8 +2,9 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PasswordResetTokens } from '../src/authorization/password-reset-tokens.js';
 import { PrismaService } from '../src/database/prisma.service.js';
-import { cookiePairs, CSRF } from './commerce-helpers.js';
+import { CSRF } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
+import { registerCustomer } from './mail-helpers.js';
 
 const OLD = 'an old long passphrase';
 const NEW = 'a brand new passphrase';
@@ -22,17 +23,13 @@ describe('Account (e2e)', () => {
 
   async function register() {
     const email = uniqueEmail('account');
-    const res = await http()
-      .post('/auth/register')
-      .set(CSRF)
-      .send({ email, password: OLD, name: 'Rana' })
-      .expect(201);
-    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-    return {
+    const cookie = await registerCustomer(app, {
       email,
-      user,
-      cookie: cookiePairs(res.headers['set-cookie']).join('; '),
-    };
+      password: OLD,
+      name: 'Rana',
+    });
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    return { email, user, cookie };
   }
 
   it('updates the name and phone; reports whether the address is confirmed', async () => {
@@ -46,7 +43,8 @@ describe('Account (e2e)', () => {
     expect(me.body).toMatchObject({
       name: 'Rana Khoury',
       phone: '70 123 456',
-      emailVerified: false,
+      // Confirmed by the code emailed at sign-up.
+      emailVerified: true,
       hasPassword: true,
     });
   });
@@ -67,12 +65,6 @@ describe('Account (e2e)', () => {
       .expect(200);
     // Every earlier session ended; a fresh one came with the answer.
     expect(changed.headers['set-cookie']).toBeDefined();
-    // Knowing the old password proves nothing about the address: still unconfirmed, so a
-    // later Google sign-in by the real owner still signs out whoever registered it.
-    expect(
-      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } }))
-        .emailVerifiedAt,
-    ).toBeNull();
     expect(
       await prisma.session.count({
         where: { userId: user.id, revokedAt: null },

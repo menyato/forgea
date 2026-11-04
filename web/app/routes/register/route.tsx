@@ -1,5 +1,6 @@
+import type { PendingConfirmation } from '@forgea/types';
 import { PASSWORD_MIN_LENGTH, RegisterDto } from '@forgea/validation';
-import { data, Form, Link, redirect, useNavigation } from 'react-router';
+import { data, Form, Link, useNavigation } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, FormAlert } from '~/components/ui/field';
 import { GoogleButton } from '~/features/auth/google-button';
@@ -8,6 +9,7 @@ import {
   nextPath,
 } from '~/features/auth/sign-in-links.server';
 import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
+import { toCodePage } from '~/features/auth/pending-confirmation.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -31,10 +33,13 @@ export async function action({ request, url, context }: Route.ActionArgs) {
   if (!parsed.ok)
     return data({ errors: parsed.errors, message: undefined }, { status: 400 });
 
-  const r = await context.get(apiContext).post('/auth/register', parsed.value);
+  const r = await context
+    .get(apiContext)
+    .post<PendingConfirmation>('/auth/register', parsed.value);
   if (!r.ok)
     return data({ errors: {}, message: r.message }, { status: r.status });
-  return redirect(nextPath(url));
+  // Not signed in yet: the code we just emailed finishes it.
+  return toCodePage(r.data, nextPath(url));
 }
 
 export default function Register({

@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import request from 'supertest';
 import { Notifications } from '../src/mail/notifications.service.js';
 
 const OUTBOX = resolve('.outbox-test');
@@ -32,3 +33,43 @@ const decodeHeader = (value: string) =>
   value.replace(/=\?UTF-8\?B\?([^?]*)\?=\s?/gi, (_, b64: string) =>
     Buffer.from(b64, 'base64').toString('utf8'),
   );
+
+/** The latest sign-up code emailed to an address (its subject starts with the code). */
+export async function latestCode(
+  app: NestExpressApplication,
+  to: string,
+): Promise<string> {
+  const codes = (await inbox(app, to))
+    .map((m) => /^(\d{6}) is your Forgea code$/.exec(m.subject)?.[1])
+    .filter((c): c is string => c !== undefined);
+  const code = codes.at(-1);
+  if (!code) throw new Error(`no sign-up code was emailed to ${to}`);
+  return code;
+}
+
+/**
+ * Signs up through the real flow (register, then the emailed code): the new customer's
+ * session cookie header.
+ */
+export async function registerCustomer(
+  app: NestExpressApplication,
+  body: { email: string; password: string; name?: string },
+): Promise<string> {
+  const http = () => request(app.getHttpServer());
+  const pending = await http()
+    .post('/auth/register')
+    .set('x-forgea-csrf', '1')
+    .send(body)
+    .expect(202);
+  const res = await http()
+    .post('/auth/email-code')
+    .set('x-forgea-csrf', '1')
+    .send({
+      ticket: pending.body.ticket,
+      code: await latestCode(app, body.email),
+    })
+    .expect(200);
+  return (res.headers['set-cookie'] as unknown as string[])
+    .map((c) => c.split(';')[0])
+    .join('; ');
+}

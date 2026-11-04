@@ -3,12 +3,13 @@ import { JwtService } from '@nestjs/jwt';
 
 const ISSUER = 'forgea-api';
 /** A different audience from sign-in tokens: one can never be used as the other. */
-const AUDIENCE = 'forgea-verify-email';
-const VALID_SECONDS = 2 * 24 * 3600;
+const AUDIENCE = 'forgea-confirm-email';
+const VALID_SECONDS = 15 * 60;
 
 /**
- * The link in the "confirm your email address" message: proves who received the email, for
- * that address only (a changed address needs a new link), for two days.
+ * The confirmation ticket the browser holds between sign-up and entering the emailed code:
+ * names the account and its address (a changed address needs a new one), for 15 minutes. It
+ * signs nobody in by itself: only together with the code (EmailCodes).
  */
 @Injectable()
 export class EmailVerificationTokens {

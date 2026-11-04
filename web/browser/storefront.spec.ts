@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { finishSignUp } from './mail';
 import { expect, test, newVisitor } from './fixtures';
 
 const uniqueEmail = () =>
@@ -37,6 +38,7 @@ test('a visitor browses without an account, signs up at checkout and pays by tra
   await page.getByLabel('Email').fill(uniqueEmail());
   await page.getByLabel('Password').fill('correct-horse-battery-9');
   await page.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(page);
 
   // Back on checkout with the same cart; the name is already filled in.
   await expect(page).toHaveURL(/\/checkout/);

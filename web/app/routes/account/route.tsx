@@ -28,18 +28,11 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 
 type Result = { ok?: true; errors?: FieldErrors; message?: string };
 
-/** profile (name, phone) | password (change it) | verify (send the confirmation link again) */
+/** profile (name, phone) | password (change it) */
 export async function action({ request, url, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
   const intent = form.get('intent');
-
-  if (intent === 'verify') {
-    const r = await api.post('/auth/verify-email/resend');
-    return r.ok
-      ? data<Result>({ ok: true })
-      : data<Result>({ message: r.message }, { status: r.status });
-  }
 
   const parsed =
     intent === 'password'
@@ -71,7 +64,9 @@ export default function Account({ loaderData }: Route.ComponentProps) {
         </h1>
         <p className="text-text-muted">
           {profile.email}
-          {profile.emailVerified ? ' · confirmed' : ' · not confirmed yet'}
+          {profile.emailVerified
+            ? ' · confirmed'
+            : ' · not confirmed yet (we email you a code next time you sign in)'}
         </p>
         <p className="flex gap-4 text-sm">
           <Link to="/orders" className="underline underline-offset-4">
@@ -82,37 +77,9 @@ export default function Account({ loaderData }: Route.ComponentProps) {
           </Link>
         </p>
       </header>
-      {!profile.emailVerified && <VerifyPanel />}
       <ProfilePanel profile={profile} />
       <PasswordPanel hasPassword={profile.hasPassword} />
     </main>
-  );
-}
-
-function VerifyPanel() {
-  const fetcher = useFetcher<Result>();
-  return (
-    <section className="grid gap-3 rounded-lg bg-surface p-6">
-      <h2 className="font-display text-xl font-bold">Confirm your email</h2>
-      <p className="text-sm text-text-muted">
-        Order updates and quotes are sent to this address once it is confirmed.
-      </p>
-      {fetcher.data?.ok ? (
-        <p className="font-medium">A new link is on its way.</p>
-      ) : (
-        <fetcher.Form method="post">
-          <input type="hidden" name="intent" value="verify" />
-          <Button
-            type="submit"
-            variant="secondary"
-            disabled={fetcher.state !== 'idle'}
-          >
-            Send me the link again
-          </Button>
-        </fetcher.Form>
-      )}
-      <FormAlert message={fetcher.data?.message} />
-    </section>
   );
 }
 

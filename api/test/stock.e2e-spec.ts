@@ -599,7 +599,7 @@ describe('Filament stock (e2e)', () => {
     expect(byGrams.items[0]!.grams).toBe(Math.max(...all.map((m) => m.grams)));
     // Page by page by grams, it still gives every movement once, biggest first.
     const grams: number[] = [];
-    for (let at = ''; ; ) {
+    for (let at = ''; ;) {
       const page = await movements(
         `?stockItemId=${copper}&sort=grams&limit=2${at ? `&cursor=${at}` : ''}`,
       );

@@ -10,7 +10,8 @@ export {
   RegisterDto,
   ResetPasswordDto,
   UpdateProfileDto,
-  VerifyEmailDto,
+  ConfirmEmailDto,
+  ResendEmailCodeDto,
 } from './auth.dto.js';
 export { CreateLeadDto } from './leads.dto.js';
 export { AddCurrencyDto, SetExchangeRateDto } from './currency.dto.js';

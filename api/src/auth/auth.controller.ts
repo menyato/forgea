@@ -15,12 +15,13 @@ import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import {
   ChangePasswordDto,
+  ConfirmEmailDto,
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
+  ResendEmailCodeDto,
   ResetPasswordDto,
   UpdateProfileDto,
-  VerifyEmailDto,
 } from '@forgea/validation';
 import type { Request, Response } from 'express';
 import { AuthCookies } from '../authorization/auth-cookies.js';
@@ -29,7 +30,7 @@ import { CurrentUser, Public } from '../authorization/decorators.js';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { AuthService, type IssuedSession } from './auth.service.js';
-import type { Profile } from '@forgea/types';
+import type { PendingConfirmation, Profile } from '@forgea/types';
 import {
   GoogleAuthGuard,
   googleReturnPath,
@@ -49,34 +50,38 @@ export class AuthController {
     this.webUrl = config.get('PUBLIC_WEB_URL', { infer: true });
   }
 
+  /** 202: not signed in yet; the code emailed to the address finishes it (email-code). */
   @Public()
   @Throttle(THROTTLE.auth)
+  @HttpCode(202)
   @Post('register')
-  async register(
-    @Body() dto: RegisterDto,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<Profile> {
-    return this.signIn(res, await this.auth.register(dto, requestContext(req)));
+  register(@Body() dto: RegisterDto): Promise<PendingConfirmation> {
+    return this.auth.register(dto);
   }
 
-  /** The link from the "confirm your email address" message. */
+  /** The emailed code and the browser's ticket: confirms the address and signs in. */
   @Public()
   @Throttle(THROTTLE.auth)
   @HttpCode(200)
-  @Post('verify-email')
-  verifyEmail(@Body() dto: VerifyEmailDto): Promise<Profile> {
-    return this.auth.verifyEmail(dto.token);
+  @Post('email-code')
+  async confirmEmail(
+    @Body() dto: ConfirmEmailDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Profile> {
+    return this.signIn(
+      res,
+      await this.auth.confirmEmail(dto, requestContext(req)),
+    );
   }
 
-  /** A new link for the signed-in customer (throttled: it sends an email). */
+  /** A new code (throttled, and at most one a minute per account: it sends an email). */
+  @Public()
   @Throttle(THROTTLE.auth)
-  @HttpCode(204)
-  @Post('verify-email/resend')
-  async resendVerification(
-    @CurrentUser() user: AuthenticatedUser,
-  ): Promise<void> {
-    await this.auth.resendVerification(user.id);
+  @HttpCode(200)
+  @Post('email-code/resend')
+  resendEmailCode(@Body() dto: ResendEmailCodeDto): Promise<{ sent: boolean }> {
+    return this.auth.resendEmailCode(dto.ticket);
   }
 
   /** "Forgot your password?": always 204, whether or not the address has an account. */
@@ -127,6 +132,7 @@ export class AuthController {
     return this.auth.updateProfile(user.id, dto);
   }
 
+  /** 200 and signed in; or 202 with a ticket when the address still needs its emailed code. */
   @Public()
   @Throttle(THROTTLE.auth)
   @Post('login')
@@ -135,11 +141,13 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<Profile> {
-    return this.signIn(
-      res,
-      await this.auth.loginWithPassword(dto, requestContext(req)),
-    );
+  ): Promise<Profile | PendingConfirmation> {
+    const result = await this.auth.loginWithPassword(dto, requestContext(req));
+    if ('ticket' in result) {
+      res.status(202);
+      return result;
+    }
+    return this.signIn(res, result);
   }
 
   @Public()

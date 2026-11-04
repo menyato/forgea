@@ -5,13 +5,12 @@ import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import {
   CSRF,
-  cookiePairs,
   createProduct,
   signedInAs,
   signedInCustomer,
 } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
-import { inbox } from './mail-helpers.js';
+import { inbox, registerCustomer } from './mail-helpers.js';
 
 describe('Emails and the production planner (e2e)', () => {
   let app: NestExpressApplication;
@@ -24,37 +23,17 @@ describe('Emails and the production planner (e2e)', () => {
   });
   afterAll(() => app.close());
 
-  it('a new customer gets a confirmation link that confirms the address', async () => {
+  it('a new customer is emailed a code; nothing is confirmed until it is entered', async () => {
     const email = uniqueEmail('verify');
-    const res = await http()
-      .post('/auth/register')
-      .set(CSRF)
-      .send({ email, password: 'correct-horse-battery-9' })
-      .expect(201);
+    await registerCustomer(app, { email, password: 'correct-horse-battery-9' });
     const [mail] = await inbox(app, email);
-    expect(mail?.subject).toBe('Confirm your email address');
-    const token = decodeURIComponent(/token=([^\s]+)/.exec(mail!.text)![1]!);
-
-    await http()
-      .post('/auth/verify-email')
-      .set(CSRF)
-      .send({ token: `${token}x` })
-      .expect(400);
-    await http()
-      .post('/auth/verify-email')
-      .set(CSRF)
-      .send({ token })
-      .expect(200);
+    expect(mail?.subject).toMatch(/^\d{6} is your Forgea code$/);
+    expect(mail?.text).not.toContain('http');
     const user = await prisma.user.findUniqueOrThrow({ where: { email } });
     expect(user.emailVerifiedAt).not.toBeNull();
-
-    // Already confirmed: asking again sends nothing.
-    await http()
-      .post('/auth/verify-email/resend')
-      .set(CSRF)
-      .set('Cookie', cookiePairs(res.headers['set-cookie']).join('; '))
-      .expect(204);
-    expect(await inbox(app, email)).toHaveLength(1);
+    expect(await prisma.emailCode.count({ where: { userId: user.id } })).toBe(
+      0,
+    );
   });
 
   it('the customer is emailed when the order is placed and at every step', async () => {
