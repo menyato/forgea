@@ -32,7 +32,11 @@ import {
   SIZE_CM_PATTERN,
 } from './constants.js';
 import { Trim } from './email.js';
-import { ProductTextDto, TextDesignDto } from './text-studio.dto.js';
+import {
+  DesignMeasurementDto,
+  ProductTextDto,
+  TextDesignDto,
+} from './text-studio.dto.js';
 
 // Every rule for the catalog is configured in the dashboard; these DTOs only keep the data
 // well-formed. One "Save…" DTO serves both create (POST) and edit (PUT): the form always sends
@@ -363,6 +367,12 @@ export class ProductPriceDto {
   @ValidateNested()
   @Type(() => TextDesignDto)
   design?: TextDesignDto;
+
+  /** The browser's measurement of that design (see DesignMeasurementDto). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DesignMeasurementDto)
+  measured?: DesignMeasurementDto;
 }
 
 /** POST /products/price-preview: the price a product would have while it is being edited. */

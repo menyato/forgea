@@ -15,7 +15,7 @@ const TIME_LIMIT_MS = 10_000;
 const MAX_WAITING = 200;
 /** Workers: two where the server has the cores for it (one core stays with the API). */
 const WORKERS = Math.max(1, Math.min(2, availableParallelism() - 1));
-/** Designs measured lately: a design is priced while typed, in the cart and at checkout. */
+/** Designs measured lately (checkout, reorders, and pages whose browser couldn't build it). */
 const CACHE_SIZE = 2000;
 
 /** A font for a job: its bytes are read only if the worker doesn't have it yet. */

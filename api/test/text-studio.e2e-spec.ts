@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +17,7 @@ import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
 import { createApp } from './create-app.js';
 import { useRoundPricing } from './studio-helpers.js';
+import { TextShaper } from '../src/text-studio/text-shaper.js';
 
 const fontFile = (file: string) =>
   readFileSync(new URL(`../prisma/example-fonts/${file}`, import.meta.url));
@@ -596,6 +598,79 @@ describe('Text studio (e2e)', () => {
     );
     // Two lines (Maya ×2, Omar) in two colours each: four movements.
     expect(taken).toHaveLength(4);
+  });
+
+  it('the live price and the cart use what the browser built; only checkout builds it on the server', async () => {
+    const shaper = app.get(TextShaper);
+    const built = vi.spyOn(shaper, 'measure');
+    const design = { text: 'Lina', fontId: cairo.id, textColour: colours.red };
+    const browser = (volumeMm3: number, colour = colours.red) => ({
+      parts: [{ colour, volumeMm3 }],
+      size: { x: 60, y: 20, z: 8 },
+    });
+    const priced = (measured: object) =>
+      http()
+        .post(`/products/${slug}/price`)
+        .set(CSRF)
+        .send({ options: [], design, measured });
+
+    const small = Number(
+      (await priced(browser(1500)).expect(200)).body.unitPrice,
+    );
+    const large = Number(
+      (await priced(browser(6000)).expect(200)).body.unitPrice,
+    );
+    expect(large).toBeGreaterThan(small);
+    // Nothing that can't be this design: another colour, or more solid than the piece's box.
+    await priced(browser(1500, colours.gold)).expect(400);
+    await priced(browser(9601)).expect(400);
+    await priced({ parts: [], size: { x: 1, y: 1, z: 1 } }).expect(400);
+    expect(built).not.toHaveBeenCalled();
+
+    // A browser that claims almost no filament: the cart shows its price, but the order is
+    // priced from the piece as the server builds it at checkout.
+    const customer = await signedInCustomer(app);
+    const cart = (
+      await as(customer.cookie)
+        .post('/cart/items', {
+          productId,
+          quantity: 1,
+          options: [],
+          design,
+          measured: browser(1),
+        })
+        .expect(201)
+    ).body as CartView;
+    expect(built).not.toHaveBeenCalled();
+    const claimed = Number(
+      cart.lines.find((l) => l.design?.text === 'Lina')!.unitPrice,
+    );
+    const real = Number((await price(design).expect(200)).body.unitPrice);
+    expect(built).toHaveBeenCalledTimes(1);
+    expect(real).toBeGreaterThan(claimed);
+
+    const placed = await http()
+      .post('/orders/checkout')
+      .set(CSRF)
+      .set('Cookie', customer.cookie)
+      .set(
+        HTTP.PROXY_SECRET_HEADER,
+        app.get(ConfigService).getOrThrow<string>('INTERNAL_PROXY_SECRET'),
+      )
+      .set(HTTP.FORWARDED_CLIENT_IP_HEADER, '10.77.0.2')
+      .send({
+        idempotencyKey: randomUUID(),
+        name: 'Lina Text',
+        phone: '70 123 457',
+        paymentMethod: 'COD',
+        delivery: false,
+      })
+      .expect(201);
+    const item = await prisma.orderItem.findFirstOrThrow({
+      where: { order: { orderNumber: placed.body.orderNumber as string } },
+    });
+    expect(Number(item.unitPrice)).toBe(real);
+    built.mockRestore();
   });
 
   it('a catalog file carries the fonts and how personalised products are made', async () => {

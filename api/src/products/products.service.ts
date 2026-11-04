@@ -14,6 +14,7 @@ import type {
   PricePreview,
   ProductDetail,
   ProductListItem,
+  DesignMeasurement,
   TextDesignInput,
 } from '@forgea/types';
 import type {
@@ -130,6 +131,7 @@ export class ProductsService {
     slug: string,
     selections: readonly OptionSelection[],
     design?: TextDesignInput,
+    measured?: DesignMeasurement,
   ): Promise<{ unitPrice: string }> {
     const p = await this.products.findActiveBySlug(slug);
     if (!p) throw new NotFoundException('Product not found');
@@ -137,14 +139,15 @@ export class ProductsService {
     if (design && !p.textStyle)
       throw new BadRequestException('This product has no text to design');
     const configuration = this.configurator.configure(p, selections);
-    // A personalised piece: made in the worker from the design, priced by what it takes.
+    // A personalised piece: priced by what it takes, as the browser measured it (or, when it
+    // sent no measurement, as the worker does).
     if (p.textStyle && design) {
-      const measured = await this.studio.measure(p, design);
+      const measurement = await this.studio.measure(p, design, measured);
       return {
         unitPrice: this.studio.price(
           await this.pricing.costCalculator(),
           p,
-          measured,
+          measurement,
         ),
       };
     }
