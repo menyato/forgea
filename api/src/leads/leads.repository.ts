@@ -184,7 +184,8 @@ export class LeadsRepository {
   async change(
     id: string,
     data: Prisma.LeadUncheckedUpdateInput,
-    note: { body: string; authorId: string },
+    /** authorId null: something the customer did (e.g. declined a quotation). */
+    note: { body: string; authorId: string | null },
   ): Promise<void> {
     await this.prisma.$transaction([
       this.prisma.lead.update({ where: { id }, data }),
@@ -254,6 +255,14 @@ export class LeadsRepository {
 
   stages() {
     return this.prisma.leadStage.findMany({ orderBy: { sortOrder: 'asc' } });
+  }
+
+  /** The stage leads move to when quoted, or the won stage. */
+  markedStage(mark: 'isQuoted' | 'isWon') {
+    return this.prisma.leadStage.findFirst({
+      where: { active: true, [mark]: true },
+      orderBy: { sortOrder: 'asc' },
+    });
   }
 
   saveStage(id: string | null, dto: SaveLeadStageDto) {

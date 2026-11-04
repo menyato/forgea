@@ -18,6 +18,7 @@ import type {
 } from '@forgea/types';
 import {
   AddNoteDto,
+  DeclineQuotationDto,
   QuotationListQuery,
   SaveQuotationDto,
 } from '@forgea/validation';
@@ -68,6 +69,18 @@ export class QuotationsController {
     return this.quotations.accept(user.id, number);
   }
 
+  /** The customer says no, from their account (a reason is optional). */
+  @Throttle(THROTTLE.checkout)
+  @HttpCode(200)
+  @Post('mine/:number/decline')
+  declineMine(
+    @QuotationNumber() number: string,
+    @Body() dto: DeclineQuotationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<QuotationDetail> {
+    return this.quotations.declineMine(user.id, number, dto.reason ?? null);
+  }
+
   /** Public: the link in the quotation email opens it without an account. */
   @Public()
   @Throttle(THROTTLE.quote)
@@ -85,6 +98,18 @@ export class QuotationsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<CheckoutResult> {
     return this.quotations.acceptByLink(token, user.id);
+  }
+
+  /** Public, like the link itself: saying no commits the customer to nothing. */
+  @Public()
+  @Throttle(THROTTLE.checkout)
+  @HttpCode(200)
+  @Post('link/:token/decline')
+  declineByLink(
+    @Param('token', LinkToken) token: string,
+    @Body() dto: DeclineQuotationDto,
+  ): Promise<QuotationDetail> {
+    return this.quotations.declineByLink(token, dto.reason ?? null);
   }
 
   @RequirePermission('quotations.view')

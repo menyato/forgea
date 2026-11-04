@@ -75,3 +75,65 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   await page.getByRole('button', { name: 'Record the payment' }).click();
   await expect(page.getByText('Paid', { exact: true })).toBeVisible();
 });
+
+test('a customer declines a quotation; the lead waits for the team, who decide it is not lost', async ({
+  browser,
+  page,
+  context,
+  baseURL,
+}) => {
+  const tag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const email = `decline-${tag}@example.com`;
+  const customer = await newVisitor(browser);
+  const shopper = await customer.newPage();
+  await shopper.goto('/register');
+  await shopper.getByLabel('Email').fill(email);
+  await shopper.getByLabel('Password').fill('correct-horse-battery-9');
+  await shopper.getByRole('button', { name: 'Create account' }).click();
+  await finishSignUp(shopper);
+
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/leads/new');
+  await page.getByLabel('Name', { exact: true }).fill('Omar Decline');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('What do they need?').fill('A shop sign, 60 cm wide.');
+  await page.getByRole('button', { name: 'Add the lead' }).click();
+  await expect(page).toHaveURL(/\/admin\/leads\/[0-9a-f-]{36}$/);
+  const leadUrl = page.url();
+  await page.getByRole('link', { name: 'Write a quotation' }).click();
+  await page.getByLabel('Phone').fill('70 333 444');
+  await page.getByLabel('Description').fill('Shop sign, 60 cm');
+  await page.getByLabel('Qty').fill('1');
+  await page.getByLabel('Unit price').fill('120.00');
+  await page.getByRole('button', { name: 'Create the quotation' }).click();
+  await expect(page).toHaveURL(/\/admin\/quotations\/[0-9a-f-]{36}$/);
+  const number = (
+    await page.getByRole('heading', { level: 1 }).textContent()
+  )?.match(/Q-\d{4}-\d{4}/)?.[0];
+  await page.getByRole('button', { name: 'Send to the customer' }).click();
+  await expect(page.getByRole('button', { name: 'Send it again' })).toBeVisible(
+    { timeout: 15_000 },
+  );
+
+  // Sent: the lead is in Quoted, and its log says so.
+  await page.goto(leadUrl);
+  await expect(page.getByText(`Quotation ${number} sent`)).toBeVisible();
+
+  // The customer declines, with a reason.
+  await shopper.goto(`/quotations/${number}`);
+  await shopper.getByText('Not right for you? Decline it').click();
+  await shopper.getByLabel('Why not? (optional)').fill('Too big for our wall');
+  await shopper.getByRole('button', { name: 'Decline this quotation' }).click();
+  await expect(shopper.getByText('You declined this quotation')).toBeVisible();
+  await customer.close();
+
+  // The lead waits for the team: they keep it open.
+  await page.reload();
+  const decision = page.getByRole('status', { name: 'Needs your decision' });
+  await expect(decision).toContainText('Too big for our wall');
+  await decision
+    .getByRole('button', { name: 'Not lost: keep it open' })
+    .click();
+  await expect(decision).toBeHidden();
+  await expect(page.getByText('Kept open.')).toBeVisible();
+});

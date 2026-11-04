@@ -15,6 +15,8 @@ export interface LeadStageView {
   name: string;
   sortOrder: number;
   isWon: boolean;
+  /** Leads move here when one of their quotations is sent. */
+  isQuoted: boolean;
   defaultProbability: number;
   active: boolean;
 }
@@ -48,6 +50,11 @@ export interface LeadListItem {
   assignedTo: { id: string; email: string; name: string | null } | null;
   /** The earliest follow-up not done yet. */
   nextActivity: { kind: ActivityKind; summary: string; dueAt: string } | null;
+  /**
+   * What the team must decide, e.g. after the customer declined a quotation (lost, or keep it
+   * open). Null when nothing waits on them.
+   */
+  decisionNeeded: string | null;
   createdAt: string;
 }
 

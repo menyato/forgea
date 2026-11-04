@@ -67,6 +67,7 @@ export {
 export {
   AddActivityDto,
   AddNoteDto,
+  DeclineQuotationDto,
   EntryListQuery,
   InvoiceListQuery,
   LEAD_STATES,

@@ -83,6 +83,14 @@ const COLUMNS: ListColumn<LeadListItem>[] = [
             New
           </span>
         )}
+        {l.decisionNeeded && l.state === 'open' && (
+          <span
+            title={l.decisionNeeded}
+            className="ml-2 rounded-pill border border-accent px-2 text-xs"
+          >
+            Needs your decision
+          </span>
+        )}
       </>
     ),
   },

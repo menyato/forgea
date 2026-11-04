@@ -132,6 +132,18 @@ export class LeadsController {
     return this.leads.lose(id, dto, user.id);
   }
 
+  /** After a declined quotation: the team says the lead is not lost. */
+  @RequirePermission('leads.manage')
+  @Audit({ action: 'lead.keep-open', targetType: 'Lead' })
+  @HttpCode(200)
+  @Post(':id/keep-open')
+  keepOpen(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<LeadDetail> {
+    return this.leads.keepOpen(id, user.id);
+  }
+
   @RequirePermission('leads.manage')
   @Audit({ action: 'lead.restore', targetType: 'Lead' })
   @HttpCode(200)

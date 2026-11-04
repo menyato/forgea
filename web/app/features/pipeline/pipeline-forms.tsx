@@ -49,6 +49,12 @@ export function StageForm({ stage }: { stage: LeadStageView | null }) {
             defaultChecked={stage?.isWon ?? false}
           />
           <CheckboxField
+            label="Quoted stage"
+            name="isQuoted"
+            hint="Sending a lead's quotation moves the lead here (if it is at an earlier stage)."
+            defaultChecked={stage?.isQuoted ?? false}
+          />
+          <CheckboxField
             label="In use"
             name="active"
             hint="Stages not in use leave the pipeline; their leads keep them."

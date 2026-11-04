@@ -62,6 +62,10 @@ export class SaveLeadStageDto {
   @IsBoolean()
   isWon: boolean = false;
 
+  /** Leads move here when one of their quotations is sent. */
+  @IsBoolean()
+  isQuoted: boolean = false;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -160,6 +164,15 @@ export class AddNoteDto {
   @MinLength(1)
   @MaxLength(4000)
   body!: string;
+}
+
+/** The customer declines a quotation: why, if they want to say. */
+export class DeclineQuotationDto {
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
 }
 
 export const LEAD_STATES = ['open', 'won', 'lost'] as const;

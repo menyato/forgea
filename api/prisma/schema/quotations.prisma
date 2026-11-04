@@ -5,6 +5,9 @@ enum QuotationStatus {
   /// Accepted: an order was created (orderId) and goes through the orders pipeline.
   CONFIRMED
   CANCELLED
+  /// The customer said no (online, with an optional reason in the history note). Staff may
+  /// change it and send it again; its lead waits for the team to decide whether it is lost.
+  DECLINED
 }
 
 /// A quotation the team writes for a customer (Odoo `sale.order` before confirmation): lines

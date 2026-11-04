@@ -2,6 +2,7 @@ import type { CheckoutResult, QuotationDetail } from '@forgea/types';
 import { data, redirect } from 'react-router';
 import { signInFor } from '~/features/auth/sign-in-links.server';
 import { QuotationDocument } from '~/features/quotations/quotation-document';
+import { declineBody } from '~/features/quotations/decline.server';
 import { quotationExtras } from '~/features/quotations/quotation-extras.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -33,9 +34,27 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   };
 }
 
-/** Accepting places an order, which needs an account with the address it was sent to. */
-export async function action({ params, url, context }: Route.ActionArgs) {
+/**
+ * Accepting places an order, which needs an account with the address it was sent to.
+ * Declining commits them to nothing: no account needed.
+ */
+export async function action({
+  request,
+  params,
+  url,
+  context,
+}: Route.ActionArgs) {
   const api = context.get(apiContext);
+  const form = await request.formData();
+  if (form.get('intent') === 'decline') {
+    const r = await api.post<QuotationDetail>(
+      `/quotations/link/${encodeURIComponent(params.token)}/decline`,
+      declineBody(form),
+    );
+    return r.ok
+      ? { result: null, error: null }
+      : data({ result: null, error: r.message }, { status: r.status });
+  }
   if (!api.hasSession) throw redirect(signInFor(url));
   const r = await api.post<CheckoutResult>(
     `/quotations/link/${encodeURIComponent(params.token)}/accept`,

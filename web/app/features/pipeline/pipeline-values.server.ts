@@ -5,6 +5,7 @@ export const stageValues = (form: FormData) => ({
   name: text(form, 'name'),
   sortOrder: text(form, 'sortOrder'),
   isWon: checked(form, 'isWon'),
+  isQuoted: checked(form, 'isQuoted'),
   defaultProbability: text(form, 'defaultProbability'),
   active: checked(form, 'active'),
 });

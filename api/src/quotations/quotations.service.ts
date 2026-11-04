@@ -17,6 +17,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { QuotationStatus, Role } from '../generated/prisma/enums.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { CheckoutService } from '../orders/checkout.service.js';
+import { LeadsService } from '../leads/leads.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import {
   type QuotationData,
@@ -61,6 +62,7 @@ export class QuotationsService {
     private readonly notifications: Notifications,
     private readonly links: QuotationLinkTokens,
     private readonly store: StoreSettingsService,
+    private readonly leads: LeadsService,
   ) {}
 
   counts(): Promise<Partial<Record<QuotationStatus, number>>> {
@@ -101,14 +103,18 @@ export class QuotationsService {
     const q = await this.require(id);
     if (
       q.status !== QuotationStatus.DRAFT &&
-      q.status !== QuotationStatus.SENT
+      q.status !== QuotationStatus.SENT &&
+      q.status !== QuotationStatus.DECLINED
     ) {
-      throw new ConflictException('Only a draft or sent quotation can be sent');
+      throw new ConflictException(
+        'Only a draft, sent or declined quotation can be sent',
+      );
     }
-    if (q.status === QuotationStatus.DRAFT) {
+    // A declined one goes out again (changed, usually): it is open to them once more.
+    if (q.status !== QuotationStatus.SENT) {
       await this.quotations.setStatus(
         id,
-        [QuotationStatus.DRAFT],
+        [QuotationStatus.DRAFT, QuotationStatus.DECLINED],
         QuotationStatus.SENT,
         actorId,
         null,
@@ -133,6 +139,12 @@ export class QuotationsService {
       wording,
       whatsappPhone: store.whatsappPhone,
     });
+    if (q.leadId)
+      await this.leads.quotationChanged(
+        q.leadId,
+        { kind: 'sent', number: q.number, total: detail.total },
+        actorId,
+      );
     return this.detail(id);
   }
 
@@ -142,6 +154,7 @@ export class QuotationsService {
     return this.place(await this.withAccount(q), actorId, [
       QuotationStatus.DRAFT,
       QuotationStatus.SENT,
+      QuotationStatus.DECLINED,
     ]);
   }
 
@@ -155,6 +168,28 @@ export class QuotationsService {
       throw new NotFoundException(NOT_FOUND);
     }
     return this.place({ ...q, customerId }, customerId, [QuotationStatus.SENT]);
+  }
+
+  /** The customer says no, from their account: the studio is told, the lead waits on the team. */
+  async declineMine(
+    customerId: string,
+    number: string,
+    reason: string | null,
+  ): Promise<QuotationDetail> {
+    const q = await this.quotations.findMine(customerId, number);
+    if (!q || q.status === QuotationStatus.DRAFT) {
+      throw new NotFoundException(NOT_FOUND);
+    }
+    return this.decline(q, customerId, reason);
+  }
+
+  /** The customer says no from the emailed link (no account needed: it commits them to nothing). */
+  async declineByLink(
+    token: string,
+    reason: string | null,
+  ): Promise<QuotationDetail> {
+    const q = await this.fromLink(token);
+    return this.decline(q, q.customerId, reason);
   }
 
   async mine(customerId: string, number: string): Promise<QuotationDetail> {
@@ -203,19 +238,63 @@ export class QuotationsService {
     actorId: string,
     note: string | null,
   ): Promise<QuotationDetail> {
-    await this.require(id);
+    const q = await this.require(id);
     const done = await this.quotations.setStatus(
       id,
-      [QuotationStatus.DRAFT, QuotationStatus.SENT],
+      [QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.DECLINED],
       QuotationStatus.CANCELLED,
       actorId,
       note,
     );
     if (!done)
       throw new ConflictException(
-        'Only a draft or sent quotation can be cancelled',
+        'Only a draft, sent or declined quotation can be cancelled',
+      );
+    if (q.leadId)
+      await this.leads.quotationChanged(
+        q.leadId,
+        { kind: 'cancelled', number: q.number },
+        actorId,
       );
     return this.detail(id);
+  }
+
+  private async decline(
+    q: QuotationRow,
+    actorId: string | null,
+    reason: string | null,
+  ): Promise<QuotationDetail> {
+    const done = await this.quotations.setStatus(
+      q.id,
+      [QuotationStatus.SENT],
+      QuotationStatus.DECLINED,
+      actorId,
+      reason,
+    );
+    if (!done)
+      throw new ConflictException(
+        q.status === QuotationStatus.DECLINED
+          ? 'You already declined this quotation'
+          : 'This quotation can no longer be declined',
+      );
+    this.notifications.alertStudio(
+      `Quotation ${q.number} declined`,
+      [
+        `${q.customerName} (${q.customerEmail}) declined quotation ${q.number}.`,
+        reason ? `Their reason: ${reason}` : 'They gave no reason.',
+        q.leadId
+          ? 'Its lead is waiting for you: mark it as lost, or keep it open.'
+          : 'You can change it and send it again.',
+      ],
+      q.leadId ? `/admin/leads/${q.leadId}` : `/admin/quotations/${q.id}`,
+    );
+    if (q.leadId)
+      await this.leads.quotationChanged(
+        q.leadId,
+        { kind: 'declined', number: q.number, reason },
+        actorId,
+      );
+    return this.detail(q.id);
   }
 
   /** A valid link to a quotation that was sent, still for the address in the link. */
@@ -259,7 +338,22 @@ export class QuotationsService {
     return { ...q, customerId };
   }
 
-  private place(
+  private async place(
+    q: QuotationRow & { customerId: string },
+    actorId: string,
+    openStatuses: QuotationStatus[],
+  ): Promise<CheckoutResult> {
+    const result = await this.placeOrder(q, actorId, openStatuses);
+    if (q.leadId && q.status !== QuotationStatus.CONFIRMED)
+      await this.leads.quotationChanged(
+        q.leadId,
+        { kind: 'accepted', number: q.number, orderNumber: result.orderNumber },
+        actorId,
+      );
+    return result;
+  }
+
+  private placeOrder(
     q: QuotationRow & { customerId: string },
     actorId: string,
     openStatuses: QuotationStatus[],
