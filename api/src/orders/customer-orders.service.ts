@@ -12,7 +12,6 @@ import type {
 import type { MyOrdersQuery } from '@forgea/validation';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { OrderStatus } from '../generated/prisma/enums.js';
-import { Notifications } from '../mail/notifications.service.js';
 import type { Measurement } from '../text-studio/text-studio.service.js';
 import { OrderStatusService } from './order-status.service.js';
 import {
@@ -33,7 +32,6 @@ export class CustomerOrdersService {
     private readonly orders: OrdersRepository,
     private readonly invoicing: Invoicing,
     private readonly statuses: OrderStatusService,
-    private readonly notifications: Notifications,
   ) {}
 
   async mine(
@@ -67,13 +65,6 @@ export class CustomerOrdersService {
       OrderStatus.CANCELLED,
       userId,
       'Cancelled by the customer',
-    );
-    this.notifications.alertStudio(
-      `Order ${order.orderNumber} cancelled by the customer`,
-      [
-        `The customer cancelled order ${order.orderNumber} before it was confirmed.`,
-      ],
-      `/admin/orders/${order.id}`,
     );
   }
 }

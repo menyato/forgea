@@ -139,6 +139,13 @@ export class QuotationsService {
       wording,
       whatsappPhone: store.whatsappPhone,
     });
+    this.notifications.alertStudio(
+      `Quotation ${q.number} sent`,
+      [
+        `Quotation ${q.number} ($${detail.total}) went to ${q.customerName} (${q.customerEmail}).`,
+      ],
+      `/admin/quotations/${q.id}`,
+    );
     if (q.leadId)
       await this.leads.quotationChanged(
         q.leadId,
@@ -250,6 +257,19 @@ export class QuotationsService {
       throw new ConflictException(
         'Only a draft, sent or declined quotation can be cancelled',
       );
+    // Withdrawn: the customer only hears of one they were sent.
+    if (q.status !== QuotationStatus.DRAFT)
+      this.notifications.send('quotationStatus', {
+        to: q.customerEmail,
+        name: q.customerName,
+        number: q.number,
+        status: QuotationStatus.CANCELLED,
+      });
+    this.notifications.alertStudio(
+      `Quotation ${q.number} cancelled`,
+      [`Quotation ${q.number} for ${q.customerEmail} was cancelled.`],
+      `/admin/quotations/${q.id}`,
+    );
     if (q.leadId)
       await this.leads.quotationChanged(
         q.leadId,
@@ -277,6 +297,12 @@ export class QuotationsService {
           ? 'You already declined this quotation'
           : 'This quotation can no longer be declined',
       );
+    this.notifications.send('quotationStatus', {
+      to: q.customerEmail,
+      name: q.customerName,
+      number: q.number,
+      status: QuotationStatus.DECLINED,
+    });
     this.notifications.alertStudio(
       `Quotation ${q.number} declined`,
       [

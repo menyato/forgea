@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { canChangeOrderStatus, ORDER_STATUS_FLOW } from '@forgea/types';
+import {
+  canChangeOrderStatus,
+  ORDER_STATUS_FLOW,
+  ORDER_STATUS_LABELS,
+} from '@forgea/types';
 import { OrderStatus } from '../generated/prisma/enums.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
@@ -81,6 +85,16 @@ export class OrderStatusService {
         status: to,
         note: note ?? null,
       });
+      // Both sides hear of every step: the studio too, whoever made it.
+      const label = ORDER_STATUS_LABELS[to].title;
+      this.notifications.alertStudio(
+        `Order ${contact.orderNumber}: ${label}`,
+        [
+          `Order ${contact.orderNumber} (${contact.email}) is now: ${label}.`,
+          ...(note ? [`Note: ${note}`] : []),
+        ],
+        `/admin/orders/${orderId}`,
+      );
     }
     return { id: orderId, status: to, previousStatus: order.status };
   }

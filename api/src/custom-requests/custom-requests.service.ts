@@ -114,6 +114,7 @@ export class CustomRequestsService {
       ],
       `/admin/requests/${created.id}`,
     );
+    this.tellCustomer(created, CustomRequestStatus.SUBMITTED, null);
     return toView(created);
   }
 
@@ -138,13 +139,15 @@ export class CustomRequestsService {
     if (r.status !== CustomRequestStatus.QUOTED) {
       throw new BadRequestException('Only a quote can be declined');
     }
-    return this.closed(
+    const view = await this.closed(
       r.id,
       [CustomRequestStatus.QUOTED],
       CustomRequestStatus.DECLINED,
       userId,
       note,
     );
+    this.tellBoth(r, CustomRequestStatus.DECLINED, note, 'declined the quote');
+    return view;
   }
 
   /** The customer withdraws a request the studio hasn't quoted yet. */
@@ -157,13 +160,20 @@ export class CustomRequestsService {
     if (r.status !== CustomRequestStatus.SUBMITTED) {
       throw new BadRequestException('Once quoted, decline the quote instead');
     }
-    return this.closed(
+    const view = await this.closed(
       r.id,
       [CustomRequestStatus.SUBMITTED],
       CustomRequestStatus.CANCELLED,
       userId,
       note,
     );
+    this.tellBoth(
+      r,
+      CustomRequestStatus.CANCELLED,
+      note,
+      'withdrew the request',
+    );
+    return view;
   }
 
   /** Accepting creates the order (awaiting the deposit) and closes the request, together. */
@@ -248,6 +258,11 @@ export class CustomRequestsService {
       note: dto.note ?? null,
       expiresAt: new Date(r.quote!.expiresAt),
     });
+    this.notifications.alertStudio(
+      `Quote sent for ${r.requestNumber}: ${r.title}`,
+      [`${r.customer.email} was quoted $${dto.price} for "${r.title}".`],
+      `/admin/requests/${r.id}`,
+    );
     return r;
   }
 
@@ -281,6 +296,14 @@ export class CustomRequestsService {
       status: r.status,
       note: note ?? null,
     });
+    this.notifications.alertStudio(
+      `Request ${r.requestNumber} closed`,
+      [
+        `${r.requestNumber} "${r.title}" (${r.customer.email}) was closed by the studio.`,
+        ...(note ? [`Note to the customer: ${note}`] : []),
+      ],
+      `/admin/requests/${r.id}`,
+    );
     return r;
   }
 
@@ -297,6 +320,41 @@ export class CustomRequestsService {
     const r = await this.requests.findById(id);
     if (!r) throw new NotFoundException('Request not found');
     return toView(r);
+  }
+
+  /** The customer's copy of a step: what it means for them, with the note if any. */
+  private tellCustomer(
+    r: Pick<RequestRow, 'requestNumber' | 'title'> & {
+      user: { email: string };
+    },
+    status: CustomRequestStatus,
+    note: string | null,
+  ): void {
+    this.notifications.send('requestStatus', {
+      to: r.user.email,
+      requestNumber: r.requestNumber,
+      title: r.title,
+      status,
+      note,
+    });
+  }
+
+  /** A step the customer took: their copy, and the studio's. */
+  private tellBoth(
+    r: RequestRow,
+    status: CustomRequestStatus,
+    note: string | undefined,
+    what: string,
+  ): void {
+    this.tellCustomer(r, status, note ?? null);
+    this.notifications.alertStudio(
+      `${r.requestNumber}: the customer ${what}`,
+      [
+        `${r.user.name ?? r.user.email} ${what} for "${r.title}".`,
+        ...(note ? [`Their note: ${note}`] : []),
+      ],
+      `/admin/requests/${r.id}`,
+    );
   }
 
   private async explainRefusal(id: string, verb: string): Promise<never> {

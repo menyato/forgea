@@ -269,6 +269,30 @@ Forgea — design and 3D printing, made in Lebanon · WhatsApp ${escape(q.whatsa
     });
   }
 
+  /** A quotation the customer declined (their receipt) or the studio withdrew. */
+  quotationStatus(q: {
+    to: string;
+    name: string;
+    number: string;
+    status: 'DECLINED' | 'CANCELLED';
+  }): Email {
+    const declined = q.status === 'DECLINED';
+    return this.email(
+      q.to,
+      declined
+        ? `You declined quotation ${q.number}`
+        : `Quotation ${q.number} was withdrawn`,
+      {
+        paragraphs: [
+          `Dear ${q.name},`,
+          declined
+            ? `Thank you for letting us know: quotation ${q.number} is declined. If something could change your mind (the price, a size, a material), reply or message us and we will send a new one.`
+            : `We have withdrawn quotation ${q.number}; it can no longer be accepted. If you still want it, ask us for a new one.`,
+        ],
+      },
+    );
+  }
+
   passwordReset(v: { to: string; token: string }): Email {
     return this.email(v.to, 'Choose a new password', {
       paragraphs: [
