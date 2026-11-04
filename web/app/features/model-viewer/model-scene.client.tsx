@@ -1,3 +1,4 @@
+import './three-console.client';
 import { meshVolume } from '@forgea/pricing';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';

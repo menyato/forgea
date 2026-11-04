@@ -13,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { modelSource } from './model-source';
+import { takePrefetched } from './model-prefetch';
 
 /**
  * Printing files are Z-up in millimetres; three.js is Y-up. Stands the model upright and fills
@@ -68,18 +69,27 @@ export async function loadModel(
   const { src, format, paintable } = modelSource(key, variant);
   let pending = loaded.get(src);
   if (!pending) {
+    // Downloaded early (the home page's bed) when three.js wasn't here yet: read those bytes;
+    // if that download failed, fetch it now as usual.
+    const early = takePrefetched(src);
     pending =
       format === 'stl'
-        ? new STLLoader()
-            .loadAsync(src)
-            .then((g) => markPaintable(new Mesh(uprightStl(g))))
-        : gltfLoader()
-            .loadAsync(src)
-            .then((gltf) => {
-              // glTF is in metres.
-              gltf.scene.scale.setScalar(1000);
-              return paintable ? markPaintable(gltf.scene) : gltf.scene;
-            });
+        ? (early
+            ? early
+                .then((b) => new STLLoader().parse(b))
+                .catch(() => new STLLoader().loadAsync(src))
+            : new STLLoader().loadAsync(src)
+          ).then((g) => markPaintable(new Mesh(uprightStl(g))))
+        : (early
+            ? early
+                .then((b) => gltfLoader().parseAsync(b, ''))
+                .catch(() => gltfLoader().loadAsync(src))
+            : gltfLoader().loadAsync(src)
+          ).then((gltf) => {
+            // glTF is in metres.
+            gltf.scene.scale.setScalar(1000);
+            return paintable ? markPaintable(gltf.scene) : gltf.scene;
+          });
     // A failed download may be retried by the next caller.
     pending.catch(() => loaded.delete(src));
     loaded.set(src, pending);

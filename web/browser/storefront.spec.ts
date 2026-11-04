@@ -150,11 +150,22 @@ test('the theme button works without JavaScript', async ({ browser }) => {
 test('the home page and the shop show each product as its 3D model', async ({
   page,
 }) => {
+  const warnings: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'warning') warnings.push(m.text());
+  });
   await page.goto('/');
   // The print bed draws in WebGL; the products standing on it are also plain links.
   const onPlate = page.locator('figcaption').getByRole('link');
   await expect(onPlate.first()).toBeVisible();
   await expect(page.locator('figure canvas')).toBeVisible();
+  // Its models download alongside three.js from the page's own code, not as <link rel=preload>
+  // (the browser warns about preloads a later-starting scene doesn't use in time).
+  expect(
+    await page.locator('link[rel="preload"][href^="/media/"]').count(),
+  ).toBe(0);
+  // three.js's notice about the Clock @react-three/fiber still makes is filtered out.
+  expect(warnings.filter((w) => w.includes('THREE.Clock'))).toEqual([]);
 
   // Other tests add products to this database; search for the seeded one.
   await page.goto('/shop?q=Phone%20stand');

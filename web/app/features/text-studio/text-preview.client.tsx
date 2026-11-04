@@ -1,3 +1,4 @@
+import '~/features/model-viewer/three-console.client';
 import {
   buildDesign,
   type BuiltDesign,
