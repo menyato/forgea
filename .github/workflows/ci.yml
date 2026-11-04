@@ -82,4 +82,17 @@ jobs:
 
       # Real Chrome (preinstalled on GitHub's Ubuntu runners), desktop and phone sizes.
       - name: Browser tests (storefront journeys)
+        # Its own limit, so a stuck run still leaves time to keep the traces below.
+        timeout-minutes: 12
         run: pnpm --filter @forgea/web test:browser
+
+      # Playwright's trace of each failed test (network, console, screenshots): download it from
+      # the run's page and open it with `pnpm --filter @forgea/web exec playwright show-trace`.
+      - name: Keep the traces of failed browser tests
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-test-traces
+          path: web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
