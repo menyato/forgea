@@ -21,6 +21,7 @@ Thumbs.db
 .outbox/
 .outbox-test/
 .outbox-browser/
+.outbox*-whatsapp/
 
 # Playwright
 test-results/
