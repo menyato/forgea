@@ -150,6 +150,14 @@ export class EnvironmentVariables {
   @Matches(/^[^@\s]+@[^@\s]+$/)
   MAIL_SENDER?: string;
 
+  /**
+   * The address emails show as their sender, when it isn't MAIL_SENDER itself: an alias of
+   * that mailbox (e.g. hello@ on the owner's account), listed under its Gmail "Send mail as".
+   */
+  @IsOptional()
+  @Matches(/^[^@\s]+@[^@\s]+$/)
+  MAIL_FROM?: string;
+
   /** Where emails are written as .eml files when they aren't sent (development, tests). */
   @IsString()
   MAIL_OUTBOX_DIR: string = '.outbox';

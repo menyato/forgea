@@ -68,7 +68,10 @@ export class GmailMailer extends Mailer {
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     super();
-    this.from = config.get('MAIL_SENDER', { infer: true }) ?? '';
+    this.from =
+      config.get('MAIL_FROM', { infer: true }) ??
+      config.get('MAIL_SENDER', { infer: true }) ??
+      '';
   }
 
   async send(email: Email): Promise<void> {
