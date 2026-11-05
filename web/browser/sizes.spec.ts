@@ -59,4 +59,17 @@ test('a product is sold in real sizes: measured from its model, shown in cm, pri
   await page.goto('/cart');
   const line = page.getByRole('article').filter({ hasText: name });
   await expect(line.getByText('Size: 3.9 × 3.9 × 3.9 cm')).toBeVisible();
+
+  // A quotation offers the product's own sizes, each at its price.
+  await page.goto('/admin/quotations/new');
+  await page.getByLabel('Product').selectOption({ label: name });
+  const quoteSize = page.getByLabel('Size');
+  const large3 = await quoteSize
+    .locator('option', { hasText: '3.9 × 3.9 × 3.9 cm' })
+    .getAttribute('value');
+  await quoteSize.selectOption(large3!);
+  await expect(page.getByLabel('Unit price')).not.toHaveValue(
+    (standard ?? '').replace(/[^0-9.]/g, ''),
+  );
+  await expect(page.getByLabel('Width')).toHaveCount(0);
 });

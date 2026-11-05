@@ -107,14 +107,27 @@ test('a lead from first contact to a confirmed order, for someone without an acc
 
   // They said yes on the phone: the studio confirms, which makes their account and the order.
   await page.getByRole('button', { name: 'Confirm: create the order' }).click();
-  const created = page.getByText(/Order FG-[0-9A-Z]{10} created/);
+  const created = page.getByText(/Sales order FG-[0-9A-Z]{10} created/);
   await expect(created).toBeVisible();
   const order =
     (await created.textContent())?.match(/FG-[0-9A-Z]{10}/)?.[0] ?? '';
+  // The quotation is now a sales order, and leads to it.
+  await expect(
+    page
+      .getByRole('region', { name: 'Next' })
+      .getByRole('link', { name: order }),
+  ).toBeVisible();
   await page.goto(`/admin/orders?q=${order}`);
   await page.getByRole('link', { name: order }).first().click();
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByText(/Twist vase in sand/)).toBeVisible();
+
+  // A new quotation for someone the studio knows fills in their name and phone.
+  await page.goto('/admin/quotations/new');
+  await page.getByLabel('Customer email').fill(email);
+  await page.getByLabel('Customer email').blur();
+  await expect(page.getByLabel('Phone')).not.toHaveValue('');
+  await expect(page.getByLabel('Name for the order')).not.toHaveValue('');
 
   // Another quotation, cancelled after saying no once to "are you sure".
   await page.goto(`/admin/quotations/new?email=${encodeURIComponent(email)}`);

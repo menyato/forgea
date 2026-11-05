@@ -178,6 +178,21 @@ describe('Back office (e2e)', () => {
       .post('/quotations', { ...form, customerEmail: staff.user.email })
       .expect(400);
     const created = await s.post('/quotations', form).expect(201);
+    // The next quotation for them fills itself from what they gave.
+    const known = await s
+      .get(
+        `/quotations/contact?email=${encodeURIComponent(customer.user.email)}`,
+      )
+      .expect(200);
+    expect(known.body).toMatchObject({
+      name: 'Karim Haddad',
+      phone: '70 111 222',
+    });
+    await as(customer.cookie)
+      .get(
+        `/quotations/contact?email=${encodeURIComponent(customer.user.email)}`,
+      )
+      .expect(403);
     expect(created.body).toMatchObject({
       status: 'DRAFT',
       number: expect.stringMatching(/^Q-\d{4}-\d{4}$/),
@@ -221,7 +236,27 @@ describe('Back office (e2e)', () => {
       'SENT',
       'CONFIRMED',
     ]);
-    await s.post(`/quotations/${id}/cancel`, { body: 'too late' }).expect(409);
+    // Its free-text lines (design work) are invoiced like any other.
+    const sale = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: order.body.orderNumber },
+    });
+    const deposit = await s
+      .post(`/accounting/orders/${sale.id}/deposit-invoice`)
+      .expect(201);
+    expect(deposit.body.total).toBe('22.50');
+    // A confirmed quotation is a sales order: cancelling it cancels the order too, and
+    // the quotation keeps its link.
+    await s
+      .post(`/quotations/${id}/cancel`, { body: 'Changed their mind' })
+      .expect(200);
+    expect((await s.get(`/quotations/${id}`)).body).toMatchObject({
+      status: 'CANCELLED',
+      orderNumber: order.body.orderNumber,
+    });
+    expect(
+      (await prisma.order.findUniqueOrThrow({ where: { id: sale.id } })).status,
+    ).toBe('CANCELLED');
+    await s.post(`/quotations/${id}/cancel`, { body: 'again' }).expect(409);
   });
 
   it('the order pipeline invoices itself: deposit, final invoice less deposit, payment, credit note', async () => {

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { QuotationContact } from '@forgea/types';
 import type { QuotationListQuery } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { setStatusActor } from '../common/status-actor.js';
@@ -244,6 +245,56 @@ export class QuotationsRepository {
       where: { id },
       select: { id: true, email: true, role: true, disabledAt: true },
     });
+  }
+
+  /** The newest of what they gave: an order, a quotation, a lead; their account fills gaps. */
+  async contact(email: string): Promise<QuotationContact> {
+    const [user, order, quotation, lead] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { email },
+        select: { name: true, phone: true },
+      }),
+      this.prisma.order.findFirst({
+        where: { user: { email } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          customerName: true,
+          phone: true,
+          city: true,
+          addressLine: true,
+          delivery: true,
+        },
+      }),
+      this.prisma.quotation.findFirst({
+        where: { customerEmail: email },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          customerName: true,
+          phone: true,
+          city: true,
+          addressLine: true,
+          delivery: true,
+        },
+      }),
+      this.prisma.lead.findFirst({
+        where: { email },
+        orderBy: { createdAt: 'desc' },
+        select: { name: true, phone: true },
+      }),
+    ]);
+    const delivered = [order, quotation].find((x) => x?.delivery && x.city);
+    return {
+      name:
+        order?.customerName ??
+        quotation?.customerName ??
+        user?.name ??
+        lead?.name ??
+        null,
+      phone:
+        order?.phone ?? quotation?.phone ?? user?.phone ?? lead?.phone ?? null,
+      city: delivered?.city ?? null,
+      addressLine: delivered?.addressLine ?? null,
+    };
   }
 
   customerByEmail(email: string) {
