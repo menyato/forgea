@@ -15,6 +15,7 @@ export interface CustomerQuery {
   q?: string | undefined;
   /** account: has one; guest: known only by email (a lead, a quotation). */
   kind?: 'account' | 'guest' | undefined;
+  week?: 'new' | 'seen' | undefined;
   sort?: 'lastActivity' | 'spent' | 'orders' | 'email' | undefined;
   order?: 'asc' | 'desc' | undefined;
   /** The offset of the page. */
@@ -63,7 +64,9 @@ export class CustomersService {
     const where = Prisma.sql`WHERE TRUE
       ${like ? Prisma.sql`AND (p.email ILIKE ${like} OR coalesce(u.name, '') ILIKE ${like} OR coalesce(u.phone, '') ILIKE ${like})` : Prisma.empty}
       ${query.kind === 'account' ? Prisma.sql`AND u.id IS NOT NULL` : Prisma.empty}
-      ${query.kind === 'guest' ? Prisma.sql`AND u.id IS NULL` : Prisma.empty}`;
+      ${query.kind === 'guest' ? Prisma.sql`AND u.id IS NULL` : Prisma.empty}
+      ${query.week === 'new' ? Prisma.sql`AND u."createdAt" >= now() - interval '7 days'` : Prisma.empty}
+      ${query.week === 'seen' ? Prisma.sql`AND EXISTS (SELECT 1 FROM sessions s WHERE s."userId" = u.id AND s."createdAt" >= now() - interval '7 days')` : Prisma.empty}`;
     const sort = SORTS[query.sort ?? 'lastActivity'];
     const direction =
       (query.order ?? (query.sort === 'email' ? 'asc' : 'desc')) === 'asc'
@@ -200,6 +203,7 @@ export class CustomersService {
 
   /** The dashboard Overview's numbers: accounts, who is new, who came back, who has none. */
   async summary(now = new Date()): Promise<CustomerSummary> {
+    // The same 7 days as the list's "New this week" / "Signed in this week" filters.
     const week = new Date(now.getTime() - 7 * 86_400_000);
     const [accounts, newThisWeek, seen, withoutAccount, guestCarts] =
       await Promise.all([

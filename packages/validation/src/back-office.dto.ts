@@ -484,6 +484,11 @@ export class CustomerListQuery {
   @IsIn(['account', 'guest'])
   kind?: 'account' | 'guest';
 
+  /** Accounts made in the last 7 days, or accounts signed in during them (the Overview's cards). */
+  @IsOptional()
+  @IsIn(['new', 'seen'])
+  week?: 'new' | 'seen';
+
   @IsOptional()
   @IsIn(['lastActivity', 'spent', 'orders', 'email'])
   sort?: 'lastActivity' | 'spent' | 'orders' | 'email';

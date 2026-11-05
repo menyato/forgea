@@ -15,6 +15,8 @@ import type { Route } from './+types/route';
 const FILTERS = [
   { key: 'account', label: 'With an account', only: 'kind' },
   { key: 'guest', label: 'Without an account', only: 'kind' },
+  { key: 'new', label: 'New this week', only: 'week' },
+  { key: 'seen', label: 'Signed in this week', only: 'week' },
 ];
 
 const DEFAULTS = { sorts: ['lastActivity', 'spent', 'orders', 'email'] };
@@ -30,6 +32,8 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   if (state.cursor) query.set('cursor', state.cursor);
   const kind = state.filters.find((f) => f === 'account' || f === 'guest');
   if (kind) query.set('kind', kind);
+  const week = state.filters.find((f) => f === 'new' || f === 'seen');
+  if (week) query.set('week', week);
   const r = await context
     .get(apiContext)
     .get<CustomerList>(`/customers?${query}`);

@@ -1,11 +1,9 @@
 import type {
-  AdminProductListItem,
   CustomerSummary,
   CustomRequestStatus,
   InvoiceCounts,
   MaterialView,
   OrderStatus,
-  Page,
   QuotationStatus,
 } from '@forgea/types';
 import { Link } from 'react-router';
@@ -76,7 +74,7 @@ export async function loader({ context }: Route.LoaderArgs) {
       : null,
     may('catalog.view')
       ? api
-          .get<Page<AdminProductListItem>>('/products/manage?limit=100')
+          .get<{ shownWithoutModel: number }>('/products/manage/counts')
           .then(ok)
       : null,
     may('customers.view')
@@ -136,7 +134,7 @@ export async function loader({ context }: Route.LoaderArgs) {
       key: 'quotations',
       count: quotations.SENT ?? 0,
       label: 'quotations waiting for an answer',
-      to: '/admin/quotations?status=SENT',
+      to: '/admin/quotations?filter=sent',
       urgent: false,
     });
   }
@@ -159,19 +157,17 @@ export async function loader({ context }: Route.LoaderArgs) {
       count: low.length,
       label: 'materials low on stock',
       detail: low.length ? low.map((m) => m.code).join(', ') : undefined,
-      to: '/admin/materials',
+      to: '/admin/materials?filter=active,low',
       urgent: low.length > 0,
     });
   }
   if (products) {
-    const without3d = products.items.filter(
-      (p) => p.active && !p.hasModel,
-    ).length;
+    const without3d = products.shownWithoutModel;
     cards.push({
       key: 'models',
       count: without3d,
       label: 'products in the shop without a 3D model',
-      to: '/admin/products',
+      to: '/admin/products?filter=shown,no3d',
       urgent: false,
     });
   }
@@ -232,12 +228,12 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
               {
                 n: customers.newThisWeek,
                 label: 'new accounts this week',
-                to: '/admin/customers?filter=account&sort=lastActivity',
+                to: '/admin/customers?filter=account,new',
               },
               {
                 n: customers.seenThisWeek,
                 label: 'signed in this week',
-                to: '/admin/customers?filter=account',
+                to: '/admin/customers?filter=account,seen',
               },
               {
                 n: customers.withoutAccount,
@@ -247,18 +243,29 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
               {
                 n: customers.guestCarts,
                 label: 'visitors with a cart, not signed in',
-                to: '/admin/customers',
+                // Nobody to list: they never gave an address.
+                to: null,
               },
-            ].map((c) => (
-              <Link
-                key={c.label}
-                to={c.to}
-                className="grid gap-1 rounded-lg border border-border bg-surface p-5 hover:border-accent"
-              >
-                <span className="text-3xl font-bold">{c.n}</span>
-                <span className="text-sm text-text-muted">{c.label}</span>
-              </Link>
-            ))}
+            ].map((c) =>
+              c.to ? (
+                <Link
+                  key={c.label}
+                  to={c.to}
+                  className="grid gap-1 rounded-lg border border-border bg-surface p-5 hover:border-accent"
+                >
+                  <span className="text-3xl font-bold">{c.n}</span>
+                  <span className="text-sm text-text-muted">{c.label}</span>
+                </Link>
+              ) : (
+                <div
+                  key={c.label}
+                  className="grid gap-1 rounded-lg border border-border bg-surface p-5"
+                >
+                  <span className="text-3xl font-bold">{c.n}</span>
+                  <span className="text-sm text-text-muted">{c.label}</span>
+                </div>
+              ),
+            )}
           </div>
         </section>
       )}
