@@ -132,8 +132,13 @@ export default function Backups({ loaderData }: Route.ComponentProps) {
               </p>
             ) : (
               <ul className="grid gap-3">
-                {b.items.map((item) => (
-                  <BackupRow key={item.file} item={item} disabled={busy} />
+                {b.items.map((item, i) => (
+                  <BackupRow
+                    key={item.file}
+                    item={item}
+                    newest={i === 0}
+                    disabled={busy}
+                  />
                 ))}
               </ul>
             )}
@@ -245,9 +250,11 @@ function KeepForm({ keep }: { keep: number }) {
 
 function BackupRow({
   item,
+  newest,
   disabled,
 }: {
   item: BackupItem;
+  newest: boolean;
   disabled: boolean;
 }) {
   const fetcher = useFetcher<SaveResult>();
@@ -276,27 +283,31 @@ function BackupRow({
         >
           Restore…
         </Button>
-        <fetcher.Form
-          method="post"
-          onSubmit={(e) => {
-            if (
-              !window.confirm(
-                `Delete the backup of ${when(item.createdAt)}? It can't be undone.`,
+        {newest ? (
+          <span className="text-xs text-text-muted">Newest: always kept</span>
+        ) : (
+          <fetcher.Form
+            method="post"
+            onSubmit={(e) => {
+              if (
+                !window.confirm(
+                  `Delete the backup of ${when(item.createdAt)}? It can't be undone.`,
+                )
               )
-            )
-              e.preventDefault();
-          }}
-        >
-          <input type="hidden" name="intent" value="delete" />
-          <input type="hidden" name="file" value={item.file} />
-          <Button
-            type="submit"
-            variant="quiet"
-            disabled={disabled || fetcher.state !== 'idle'}
+                e.preventDefault();
+            }}
           >
-            Delete
-          </Button>
-        </fetcher.Form>
+            <input type="hidden" name="intent" value="delete" />
+            <input type="hidden" name="file" value={item.file} />
+            <Button
+              type="submit"
+              variant="quiet"
+              disabled={disabled || fetcher.state !== 'idle'}
+            >
+              Delete
+            </Button>
+          </fetcher.Form>
+        )}
       </div>
       {restoring && (
         <fetcher.Form

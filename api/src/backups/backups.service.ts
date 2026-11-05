@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -103,6 +104,11 @@ export class BackupsService {
 
   async remove(file: string, by: string): Promise<void> {
     await this.require(file);
+    // One backup always stays on the server (backup.sh refuses it too).
+    if ((await this.items())[0]?.file === file)
+      throw new ConflictException(
+        "The newest backup can't be deleted: one always stays on the server",
+      );
     await this.ask({ action: 'delete', file, by });
   }
 

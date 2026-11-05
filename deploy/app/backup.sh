@@ -154,6 +154,12 @@ restore() {
 remove() {
   local file="$1"
   name_ok "$file" && [ -f "$dir/$file" ] || { event delete "" false "No such backup"; return 1; }
+  # From the dashboard the newest can't go: one backup always stays on the server.
+  if [ "${by:-}" != server ] &&
+     [ "$(ls -1t "$dir"/forgea-"$env_name"-*.tar | head -n 1)" = "$dir/$file" ]; then
+    event delete "$file" false "The newest backup can't be deleted from the dashboard"
+    return 1
+  fi
   rm -f -- "$dir/$file"
   event delete "$file" true "Deleted"
 }
