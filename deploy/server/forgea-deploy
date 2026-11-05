@@ -41,6 +41,14 @@ docker compose up --detach --remove-orphans --wait
 # Recorded only once the new version is up, so a restart never picks a half-deployed one.
 sed -i "s/^TAG=.*/TAG=$TAG/" .env
 
-# Images unused for a week go; the previous release usually stays for a quick rollback.
-docker image prune --all --force --filter "until=168h" >/dev/null
+# Each release is ~3 GB, and there can be several a day: keep only what either environment
+# runs now plus the two newest releases (a quick rollback), and nothing untagged.
+in_use="$(sed -n 's/^TAG=//p' /srv/forgea/production/.env /srv/forgea/staging/.env 2>/dev/null)"
+for repo in $(docker images --format '{{.Repository}}' | grep '^ghcr.io/menyato/forgea-' | sort -u); do
+  docker images "$repo" --format '{{.CreatedAt}}|{{.Tag}}' | sort -r | cut -d'|' -f2 | tail -n +3 |
+    while read -r tag; do
+      echo "$in_use" | grep -qx "$tag" || docker rmi "$repo:$tag" >/dev/null 2>&1 || true
+    done
+done
+docker image prune --force >/dev/null
 echo "Deployed $TAG to $ENV_NAME"
