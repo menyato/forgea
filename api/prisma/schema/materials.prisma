@@ -21,7 +21,6 @@ model Material {
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 
   products       Product[]
-  printJobs      PrintJob[]
   optionValues   OptionValue[]
   customRequests CustomRequest[]
   stockItems     StockItem[]

@@ -86,6 +86,13 @@ export const PAGES: readonly {
     group: 'Orders',
   },
   {
+    path: '/admin/printers',
+    access: 'production.manage',
+    label: 'Printers',
+    group: 'Orders',
+    config: true,
+  },
+  {
     path: '/admin/requests',
     access: 'requests.view',
     label: 'Custom requests',

@@ -161,6 +161,7 @@ function designEstimate(
       pricePerGram,
     }).subtotal,
     gramsPerUnit: m.grams,
+    hoursPerUnit: m.printHours,
     materialId: product.materialId,
     colour: colours[0]?.colour ?? '',
     colours,

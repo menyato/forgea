@@ -6,12 +6,15 @@ import {
 } from '@forgea/types';
 import { UpdatePrintJobDto } from '@forgea/validation';
 import { Link, useFetcher } from 'react-router';
+import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { Field } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { StatusBar } from '~/features/admin/views';
+import { PrinterField, ReelField } from '~/features/production/choice-fields';
+import { productionChoices } from '~/features/production/choices.server';
 import {
   PRINT_JOB_ASIDE,
   PRINT_JOB_STEPS,
@@ -21,15 +24,22 @@ import { fromStudioInput, studioFormat, studioInput } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 export async function loader({ url, params, context }: Route.LoaderArgs) {
-  const r = await context
-    .get(apiContext)
-    .get<PrintJobListItem>(`/print-jobs/${encodeURIComponent(params.id)}`);
+  const api = context.get(apiContext);
+  const [r, choices] = await Promise.all([
+    api.get<PrintJobListItem>(`/print-jobs/${encodeURIComponent(params.id)}`),
+    productionChoices(api),
+  ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  // Dropped on Scheduled in the kanban: straight to picking when it prints.
-  return { job: r.data, plan: url.searchParams.has('plan') };
+  // Dropped on Scheduled or Done in the kanban: straight to what that step needs.
+  return {
+    job: r.data,
+    ...choices,
+    plan: url.searchParams.has('plan'),
+    finish: url.searchParams.has('finish'),
+  };
 }
 
-/** status | schedule | machine: each one PATCH of the job; the API refuses a step not allowed. */
+/** plan | schedule | finish | fail | status: each one PATCH; the API refuses what isn't allowed. */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
   const send = (dto: UpdatePrintJobDto) =>
@@ -37,6 +47,18 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       .get(apiContext)
       .patch(`/print-jobs/${encodeURIComponent(params.id)}`, dto);
   switch (form.get('intent')) {
+    case 'plan':
+      return save(
+        UpdatePrintJobDto,
+        {
+          printerId: text(form, 'printerId'),
+          stockItemId: text(form, 'stockItemId'),
+          quantity: text(form, 'quantity'),
+          grams: text(form, 'grams'),
+          hours: text(form, 'hours'),
+        },
+        send,
+      );
     case 'schedule': {
       const when = text(form, 'scheduledDate');
       return save(
@@ -45,8 +67,27 @@ export async function action({ request, params, context }: Route.ActionArgs) {
         send,
       );
     }
-    case 'machine':
-      return save(UpdatePrintJobDto, { machine: text(form, 'machine') }, send);
+    case 'finish':
+      return save(
+        UpdatePrintJobDto,
+        {
+          status: PrintJobStatus.DONE,
+          actualGrams: text(form, 'actualGrams'),
+          actualHours: text(form, 'actualHours'),
+        },
+        send,
+      );
+    case 'fail':
+      return save(
+        UpdatePrintJobDto,
+        {
+          status: PrintJobStatus.FAILED,
+          ...(text(form, 'actualGrams')
+            ? { actualGrams: text(form, 'actualGrams') }
+            : {}),
+        },
+        send,
+      );
     default:
       return save(UpdatePrintJobDto, { status: text(form, 'status') }, send);
   }
@@ -56,24 +97,36 @@ const FULL = studioFormat({ dateStyle: 'full', timeStyle: 'short' });
 const when = (iso: string) => FULL.format(new Date(iso));
 
 export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
-  const { job, plan } = loaderData;
+  const { job, printers, reels, plan, finish } = loaderData;
   const step = useFetcher<SaveResult>();
+  const planning = useFetcher<SaveResult>();
   const schedule = useFetcher<SaveResult>();
-  const printer = useFetcher<SaveResult>();
+  const done = useFetcher<SaveResult>();
+  const failed = useFetcher<SaveResult>();
   const mayWork = useCan()('production.manage');
-  // Scheduling is done with a date below, not as a plain step.
-  const next = PRINT_JOB_FLOW[job.status].filter(
-    (s) => s !== PrintJobStatus.SCHEDULED,
-  );
-  const plannable =
+  const open =
     job.status === PrintJobStatus.QUEUED ||
-    job.status === PrintJobStatus.SCHEDULED;
+    job.status === PrintJobStatus.SCHEDULED ||
+    job.status === PrintJobStatus.PRINTING;
+  // Scheduling takes a date, finishing and failing take figures: not plain steps.
+  const next = PRINT_JOB_FLOW[job.status].filter(
+    (s) =>
+      s !== PrintJobStatus.SCHEDULED &&
+      s !== PrintJobStatus.DONE &&
+      s !== PrintJobStatus.FAILED,
+  );
+  const canFinish = PRINT_JOB_FLOW[job.status].includes(PrintJobStatus.DONE);
+  const canFail = PRINT_JOB_FLOW[job.status].includes(PrintJobStatus.FAILED);
+  const ready = job.printer !== null && job.reel !== null;
+  const errors = planning.data?.errors ?? {};
   return (
     <>
       <AdminHeader
         trail={[{ label: 'Production', to: '/admin/production' }]}
-        title={`Print run · ${job.orderNumber}`}
-        intro={`${job.grams} g of ${job.material}, ${job.color}, about ${job.hours} h on ${job.machine}.`}
+        title={`${job.quantity} × ${job.item?.name ?? 'Print run'}`}
+        intro={`Order ${job.orderNumber} · about ${job.grams} g, ${job.hours} h${
+          job.printer ? ` on ${job.printer.name}` : ''
+        }${job.reel ? `, ${job.reel.material} ${job.reel.colour}` : ''}.`}
       />
       <StatusBar
         steps={PRINT_JOB_STEPS.map((s) => ({
@@ -87,6 +140,15 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
             : undefined
         }
       />
+      {open && !ready && (
+        <p
+          role="status"
+          className="mb-6 rounded-lg border-2 border-accent bg-surface p-4 text-sm"
+        >
+          Choose its <strong>printer</strong> and <strong>reel</strong> below
+          before it can be scheduled or started.
+        </p>
+      )}
       {mayWork && next.length > 0 && (
         <step.Form method="post" className="mb-6 flex flex-wrap gap-2">
           <input type="hidden" name="intent" value="status" />
@@ -116,72 +178,213 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
               >
                 {job.orderNumber}
               </Link>
+              {job.item && ` · ${job.item.name}`}
             </dd>
-            <dt className="text-text-muted">Material</dt>
-            <dd>
-              {job.material} · {job.color}
-            </dd>
-            <dt className="text-text-muted">Filament</dt>
-            <dd>{job.grams} g</dd>
-            <dt className="text-text-muted">Printing time</dt>
-            <dd>{job.hours} h</dd>
+            <dt className="text-text-muted">Pieces</dt>
+            <dd>{job.quantity}</dd>
             <dt className="text-text-muted">Printer</dt>
-            <dd>{job.machine}</dd>
+            <dd>{job.printer?.name ?? 'Not chosen'}</dd>
+            <dt className="text-text-muted">Reel</dt>
+            <dd>
+              {job.reel
+                ? `${job.reel.material} · ${job.reel.colour || 'no colour'}`
+                : 'Not chosen'}
+            </dd>
+            <dt className="text-text-muted">Estimate</dt>
+            <dd>
+              {job.grams} g · {job.hours} h
+            </dd>
+            {job.actualGrams && (
+              <>
+                <dt className="text-text-muted">
+                  {job.status === PrintJobStatus.FAILED
+                    ? 'Lost'
+                    : 'Really took'}
+                </dt>
+                <dd>
+                  {job.actualGrams} g
+                  {job.actualHours ? ` · ${job.actualHours} h` : ''}
+                </dd>
+              </>
+            )}
             <dt className="text-text-muted">Scheduled</dt>
             <dd>{job.scheduledDate ? when(job.scheduledDate) : 'Not yet'}</dd>
-            <dt className="text-text-muted">Added</dt>
-            <dd>{when(job.createdAt)}</dd>
+            {job.finishedAt && (
+              <>
+                <dt className="text-text-muted">Finished</dt>
+                <dd>{when(job.finishedAt)}</dd>
+              </>
+            )}
           </dl>
         </Panel>
-        {mayWork && plannable && (
+        {job.cost && (
+          <Panel title="What it really cost">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
+              <dt className="text-text-muted">Filament</dt>
+              <dd>
+                <Money amount={job.cost.material} />
+              </dd>
+              <dt className="text-text-muted">Electricity</dt>
+              <dd>
+                <Money amount={job.cost.electricity} /> (
+                {job.cost.electricityKwh} kWh)
+              </dd>
+              <dt className="text-text-muted">Printer wear</dt>
+              <dd>
+                <Money amount={job.cost.wear} />
+              </dd>
+              <dt className="font-semibold">Total</dt>
+              <dd className="font-semibold">
+                <Money amount={job.cost.total} />
+              </dd>
+            </dl>
+          </Panel>
+        )}
+        {mayWork && open && (
           <Panel title="Plan it">
-            <schedule.Form
-              method="post"
-              className="flex flex-wrap items-end gap-3"
-            >
-              <input type="hidden" name="intent" value="schedule" />
-              <Field
-                label="When it prints (Beirut time)"
-                name="scheduledDate"
-                type="datetime-local"
-                key={job.scheduledDate ?? 'none'}
-                autoFocus={plan}
-                defaultValue={
-                  job.scheduledDate ? studioInput(job.scheduledDate) : ''
-                }
-                hint="Empty takes it off the calendar and back to waiting."
+            <planning.Form method="post" className="grid gap-3 sm:grid-cols-2">
+              <input type="hidden" name="intent" value="plan" />
+              <PrinterField
+                printers={printers}
+                value={job.printer?.id}
+                error={errors['printerId']}
               />
-              <Button
-                type="submit"
-                variant="secondary"
-                disabled={schedule.state !== 'idle'}
-              >
-                {job.scheduledDate ? 'Move' : 'Schedule'}
-              </Button>
-              <SaveStatus state={schedule.state} result={schedule.data} />
-            </schedule.Form>
-            <printer.Form
-              method="post"
-              className="flex flex-wrap items-end gap-3"
-            >
-              <input type="hidden" name="intent" value="machine" />
+              <ReelField
+                reels={reels}
+                value={job.reel?.id}
+                error={errors['stockItemId']}
+              />
               <Field
-                label="Printer"
-                name="machine"
+                label="Pieces"
+                name="quantity"
+                type="number"
+                min={1}
+                defaultValue={job.quantity}
+                error={errors['quantity']}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="Grams (estimate)"
+                  name="grams"
+                  inputMode="decimal"
+                  defaultValue={job.grams}
+                  error={errors['grams']}
+                />
+                <Field
+                  label="Hours (estimate)"
+                  name="hours"
+                  inputMode="decimal"
+                  defaultValue={job.hours}
+                  error={errors['hours']}
+                />
+              </div>
+              <div className="flex items-center gap-3 sm:col-span-2">
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  disabled={planning.state !== 'idle'}
+                >
+                  Save the plan
+                </Button>
+                <SaveStatus state={planning.state} result={planning.data} />
+              </div>
+            </planning.Form>
+            {job.status !== PrintJobStatus.PRINTING && (
+              <schedule.Form
+                method="post"
+                className="flex flex-wrap items-end gap-3"
+              >
+                <input type="hidden" name="intent" value="schedule" />
+                <Field
+                  label="When it prints (Beirut time)"
+                  name="scheduledDate"
+                  type="datetime-local"
+                  key={job.scheduledDate ?? 'none'}
+                  autoFocus={plan}
+                  defaultValue={
+                    job.scheduledDate ? studioInput(job.scheduledDate) : ''
+                  }
+                  hint="Empty takes it off the calendar and back to waiting."
+                />
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  disabled={schedule.state !== 'idle' || !ready}
+                >
+                  {job.scheduledDate ? 'Move' : 'Schedule'}
+                </Button>
+                <SaveStatus state={schedule.state} result={schedule.data} />
+              </schedule.Form>
+            )}
+          </Panel>
+        )}
+        {mayWork && canFinish && (
+          <Panel title="Finished: what it really took">
+            <done.Form method="post" className="grid gap-3 sm:grid-cols-2">
+              <input type="hidden" name="intent" value="finish" />
+              <Field
+                label="Grams used (weigh the pieces and supports)"
+                name="actualGrams"
+                inputMode="decimal"
                 required
-                key={job.machine}
-                defaultValue={job.machine}
-                error={printer.data?.errors?.['machine']}
+                autoFocus={finish}
+                defaultValue={job.grams}
+                error={done.data?.errors?.['actualGrams']}
+              />
+              <Field
+                label="Hours it took"
+                name="actualHours"
+                inputMode="decimal"
+                required
+                defaultValue={job.hours}
+                error={done.data?.errors?.['actualHours']}
+              />
+              <div className="flex items-center gap-3 sm:col-span-2">
+                <Button
+                  type="submit"
+                  disabled={done.state !== 'idle' || !ready}
+                >
+                  Mark as done
+                </Button>
+                <SaveStatus state={done.state} result={done.data} />
+              </div>
+              <p className="text-xs text-text-muted sm:col-span-2">
+                Stock moves by the difference from the estimate, and the real
+                cost (filament, electricity, printer wear) goes on the order.
+              </p>
+            </done.Form>
+          </Panel>
+        )}
+        {mayWork && canFail && (
+          <Panel title="It failed">
+            <failed.Form
+              method="post"
+              className="flex flex-wrap items-end gap-3"
+              onSubmit={(e) => {
+                if (
+                  !window.confirm(
+                    'Mark this print as failed? Its filament leaves stock.',
+                  )
+                )
+                  e.preventDefault();
+              }}
+            >
+              <input type="hidden" name="intent" value="fail" />
+              <Field
+                label="Grams lost (empty: the estimate)"
+                name="actualGrams"
+                inputMode="decimal"
+                error={failed.data?.errors?.['actualGrams']}
               />
               <Button
                 type="submit"
-                variant="secondary"
-                disabled={printer.state !== 'idle'}
+                variant="quiet"
+                disabled={failed.state !== 'idle'}
               >
-                Change printer
+                Mark as failed
               </Button>
-              <SaveStatus state={printer.state} result={printer.data} />
-            </printer.Form>
+              <SaveStatus state={failed.state} result={failed.data} />
+            </failed.Form>
           </Panel>
         )}
       </div>

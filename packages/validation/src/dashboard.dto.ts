@@ -34,7 +34,7 @@ import {
   EMAIL_MAX_LENGTH,
   MONEY_PATTERN,
   PERCENT_PATTERN,
-  POSITIVE_DECIMAL,
+  DECIMAL_PATTERN,
   REQUEST_DESCRIPTION_MAX_LENGTH,
   REQUEST_QUANTITY_MAX,
   REQUEST_TITLE_MAX_LENGTH,
@@ -350,26 +350,31 @@ export class CreatePrintJobDto {
   @IsUUID()
   orderId!: string;
 
+  /** The order line it prints; leave out for work that isn't one line. */
+  @IsOptional()
   @IsUUID()
-  materialId!: string;
+  orderItemId?: string;
 
-  @Trim()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(40)
-  color!: string;
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose a printer' })
+  printerId?: string;
 
-  @Matches(POSITIVE_DECIMAL, { message: 'Grams, more than 0, e.g. 60' })
+  /** The reel: a material and colour from stock. */
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the reel' })
+  stockItemId?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1, { message: 'At least one piece' })
+  @Max(10000)
+  quantity: number = 1;
+
+  @Matches(DECIMAL_PATTERN, { message: 'Grams, e.g. 60' })
   grams!: string;
 
-  @Matches(POSITIVE_DECIMAL, { message: 'Hours, more than 0, e.g. 3.5' })
+  @Matches(DECIMAL_PATTERN, { message: 'Hours, e.g. 3.5' })
   hours!: string;
-
-  @Trim()
-  @IsString()
-  @MinLength(1, { message: 'Which printer?' })
-  @MaxLength(50)
-  machine!: string;
 
   /** When it starts (ISO 8601); unset = waiting in the queue. */
   @IsOptional()
@@ -377,7 +382,10 @@ export class CreatePrintJobDto {
   scheduledDate?: string;
 }
 
-/** Move a job along the board, or (re)schedule it; null unschedules it. */
+/**
+ * A change to a job: its plan (printer, reel, pieces, estimate, date) or its next step. "Done"
+ * needs what it really took (actualGrams, actualHours); "Failed" may say the grams lost.
+ */
 export class UpdatePrintJobDto {
   @IsOptional()
   @IsIn(Object.values(PrintJobStatus))
@@ -389,11 +397,72 @@ export class UpdatePrintJobDto {
   scheduledDate?: string | null;
 
   @IsOptional()
+  @IsUUID('all', { message: 'Choose a printer' })
+  printerId?: string;
+
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the reel' })
+  stockItemId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1, { message: 'At least one piece' })
+  @Max(10000)
+  quantity?: number;
+
+  @IsOptional()
+  @Matches(DECIMAL_PATTERN, { message: 'Grams, e.g. 60' })
+  grams?: string;
+
+  @IsOptional()
+  @Matches(DECIMAL_PATTERN, { message: 'Hours, e.g. 3.5' })
+  hours?: string;
+
+  @IsOptional()
+  @Matches(DECIMAL_PATTERN, { message: 'The grams it really took, e.g. 62' })
+  actualGrams?: string;
+
+  @IsOptional()
+  @Matches(DECIMAL_PATTERN, { message: 'The hours it really took, e.g. 3.8' })
+  actualHours?: string;
+}
+
+/** A printer: Production → Printers. */
+export class SavePrinterDto {
   @Trim()
   @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  machine?: string;
+  @MinLength(1, { message: 'Name the printer' })
+  @MaxLength(60)
+  name!: string;
+
+  /** Average draw while printing. */
+  @Type(() => Number)
+  @IsInt({ message: 'Watts, a whole number, e.g. 150' })
+  @Min(1)
+  @Max(5000)
+  watts!: number;
+
+  /** What it cost and the print hours it should last: both or neither (the API checks). */
+  @IsOptional()
+  @Matches(MONEY_PATTERN, { message: 'An amount, e.g. 699' })
+  priceUsd?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Hours, a whole number, e.g. 5000' })
+  @Min(1)
+  @Max(1000000)
+  lifeHours?: number;
+
+  @IsBoolean()
+  active: boolean = true;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 }
 
 /** What one role may do (Roles & permissions page). */

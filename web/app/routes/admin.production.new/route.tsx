@@ -1,11 +1,11 @@
 import type {
-  MaterialView,
   OrderListItem,
   Page,
   PrintJobListItem,
+  StaffOrder,
 } from '@forgea/types';
 import { CreatePrintJobDto } from '@forgea/validation';
-import { redirect, useFetcher } from 'react-router';
+import { Form, redirect, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
@@ -16,24 +16,30 @@ import {
   ViewOnly,
 } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { PrinterField, ReelField } from '~/features/production/choice-fields';
+import { productionChoices } from '~/features/production/choices.server';
 import { apiContext } from '~/lib/request.server';
 import { fromStudioInput } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [orders, materials] = await Promise.all([
+  const chosen = url.searchParams.get('order');
+  const [orders, choices, order] = await Promise.all([
     // Only orders being produced, however old: print runs are made for those.
     api.get<Page<OrderListItem>>(
       '/orders?limit=100&statuses=CONFIRMED,IN_PRODUCTION',
     ),
-    api.get<MaterialView[]>('/materials'),
+    productionChoices(api),
+    chosen && /^[0-9a-f-]{36}$/.test(chosen)
+      ? api.get<StaffOrder>(`/orders/${chosen}`)
+      : null,
   ]);
   if (!orders.ok) throw new Response(orders.message, { status: orders.status });
   return {
     orders: orders.data.items,
-    materials: materials.ok ? materials.data.filter((m) => m.active) : [],
-    order: url.searchParams.get('order'),
+    ...choices,
+    order: order?.ok ? order.data : null,
   };
 }
 
@@ -46,11 +52,18 @@ export async function action({ request, context }: Route.ActionArgs) {
     CreatePrintJobDto,
     {
       orderId: text(form, 'orderId'),
-      materialId: text(form, 'materialId'),
-      color: text(form, 'color'),
+      ...(text(form, 'orderItemId')
+        ? { orderItemId: text(form, 'orderItemId') }
+        : {}),
+      ...(text(form, 'printerId')
+        ? { printerId: text(form, 'printerId') }
+        : {}),
+      ...(text(form, 'stockItemId')
+        ? { stockItemId: text(form, 'stockItemId') }
+        : {}),
+      quantity: text(form, 'quantity'),
       grams: text(form, 'grams'),
       hours: text(form, 'hours'),
-      machine: text(form, 'machine'),
       ...(when ? { scheduledDate: fromStudioInput(when) } : {}),
     },
     async (dto) => {
@@ -66,7 +79,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function NewPrintJob({ loaderData }: Route.ComponentProps) {
-  const { orders, materials, order } = loaderData;
+  const { orders, order, printers, reels } = loaderData;
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
   const mayWork = useCan()('production.manage');
@@ -74,7 +87,7 @@ export default function NewPrintJob({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         title="Plan a print run"
-        intro="One run on one printer for a confirmed order. With a day and time it is scheduled (and goes on the studio's calendar); without, it waits in the queue."
+        intro="Orders going into production get their runs by themselves; add one here for a reprint, a split run or work that isn't one line. With a day and time it is scheduled (and goes on the studio's calendar); without, it waits in the queue."
         trail={[{ label: 'Production', to: '/admin/production' }]}
       />
       <Panel>
@@ -85,70 +98,82 @@ export default function NewPrintJob({ loaderData }: Route.ComponentProps) {
           </p>
         ) : (
           <ViewOnly editable={mayWork}>
-            <fetcher.Form method="post" className="grid gap-4 sm:grid-cols-2">
+            {/* Choosing the order loads its lines. */}
+            <Form method="get" className="mb-4 flex flex-wrap items-end gap-3">
               <SelectField
                 label="Order"
-                name="orderId"
-                defaultValue={order ?? undefined}
-                error={errors['orderId']}
+                name="order"
+                defaultValue={order?.id ?? ''}
               >
+                <option value="" disabled>
+                  Choose the order…
+                </option>
                 {orders.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.orderNumber} · {o.customerEmail}
                   </option>
                 ))}
               </SelectField>
-              <SelectField
-                label="Material"
-                name="materialId"
-                error={errors['materialId']}
-              >
-                {materials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.stockGrams} g in stock)
+              <Button type="submit" variant="secondary">
+                Show its lines
+              </Button>
+            </Form>
+            {order && (
+              <fetcher.Form method="post" className="grid gap-4 sm:grid-cols-2">
+                <input type="hidden" name="orderId" value={order.id} />
+                <SelectField
+                  label="Line it prints"
+                  name="orderItemId"
+                  error={errors['orderItemId']}
+                >
+                  {order.items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.quantity} × {i.name}
+                    </option>
+                  ))}
+                  <option value="">
+                    Not one line (other work for this order)
                   </option>
-                ))}
-              </SelectField>
-              <Field
-                label="Colour"
-                name="color"
-                required
-                error={errors['color']}
-              />
-              <Field
-                label="Printer"
-                name="machine"
-                required
-                defaultValue="Printer 1"
-                error={errors['machine']}
-              />
-              <Field
-                label="Grams"
-                name="grams"
-                inputMode="decimal"
-                required
-                error={errors['grams']}
-              />
-              <Field
-                label="Hours"
-                name="hours"
-                inputMode="decimal"
-                required
-                error={errors['hours']}
-              />
-              <Field
-                label="When (optional, Beirut time)"
-                name="scheduledDate"
-                type="datetime-local"
-                error={errors['scheduledDate']}
-              />
-              <div className="flex items-end gap-3">
-                <Button type="submit" disabled={fetcher.state !== 'idle'}>
-                  Plan it
-                </Button>
-                <SaveStatus state={fetcher.state} result={fetcher.data} />
-              </div>
-            </fetcher.Form>
+                </SelectField>
+                <Field
+                  label="Pieces"
+                  name="quantity"
+                  type="number"
+                  min={1}
+                  defaultValue={1}
+                  required
+                  error={errors['quantity']}
+                />
+                <PrinterField printers={printers} error={errors['printerId']} />
+                <ReelField reels={reels} error={errors['stockItemId']} />
+                <Field
+                  label="Grams (estimate)"
+                  name="grams"
+                  inputMode="decimal"
+                  required
+                  error={errors['grams']}
+                />
+                <Field
+                  label="Hours (estimate)"
+                  name="hours"
+                  inputMode="decimal"
+                  required
+                  error={errors['hours']}
+                />
+                <Field
+                  label="When (optional, Beirut time)"
+                  name="scheduledDate"
+                  type="datetime-local"
+                  error={errors['scheduledDate']}
+                />
+                <div className="flex items-end gap-3">
+                  <Button type="submit" disabled={fetcher.state !== 'idle'}>
+                    Plan it
+                  </Button>
+                  <SaveStatus state={fetcher.state} result={fetcher.data} />
+                </div>
+              </fetcher.Form>
+            )}
           </ViewOnly>
         )}
       </Panel>

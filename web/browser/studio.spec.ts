@@ -412,17 +412,37 @@ test('filament: a delivery comes in, an order going into production takes its gr
   }
   const orderId = page.url().split('/').pop()!;
 
-  // Its print run, planned in the studio's own time (Beirut, UTC+3 in summer), reads back
-  // at that time everywhere.
-  await page.goto(`/admin/production/new?order=${orderId}`);
-  await page.getByLabel('Colour').fill('Forest green');
-  await page.getByLabel('Grams').fill('40');
-  await page.getByLabel('Hours').fill('2');
-  await page
-    .getByLabel('When (optional, Beirut time)')
+  // Going into production planned its print by itself, from the Forest green reel.
+  const production = page.getByRole('region', { name: 'Production' });
+  await expect(production.getByText('Left after print costs')).toBeVisible();
+  const jobLink = production.getByRole('link', { name: /^1 × / }).first();
+  await expect(jobLink).toBeVisible();
+  const jobPage = await jobLink.getAttribute('href');
+
+  // A printer of the studio's, with what it draws and costs.
+  const printerName = `Printer ${Date.now().toString(36)}`;
+  await page.goto('/admin/printers/new');
+  await page.getByLabel('Name').fill(printerName);
+  await page.getByLabel('Power while printing (watts)').fill('200');
+  await page.getByLabel('What it cost (USD, optional)').fill('500');
+  await page.getByLabel('Print hours it should last (optional)').fill('5000');
+  await page.getByRole('button', { name: 'Add the printer' }).click();
+  await expect(page).toHaveURL(/\/admin\/printers\/[0-9a-f-]{36}$/);
+
+  // Planned on it, in the studio's own time (Beirut, UTC+3 in summer), it reads back at
+  // that time everywhere.
+  await page.goto(jobPage!);
+  const plan = page.getByRole('region', { name: 'Plan it' });
+  await expect(plan.getByLabel('Reel')).toHaveValue(/[0-9a-f-]{36}/);
+  await plan
+    .getByLabel('Printer')
+    .selectOption({ label: `${printerName} (200 W)` });
+  await plan.getByRole('button', { name: 'Save the plan' }).click();
+  await expect(plan.getByText('Saved')).toBeVisible();
+  await plan
+    .getByLabel('When it prints (Beirut time)')
     .fill('2026-07-01T09:30');
-  await page.getByRole('button', { name: 'Plan it' }).click();
-  await expect(page).toHaveURL(/\/admin\/production\/[0-9a-f-]{36}$/);
+  await plan.getByRole('button', { name: 'Schedule' }).click();
   await expect(page.getByText(/Wednesday,? 1 July 2026.*09:30/)).toBeVisible();
   await expect(page.getByLabel('When it prints (Beirut time)')).toHaveValue(
     '2026-07-01T09:30',

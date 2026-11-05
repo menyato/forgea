@@ -134,6 +134,8 @@ const DASHBOARD = [
   '/admin/production?view=list',
   '/admin/production/new',
   '/admin/production/calendar',
+  '/admin/printers',
+  '/admin/printers/new',
   '/admin/accounting/books/entries/new',
   '/admin/team/new',
   '/admin/team?filter=customers',

@@ -115,6 +115,7 @@ describe('configuredUnitCost', () => {
     expect(configuredUnitCost(calculator, base, [large, silk])).toEqual({
       cost: '19.00',
       grams: '180',
+      hours: '6',
     });
   });
 });

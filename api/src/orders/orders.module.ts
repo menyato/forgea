@@ -6,6 +6,7 @@ import { MailModule } from '../mail/mail.module.js';
 import { StoreSettingsModule } from '../store-settings/store-settings.module.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { PricingModule } from '../pricing/pricing.module.js';
+import { PrintJobsModule } from '../print-jobs/print-jobs.module.js';
 import { StockModule } from '../stock/stock.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { CheckoutService } from './checkout.service.js';
@@ -27,6 +28,7 @@ import { ReorderService } from './reorder.service.js';
     StoreSettingsModule,
     AccountingModule,
     StockModule,
+    PrintJobsModule,
   ],
   controllers: [OrdersController],
   providers: [

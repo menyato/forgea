@@ -93,6 +93,7 @@ describe('estimateItem', () => {
     ).toEqual({
       unitCost: '22.60',
       gramsPerUnit: '200',
+      hoursPerUnit: '8',
       materialId: 'pla',
       colour: 'Red',
     });
@@ -108,6 +109,7 @@ describe('estimateItem', () => {
     ).toEqual({
       unitCost: '25.00',
       gramsPerUnit: '150',
+      hoursPerUnit: '5',
       materialId: 'petg',
       colour: '',
     });

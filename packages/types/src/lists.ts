@@ -51,24 +51,57 @@ export interface OrderListItem {
   createdAt: string;
 }
 
+/** One print run: an order's line, on a printer, from a reel, with what it took and cost. */
 export interface PrintJobListItem {
   id: string;
   orderId: string;
   orderNumber: string;
-  material: string;
-  color: string;
+  /** The order line it prints; null for work added by hand that isn't one line. */
+  item: { id: string; name: string } | null;
+  /** Null until chosen: a job can't be scheduled or started without one. */
+  printer: { id: string; name: string } | null;
+  /** The reel (material and colour from stock); null until chosen, like the printer. */
+  reel: { id: string; material: string; colour: string } | null;
+  quantity: number;
+  /** The estimate. */
   grams: string;
   hours: string;
-  machine: string;
+  /** What it really took (done), or the grams lost (failed). */
+  actualGrams: string | null;
+  actualHours: string | null;
+  /** Its real cost once done, USD, with that day's prices. */
+  cost: {
+    material: string;
+    electricityKwh: string;
+    electricity: string;
+    wear: string;
+    total: string;
+  } | null;
   scheduledDate: string | null;
   status: PrintJobStatus;
   createdAt: string;
+  finishedAt: string | null;
 }
 
-/** How many print jobs are in each status and on each machine (the production filters). */
+/** How many print jobs are in each status and on each printer (the production filters). */
 export interface PrintJobCounts {
   statuses: Partial<Record<PrintJobStatus, number>>;
-  machines: Record<string, number>;
+  /** By printer id; jobs with no printer yet under "none". */
+  printers: Record<string, number>;
+}
+
+/** A printer of the studio (Production → Printers). */
+export interface PrinterView {
+  id: string;
+  name: string;
+  watts: number;
+  priceUsd: string | null;
+  lifeHours: number | null;
+  /** priceUsd ÷ lifeHours, USD per print hour; null when either is missing. */
+  wearPerHour: string | null;
+  active: boolean;
+  notes: string | null;
+  jobs: number;
 }
 
 /** A JSON value as stored (an audit entry's details). */

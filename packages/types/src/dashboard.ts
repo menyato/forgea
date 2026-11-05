@@ -24,6 +24,7 @@ export interface StaffOrder {
   addressLine: string | null;
   deliveryNotes: string | null;
   items: {
+    id: string;
     name: string;
     quantity: number;
     unitPrice: Money;

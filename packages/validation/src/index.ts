@@ -36,6 +36,7 @@ export {
   CloseCustomRequestDto,
   CreateCustomRequestDto,
   CreatePrintJobDto,
+  SavePrinterDto,
   CustomRequestListQuery,
   EstimateRequestDto,
   QuoteCustomRequestDto,

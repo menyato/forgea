@@ -109,7 +109,9 @@ export default function ProductionCalendar({
                       {j.orderNumber}
                     </span>
                     <span className="text-text-muted">
-                      {TIME.format(new Date(j.scheduledDate!))} · {j.machine}
+                      {TIME.format(new Date(j.scheduledDate!))} ·{' '}
+                      {j.printer?.name ?? 'no printer'} · {j.quantity} ×{' '}
+                      {j.item?.name ?? 'print'}
                     </span>
                     <span className="text-text-muted">
                       {PRINT_JOB_STATUS_LABELS[j.status]}
