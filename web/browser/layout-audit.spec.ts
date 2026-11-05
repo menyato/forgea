@@ -80,6 +80,7 @@ const SHOP = [
   '/products/twist-vase',
   '/custom',
   '/contact',
+  '/privacy',
   '/cart',
   '/sign-in',
   '/register',

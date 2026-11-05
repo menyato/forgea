@@ -74,6 +74,7 @@ const PUBLIC = [
   '/products/couple-names',
   '/custom',
   '/contact',
+  '/privacy',
   '/cart',
   '/sign-in',
   '/register',

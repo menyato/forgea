@@ -26,6 +26,9 @@ export function SiteFooter({ store }: { store: StoreSettings | null }) {
           <Link to="/orders" className="hover:text-text hover:underline">
             My orders
           </Link>
+          <Link to="/privacy" className="hover:text-text hover:underline">
+            Privacy
+          </Link>
         </div>
         <div className="grid content-start gap-2">
           <p className="font-semibold text-text">Talk to us</p>

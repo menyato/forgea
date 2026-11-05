@@ -20,7 +20,7 @@ const MAX_BYTES = 2_000_000;
 /** The pages, and the data requests React Router makes for them when navigating in the browser. */
 const PUBLIC = [
   /^\/(?:_root\.data)?$/,
-  /^\/(?:shop|custom|contact)(?:\.data)?$/,
+  /^\/(?:shop|custom|contact|privacy)(?:\.data)?$/,
   /^\/products\/[a-z0-9-]{1,120}(?:\.data)?$/,
 ];
 
