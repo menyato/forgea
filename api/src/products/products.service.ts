@@ -162,6 +162,10 @@ export class ProductsService {
 
   // Dashboard
 
+  async manageCounts(): Promise<{ shownWithoutModel: number }> {
+    return { shownWithoutModel: await this.products.countShownWithoutModel() };
+  }
+
   async manageList(
     query: ProductListQuery,
   ): Promise<Page<AdminProductListItem>> {

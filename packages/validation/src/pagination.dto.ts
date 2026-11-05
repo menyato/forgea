@@ -83,6 +83,11 @@ export class ProductListQuery extends CursorPageQuery {
   @QueryBoolean()
   @IsBoolean()
   active?: boolean;
+
+  /** The dashboard's list only: with a 3D model, or without one. */
+  @IsOptional()
+  @IsIn(['with', 'without'])
+  model?: 'with' | 'without';
 }
 
 export class OrderListQuery extends CursorPageQuery {

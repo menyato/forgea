@@ -17,6 +17,8 @@ import type { Route } from './+types/route';
 const FILTERS = [
   { key: 'shown', label: 'In the shop', only: 'active' },
   { key: 'hidden', label: 'Hidden', only: 'active' },
+  { key: 'with3d', label: 'With a 3D model', only: 'model' },
+  { key: 'no3d', label: 'Without a 3D model', only: 'model' },
 ];
 
 const GROUPS = [
@@ -31,6 +33,8 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   const query = pageQuery(state, state.view === 'kanban' ? 100 : 50);
   if (state.filters.includes('shown')) query.set('active', 'true');
   else if (state.filters.includes('hidden')) query.set('active', 'false');
+  if (state.filters.includes('with3d')) query.set('model', 'with');
+  else if (state.filters.includes('no3d')) query.set('model', 'without');
   const r = await context
     .get(apiContext)
     .get<Page<AdminProductListItem>>(`/products/manage?${query}`);

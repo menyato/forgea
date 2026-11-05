@@ -13,6 +13,13 @@ import {
 export class ProductsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** The Overview's count: products in the shop without a 3D model. */
+  countShownWithoutModel(): Promise<number> {
+    return this.prisma.product.count({
+      where: { active: true, modelFileKey: null },
+    });
+  }
+
   /** The public catalog (active only), or every product for the dashboard. */
   list(query: ProductListQuery, activeOnly: boolean) {
     const where: Prisma.ProductWhereInput = {
@@ -24,6 +31,11 @@ export class ProductsRepository {
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
       ...(query.material ? { material: { code: query.material } } : {}),
       ...(query.category ? { category: { slug: query.category } } : {}),
+      ...(query.model === 'with'
+        ? { modelFileKey: { not: null } }
+        : query.model === 'without'
+          ? { modelFileKey: null }
+          : {}),
     };
     return keysetPage<ConfigurableProduct>(
       {

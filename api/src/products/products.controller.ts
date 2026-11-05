@@ -46,6 +46,13 @@ export class ProductsController {
     return this.products.list(query);
   }
 
+  /** The Overview's numbers (the list's "In the shop" + "Without 3D" filters count the same). */
+  @RequirePermission('catalog.view')
+  @Get('manage/counts')
+  manageCounts(): Promise<{ shownWithoutModel: number }> {
+    return this.products.manageCounts();
+  }
+
   /** Dashboard: every product, hidden ones included. Declared before ":slug". */
   @RequirePermission('catalog.view')
   @Get('manage')
