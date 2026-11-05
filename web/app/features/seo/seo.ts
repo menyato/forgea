@@ -25,7 +25,13 @@ export const PRIVATE_PATHS = [
 ] as const;
 
 /** Public pages that are always in the sitemap, besides one entry per product. */
-const SITEMAP_PAGES = ['/', '/shop', '/custom', '/contact'] as const;
+const SITEMAP_PAGES = [
+  '/',
+  '/shop',
+  '/custom',
+  '/contact',
+  '/privacy',
+] as const;
 
 /**
  * The site's own address (PUBLIC_WEB_URL), which the root loader passes down: links in search
