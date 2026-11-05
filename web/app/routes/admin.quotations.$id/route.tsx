@@ -8,7 +8,7 @@ import {
   QuotationStatus,
 } from '@forgea/types';
 import { SaveQuotationDto } from '@forgea/validation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
@@ -32,6 +32,7 @@ import { relatedOf } from '~/features/admin/related.server';
 import { DeliveryAreaField } from '~/features/orders/delivery-area-field';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import type { QuotationLookup } from '../admin.quotations.lookup/route';
 
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -117,6 +118,8 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 
 interface Line {
   productId: string;
+  /** The product's own size chosen, when it has sizes. */
+  sizeId: string;
   description: string;
   quantity: string;
   unitPrice: string;
@@ -147,9 +150,33 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
       // Declined: change it, then send it again.
       q.status === QuotationStatus.DECLINED);
   const [delivery, setDelivery] = useState(q?.delivery ?? false);
+  // What the studio knows about this email fills the fields still empty.
+  const formRef = useRef<HTMLFormElement>(null);
+  const contact = useFetcher<QuotationLookup | null>();
+  const [area, setArea] = useState<string | null>(q?.city ?? null);
+  useEffect(() => {
+    const found =
+      contact.data && 'contact' in contact.data ? contact.data.contact : null;
+    const form = formRef.current;
+    if (!found || !form) return;
+    const fill = (name: string, value: string | null) => {
+      const input = form.elements.namedItem(name);
+      if (value && input instanceof HTMLInputElement && !input.value.trim())
+        input.value = value;
+    };
+    fill('customerName', found.name);
+    fill('phone', found.phone);
+    if (found.city && !area) {
+      setDelivery(true);
+      setArea(found.city);
+      // The address field appears with the delivery box: filled once it is there.
+      requestAnimationFrame(() => fill('addressLine', found.addressLine));
+    }
+  }, [contact.data]);
   const [lines, setLines] = useState<Line[]>(
     q?.lines.map((l) => ({
       productId: l.productId ?? '',
+      sizeId: '',
       description: l.description,
       quantity: String(l.quantity),
       unitPrice: l.unitPrice,
@@ -161,6 +188,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
     })) ?? [
       {
         productId: '',
+        sizeId: '',
         description: '',
         quantity: '1',
         unitPrice: '',
@@ -201,7 +229,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           steps={[
             { key: 'DRAFT', label: 'Draft' },
             { key: 'SENT', label: 'Sent' },
-            { key: 'CONFIRMED', label: 'Confirmed' },
+            { key: 'CONFIRMED', label: 'Sales order' },
           ]}
           current={q.status}
           aside={
@@ -215,7 +243,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           }
         />
       )}
-      <fetcher.Form method="post" className="grid gap-6">
+      <fetcher.Form ref={formRef} method="post" className="grid gap-6">
         <input type="hidden" name="intent" value="save" />
         {prefill.leadId && (
           <input
@@ -256,6 +284,13 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                 required
                 defaultValue={q?.customer.email ?? prefill.email}
                 error={errors['customerEmail']}
+                onBlur={(e) => {
+                  const email = e.currentTarget.value.trim();
+                  if (editable && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+                    void contact.load(
+                      `/admin/quotations/lookup?email=${encodeURIComponent(email)}`,
+                    );
+                }}
               />
               <Field
                 label="Name for the order"
@@ -299,7 +334,11 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
               />
               {delivery && (
                 <>
-                  <DeliveryAreaField value={q?.city} error={errors['city']} />
+                  <DeliveryAreaField
+                    key={area ?? 'none'}
+                    value={area}
+                    error={errors['city']}
+                  />
                   <Field
                     label="Street, building, floor"
                     name="addressLine"
@@ -330,10 +369,14 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                       p
                         ? {
                             productId: p.id,
+                            sizeId: '',
                             description: p.name,
                             unitPrice: p.price,
+                            sizeX: '',
+                            sizeY: '',
+                            sizeZ: '',
                           }
-                        : { productId: '' },
+                        : { productId: '', sizeId: '' },
                     );
                   }}
                 >
@@ -402,29 +445,12 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                     </Button>
                   )}
                 </div>
-                <fieldset className="grid grid-cols-3 gap-2 sm:col-span-full sm:max-w-md">
-                  <legend className="mb-1 text-sm font-medium">
-                    Printed size, cm (optional: all three)
-                  </legend>
-                  {(
-                    [
-                      ['sizeX', 'Width'],
-                      ['sizeY', 'Depth'],
-                      ['sizeZ', 'Height'],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <Field
-                      key={key}
-                      label={label}
-                      name={`line-${i}-${key}`}
-                      inputMode="decimal"
-                      placeholder="cm"
-                      autoComplete="off"
-                      value={l[key]}
-                      onChange={(e) => set(i, { [key]: e.currentTarget.value })}
-                    />
-                  ))}
-                </fieldset>
+                <LineSize
+                  index={i}
+                  line={l}
+                  slug={products.find((p) => p.id === l.productId)?.slug}
+                  onChange={(change) => set(i, change)}
+                />
               </div>
             ))}
             {Object.entries(errors)
@@ -443,6 +469,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                     ...all,
                     {
                       productId: '',
+                      sizeId: '',
                       description: '',
                       quantity: '1',
                       unitPrice: '',
@@ -503,7 +530,7 @@ function QuotationActions({
     <Panel title="Next" className="mt-6">
       {fetcher.data?.order && (
         <p className="font-semibold text-success">
-          Order {fetcher.data.order.orderNumber} created; it is in Orders.
+          Sales order {fetcher.data.order.orderNumber} created; it is in Orders.
         </p>
       )}
       {q.status === QuotationStatus.DECLINED && (
@@ -560,11 +587,56 @@ function QuotationActions({
             Cancel the quotation
           </Button>
         </fetcher.Form>
+      ) : q.status === QuotationStatus.CONFIRMED && q.orderId ? (
+        <div className="grid gap-3">
+          <p>
+            Confirmed: it is now sales order{' '}
+            <Link
+              to={`/admin/orders/${q.orderId}`}
+              className="font-semibold underline underline-offset-4"
+            >
+              {q.orderNumber}
+            </Link>
+            .
+          </p>
+          {mayManage && (
+            <fetcher.Form method="post">
+              <Button
+                type="submit"
+                name="intent"
+                value="cancel"
+                variant="quiet"
+                disabled={fetcher.state !== 'idle'}
+                onClick={(e) => {
+                  if (
+                    !window.confirm(
+                      `Cancel quotation ${q.number} and its order ${q.orderNumber}? The customer is told.`,
+                    )
+                  )
+                    e.preventDefault();
+                }}
+              >
+                Cancel the quotation and its order
+              </Button>
+            </fetcher.Form>
+          )}
+        </div>
       ) : (
         <p className="text-sm text-text-muted">
-          {q.status === QuotationStatus.CONFIRMED
-            ? `Confirmed as order ${q.orderNumber}.`
-            : 'Cancelled.'}
+          Cancelled
+          {q.orderId ? (
+            <>
+              {' '}
+              with its order{' '}
+              <Link
+                to={`/admin/orders/${q.orderId}`}
+                className="underline underline-offset-4"
+              >
+                {q.orderNumber}
+              </Link>
+            </>
+          ) : null}
+          .
         </p>
       )}
       <SaveStatus state={fetcher.state} result={fetcher.data} />
@@ -578,5 +650,94 @@ function QuotationActions({
         ))}
       </ol>
     </Panel>
+  );
+}
+
+/**
+ * A line's printed size: a product's own sizes to choose from (each with its price), or, for a
+ * free-text line or a product without sizes, the measurements typed in.
+ */
+function LineSize({
+  index: i,
+  line: l,
+  slug,
+  onChange,
+}: {
+  index: number;
+  line: Line;
+  slug: string | undefined;
+  onChange: (change: Partial<Line>) => void;
+}) {
+  const sizes = useFetcher<QuotationLookup | null>();
+  useEffect(() => {
+    if (slug)
+      void sizes.load(
+        `/admin/quotations/lookup?product=${encodeURIComponent(slug)}`,
+      );
+  }, [slug]);
+  const choices =
+    slug && sizes.data && 'sizes' in sizes.data ? sizes.data.sizes : [];
+  if (choices.length > 0) {
+    const chosen =
+      choices.find((c) => c.id === l.sizeId) ??
+      choices.find(
+        (c) => c.x === l.sizeX && c.y === l.sizeY && c.z === l.sizeZ,
+      );
+    return (
+      <div className="sm:col-span-full sm:max-w-md">
+        <SelectField
+          label="Size"
+          name={`line-${i}-size`}
+          value={chosen?.id ?? ''}
+          onChange={(e) => {
+            const c = choices.find((x) => x.id === e.currentTarget.value);
+            onChange(
+              c
+                ? {
+                    sizeId: c.id,
+                    sizeX: c.x,
+                    sizeY: c.y,
+                    sizeZ: c.z,
+                    ...(c.unitPrice ? { unitPrice: c.unitPrice } : {}),
+                  }
+                : { sizeId: '', sizeX: '', sizeY: '', sizeZ: '' },
+            );
+          }}
+        >
+          <option value="">Choose a size…</option>
+          {choices.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+              {c.unitPrice ? ` · $${c.unitPrice}` : ''}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+    );
+  }
+  return (
+    <fieldset className="grid grid-cols-3 gap-2 sm:col-span-full sm:max-w-md">
+      <legend className="mb-1 text-sm font-medium">
+        Printed size, cm (optional: all three)
+      </legend>
+      {(
+        [
+          ['sizeX', 'Width'],
+          ['sizeY', 'Depth'],
+          ['sizeZ', 'Height'],
+        ] as const
+      ).map(([key, label]) => (
+        <Field
+          key={key}
+          label={label}
+          name={`line-${i}-${key}`}
+          inputMode="decimal"
+          placeholder="cm"
+          autoComplete="off"
+          value={l[key]}
+          onChange={(e) => onChange({ [key]: e.currentTarget.value })}
+        />
+      ))}
+    </fieldset>
   );
 }

@@ -13,11 +13,13 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   CheckoutResult,
   Page,
+  QuotationContact,
   QuotationDetail,
   QuotationListItem,
 } from '@forgea/types';
 import {
   AddNoteDto,
+  CustomerEmailQuery,
   DeclineQuotationDto,
   QuotationListQuery,
   SaveQuotationDto,
@@ -123,6 +125,13 @@ export class QuotationsController {
   @Get('counts')
   counts(): Promise<Partial<Record<QuotationStatus, number>>> {
     return this.quotations.counts();
+  }
+
+  /** Name, phone and address from their account, last order, quotation or lead. */
+  @RequirePermission('quotations.manage')
+  @Get('contact')
+  contact(@Query() query: CustomerEmailQuery): Promise<QuotationContact> {
+    return this.quotations.contact(query.email);
   }
 
   @RequirePermission('quotations.view')

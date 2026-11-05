@@ -7,6 +7,7 @@ import {
 import type {
   CheckoutResult,
   Page,
+  QuotationContact,
   QuotationDetail,
   QuotationListItem,
 } from '@forgea/types';
@@ -14,9 +15,14 @@ import type { QuotationListQuery, SaveQuotationDto } from '@forgea/validation';
 import { QuotationLinkTokens } from '../authorization/quotation-link-tokens.js';
 import { toPage } from '../common/pagination/keyset.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { QuotationStatus, Role } from '../generated/prisma/enums.js';
+import {
+  OrderStatus,
+  QuotationStatus,
+  Role,
+} from '../generated/prisma/enums.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { CheckoutService } from '../orders/checkout.service.js';
+import { OrderStatusService } from '../orders/order-status.service.js';
 import { LeadsService } from '../leads/leads.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import {
@@ -63,6 +69,7 @@ export class QuotationsService {
     private readonly links: QuotationLinkTokens,
     private readonly store: StoreSettingsService,
     private readonly leads: LeadsService,
+    private readonly orderStatus: OrderStatusService,
   ) {}
 
   counts(): Promise<Partial<Record<QuotationStatus, number>>> {
@@ -71,6 +78,10 @@ export class QuotationsService {
 
   async list(query: QuotationListQuery): Promise<Page<QuotationListItem>> {
     return toPage(await this.quotations.list(query), toListItem);
+  }
+
+  contact(email: string): Promise<QuotationContact> {
+    return this.quotations.contact(email);
   }
 
   async detail(id: string): Promise<QuotationDetail> {
@@ -251,6 +262,24 @@ export class QuotationsService {
     note: string | null,
   ): Promise<QuotationDetail> {
     const q = await this.require(id);
+    if (q.status === QuotationStatus.CONFIRMED && q.orderId) {
+      // A sales order: the order is cancelled, and the quotation with it. The order's own
+      // rules apply (one already delivered can't be cancelled), and its emails tell the
+      // customer.
+      await this.orderStatus.change(
+        q.orderId,
+        OrderStatus.CANCELLED,
+        actorId,
+        note ?? undefined,
+      );
+      if (q.leadId)
+        await this.leads.quotationChanged(
+          q.leadId,
+          { kind: 'cancelled', number: q.number },
+          actorId,
+        );
+      return this.detail(id);
+    }
     const done = await this.quotations.setStatus(
       id,
       [QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.DECLINED],
@@ -259,9 +288,7 @@ export class QuotationsService {
       note,
     );
     if (!done)
-      throw new ConflictException(
-        'Only a draft, sent or declined quotation can be cancelled',
-      );
+      throw new ConflictException('This quotation is already cancelled');
     // Withdrawn: the customer only hears of one they were sent.
     if (q.status !== QuotationStatus.DRAFT)
       this.notifications.send('quotationStatus', {
@@ -543,6 +570,7 @@ function toListItem(q: QuotationRow): QuotationListItem {
       (q.status === QuotationStatus.DRAFT ||
         q.status === QuotationStatus.SENT) &&
       q.validUntil < todayUtc(),
+    orderId: q.orderId,
     orderNumber: q.order?.orderNumber ?? null,
     createdAt: q.createdAt.toISOString(),
   };

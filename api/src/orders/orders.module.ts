@@ -40,6 +40,7 @@ import { ReorderService } from './reorder.service.js';
     ReorderService,
   ],
   // Custom requests place an order when their quote is accepted.
-  exports: [CheckoutService],
+  // Quotations: a confirmed one cancelled cancels its order too.
+  exports: [CheckoutService, OrderStatusService],
 })
 export class OrdersModule {}

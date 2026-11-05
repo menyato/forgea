@@ -9,7 +9,7 @@ import {
   ORDER_STATUS_FLOW,
   ORDER_STATUS_LABELS,
 } from '@forgea/types';
-import { OrderStatus } from '../generated/prisma/enums.js';
+import { QuotationStatus, OrderStatus } from '../generated/prisma/enums.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { PrintJobsService } from '../print-jobs/print-jobs.service.js';
@@ -71,7 +71,16 @@ export class OrderStatusService {
       actorUserId,
       note ?? null,
       extra,
-      stock ? (tx) => this.stock.apply(tx, stock) : undefined,
+      async (tx) => {
+        if (stock) await this.stock.apply(tx, stock);
+        // A sales order from a quotation: cancelling it cancels the quotation (its history
+        // records who and why, like the order's).
+        if (to === OrderStatus.CANCELLED)
+          await tx.quotation.updateMany({
+            where: { orderId, status: QuotationStatus.CONFIRMED },
+            data: { status: QuotationStatus.CANCELLED },
+          });
+      },
     );
     if (!changed)
       throw new ConflictException(

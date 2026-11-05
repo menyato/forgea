@@ -21,7 +21,7 @@ import type { Route } from './+types/route';
 const LABELS: Record<QuotationStatus, string> = {
   DRAFT: 'Draft',
   SENT: 'Sent',
-  CONFIRMED: 'Confirmed',
+  CONFIRMED: 'Sales order',
   CANCELLED: 'Cancelled',
   DECLINED: 'Declined by the customer',
 };

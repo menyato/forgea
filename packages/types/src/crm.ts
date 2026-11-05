@@ -114,6 +114,8 @@ export interface QuotationListItem {
   total: Money;
   validUntil: string;
   expired: boolean;
+  /** Its sales order, once confirmed (kept when both are cancelled). */
+  orderId: string | null;
   orderNumber: string | null;
   createdAt: string;
 }
@@ -237,4 +239,13 @@ export interface AccountingSettingsView {
   salesTax: { id: string; name: string; ratePercent: string } | null;
   taxes: { id: string; name: string; ratePercent: string }[];
   lockDate: string | null;
+}
+
+/** What the studio already knows about someone, to fill a new quotation (staff only). */
+export interface QuotationContact {
+  name: string | null;
+  phone: string | null;
+  /** Their last delivery area and address, when they had something delivered. */
+  city: string | null;
+  addressLine: string | null;
 }
