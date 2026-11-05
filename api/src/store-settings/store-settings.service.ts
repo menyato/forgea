@@ -1,3 +1,5 @@
+import { deliveryArea } from '@forgea/types';
+import { BadRequestException } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import type { QuotationEmailSettings, StoreSettings } from '@forgea/types';
 import type {
@@ -30,6 +32,29 @@ export class StoreSettingsService {
       adminId,
     );
     return toView(row);
+  }
+
+  async updateDeliveryAreas(
+    areas: string[],
+    adminId: string,
+  ): Promise<StoreSettings> {
+    return toView(
+      await this.settings.updateDeliveryAreas(
+        areas.map((a) => a.trim()).filter(Boolean),
+        adminId,
+      ),
+    );
+  }
+
+  /**
+   * The area as the list writes it; 400 when the studio doesn't deliver there (checkout and
+   * quotations, so a typed or stale value can never slip through).
+   */
+  async requireDeliveryArea(city: string | null | undefined): Promise<string> {
+    const area = deliveryArea((await this.get()).deliveryAreas, city);
+    if (!area)
+      throw new BadRequestException('Choose the delivery area from the list');
+    return area;
   }
 
   async updateRequestRules(
@@ -76,6 +101,7 @@ function toView(row: StoreSettingsRow): StoreSettings {
     transferPhone: row.transferPhone,
     transferInstructions: row.transferInstructions,
     whatsappPhone: row.whatsappPhone,
+    deliveryAreas: row.deliveryAreas,
     requests: {
       quoteValidityDays: row.quoteValidityDays,
       depositRefundable: row.depositRefundable,

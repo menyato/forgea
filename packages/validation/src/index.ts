@@ -29,7 +29,7 @@ export {
   UpdateCartItemDto,
 } from './checkout.dto.js';
 export { ChangeOrderStatusDto, MyOrdersQuery } from './orders.dto.js';
-export { UpdateStoreSettingsDto } from './settings.dto.js';
+export { DeliveryAreasDto, UpdateStoreSettingsDto } from './settings.dto.js';
 export {
   AddTeamMemberDto,
   BulkDiscountTierDto,

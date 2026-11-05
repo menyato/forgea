@@ -29,6 +29,7 @@
     "@forgea/types": "workspace:*",
     "class-transformer": "catalog:",
     "class-validator": "catalog:",
+    "libphonenumber-js": "catalog:",
     "reflect-metadata": "catalog:"
   },
   "devDependencies": {

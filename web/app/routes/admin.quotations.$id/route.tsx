@@ -29,6 +29,7 @@ import {
 import { jsonField } from '~/lib/forms.server';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
+import { DeliveryAreaField } from '~/features/orders/delivery-area-field';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -298,12 +299,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
               />
               {delivery && (
                 <>
-                  <Field
-                    label="City or area"
-                    name="city"
-                    defaultValue={q?.city ?? undefined}
-                    error={errors['city']}
-                  />
+                  <DeliveryAreaField value={q?.city} error={errors['city']} />
                   <Field
                     label="Street, building, floor"
                     name="addressLine"

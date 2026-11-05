@@ -17,6 +17,8 @@ export interface StoreSettings {
   transferPhone: string;
   transferInstructions: string | null;
   whatsappPhone: string;
+  /** Where the studio delivers: the only choices at checkout and on quotations. */
+  deliveryAreas: string[];
   requests: RequestSettings;
 }
 
@@ -79,3 +81,12 @@ export function fillQuotationText(
 /** "12.5 × 8 × 4.2 cm": a printed size, width × depth × height. */
 export const formatSizeCm = (size: { x: string; y: string; z: string }) =>
   `${size.x} × ${size.y} × ${size.z} cm`;
+
+/** The area as the studio's list writes it, or null when it isn't one the studio delivers to. */
+export function deliveryArea(
+  areas: readonly string[],
+  typed: string | null | undefined,
+): string | null {
+  const t = typed?.trim().toLowerCase();
+  return (t && areas.find((a) => a.toLowerCase() === t)) || null;
+}

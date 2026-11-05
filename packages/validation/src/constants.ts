@@ -12,7 +12,6 @@ export const EMAIL_MAX_LENGTH = 254;
 
 export const CART_QUANTITY_MAX = 999;
 /** Lebanese and international numbers: digits, spaces, dashes, parentheses, optional leading +. */
-export const PHONE_PATTERN = /^\+?[0-9 ()-]{7,20}$/;
 
 /**
  * A positive decimal with up to 12 integer and 8 fractional digits, as a string so no

@@ -41,7 +41,7 @@ import {
   STATUS_NOTE_MAX_LENGTH,
   STORAGE_KEY_PATTERN,
 } from './constants.js';
-import { CommaList, NormalizeEmail, Trim } from './email.js';
+import { CommaList, NormalizeEmail, Trim, NoEmailTypo } from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
 
 const money = { message: 'Enter an amount, e.g. 12.50' };
@@ -164,6 +164,7 @@ const TEAM_ROLES = [Role.STAFF, Role.DESIGNER, Role.ADMIN] as const;
 export class AddTeamMemberDto {
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 
