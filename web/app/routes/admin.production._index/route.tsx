@@ -1,6 +1,7 @@
 import {
   type Page,
   PRINT_JOB_STATUS_LABELS,
+  type PrinterView,
   type PrintJobCounts,
   type PrintJobListItem,
   PrintJobStatus,
@@ -37,13 +38,20 @@ const BOARD = [
 
 const GROUPS = [
   { key: 'status', label: 'Status' },
-  { key: 'machine', label: 'Printer' },
+  { key: 'printer', label: 'Printer' },
   { key: 'day', label: 'Scheduled day' },
 ];
 
-/** A printer's filter key: its name, kept apart from the status keys. */
-const machineKey = (machine: string) =>
-  `printer:${encodeURIComponent(machine)}`;
+/** A printer's filter key: its id ("none": no printer yet), kept apart from the status keys. */
+const printerKey = (id: string) => `printer:${id}`;
+const NO_PRINTER = { id: 'none', name: 'No printer yet' };
+/** What a job prints, for its card and row. */
+const what = (j: PrintJobListItem) =>
+  `${j.quantity} × ${j.item?.name ?? 'print'}`;
+const reel = (j: PrintJobListItem) =>
+  j.reel
+    ? `${j.reel.material} · ${j.reel.colour || 'no colour'}`
+    : 'Reel not chosen';
 
 const DAY = studioFormat({
   weekday: 'short',
@@ -60,20 +68,29 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const state = listState(url.searchParams, DEFAULTS);
   const kanban = state.view === 'kanban';
-  const counted = await api.get<PrintJobCounts>('/print-jobs/counts');
+  const [counted, listed] = await Promise.all([
+    api.get<PrintJobCounts>('/print-jobs/counts'),
+    api.get<PrinterView[]>('/printers'),
+  ]);
   const counts: PrintJobCounts = counted.ok
     ? counted.data
-    : { statuses: {}, machines: {} };
-  const machines = Object.keys(counts.machines).sort((a, b) =>
-    a.localeCompare(b),
-  );
+    : { statuses: {}, printers: {} };
+  // Printers with jobs, by name; jobs with no printer yet as one more.
+  const printers = [
+    ...(listed.ok ? listed.data : [])
+      .filter((p) => counts.printers[p.id])
+      .map((p) => ({ id: p.id, name: p.name })),
+    ...(counts.printers['none'] ? [NO_PRINTER] : []),
+  ];
   // The API takes one status and one printer at a time: the filters are alternatives.
   const status = PRINT_JOB_ORDER.find((s) => state.filters.includes(s));
-  const machine = machines.find((m) => state.filters.includes(machineKey(m)));
+  const printer = printers.find((m) =>
+    state.filters.includes(printerKey(m.id)),
+  );
 
   const query = pageQuery(state, kanban ? 100 : 50);
   if (status) query.set('status', status);
-  if (machine) query.set('machine', machine);
+  if (printer) query.set('printer', printer.id);
   const r = await api.get<Page<PrintJobListItem>>(`/print-jobs?${query}`);
   if (!r.ok) throw new Response(r.message, { status: r.status });
 
@@ -82,16 +99,16 @@ export async function loader({ url, context }: Route.LoaderArgs) {
     state,
     jobs: r.data,
     counts,
-    machines,
+    printers,
     // What the pager can promise: known for one filter at a time, not for a search.
     total: state.q
       ? undefined
-      : status && machine
+      : status && printer
         ? undefined
         : status
           ? (counts.statuses[status] ?? 0)
-          : machine
-            ? counts.machines[machine]
+          : printer
+            ? counts.printers[printer.id]
             : all,
     columns: status ? [status] : [...BOARD],
   };
@@ -105,6 +122,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   // Scheduling needs a day and a time: dropped on Scheduled, the job's page opens to pick them.
   if (to === PrintJobStatus.SCHEDULED && /^[0-9a-f-]{36}$/.test(id))
     throw redirect(`/admin/production/${id}?plan=1`);
+  // Done needs what it really took: dropped on Done, the job's page asks for it.
+  if (to === PrintJobStatus.DONE && /^[0-9a-f-]{36}$/.test(id))
+    throw redirect(`/admin/production/${id}?finish=1`);
   return save(UpdatePrintJobDto, { status: to }, (dto) =>
     context.get(apiContext).patch(`/print-jobs/${encodeURIComponent(id)}`, dto),
   );
@@ -116,19 +136,39 @@ const COLUMNS: ListColumn<PrintJobListItem>[] = [
     label: 'Order',
     cell: (j) => <span className="font-mono">{j.orderNumber}</span>,
   },
+  { key: 'what', label: 'Prints', cell: what },
   {
-    key: 'material',
-    label: 'Material',
-    cell: (j) => `${j.material} · ${j.color}`,
+    key: 'reel',
+    label: 'Reel',
+    cell: (j) => <span className={j.reel ? '' : 'text-danger'}>{reel(j)}</span>,
   },
   {
     key: 'grams',
     label: 'Grams',
     align: 'right',
-    cell: (j) => `${j.grams} g`,
+    cell: (j) => (j.actualGrams ? `${j.actualGrams} g used` : `${j.grams} g`),
   },
-  { key: 'hours', label: 'Hours', align: 'right', cell: (j) => `${j.hours} h` },
-  { key: 'machine', label: 'Printer', cell: (j) => j.machine },
+  {
+    key: 'hours',
+    label: 'Hours',
+    align: 'right',
+    cell: (j) => (j.actualHours ? `${j.actualHours} h taken` : `${j.hours} h`),
+  },
+  {
+    key: 'printer',
+    label: 'Printer',
+    cell: (j) => (
+      <span className={j.printer ? '' : 'text-danger'}>
+        {j.printer?.name ?? 'Not chosen'}
+      </span>
+    ),
+  },
+  {
+    key: 'cost',
+    label: 'Real cost',
+    align: 'right',
+    cell: (j) => (j.cost ? `$${j.cost.total}` : '—'),
+  },
   {
     key: 'scheduled',
     label: 'Scheduled',
@@ -160,7 +200,7 @@ const COLUMNS: ListColumn<PrintJobListItem>[] = [
 const href = (j: PrintJobListItem) => `/admin/production/${j.id}`;
 
 export default function Production({ loaderData }: Route.ComponentProps) {
-  const { state, jobs, counts, machines, total, columns } = loaderData;
+  const { state, jobs, counts, printers, total, columns } = loaderData;
   const mayWork = useCan()('production.manage');
   const filters: ListFilter[] = [
     ...PRINT_JOB_ORDER.map((s) => ({
@@ -169,10 +209,10 @@ export default function Production({ loaderData }: Route.ComponentProps) {
       count: counts.statuses[s] ?? 0,
       only: 'status',
     })),
-    ...machines.map((m) => ({
-      key: machineKey(m),
-      label: m,
-      count: counts.machines[m],
+    ...printers.map((m) => ({
+      key: printerKey(m.id),
+      label: m.name,
+      count: counts.printers[m.id],
       only: 'printer',
     })),
   ];
@@ -180,9 +220,12 @@ export default function Production({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         title="Production"
-        intro="Print runs for each order: plan them on a printer and a day, move them along as they print (drag a card on the kanban). Scheduled runs also appear on the studio's Google Calendar; a failed print takes its filament out of stock."
+        intro="A print run for each order line, made by itself when the order goes into production. Choose the printer and the reel, schedule it, and when it is done enter the grams and hours it really took: stock follows, and its real cost (filament, electricity, printer wear) goes on the order. Scheduled runs also appear on the studio's Google Calendar."
         action={
           <span className="flex flex-wrap gap-2">
+            <Link to="/admin/printers" className={buttonClass('secondary')}>
+              Printers
+            </Link>
             <Link
               to="/admin/production/calendar"
               className={buttonClass('secondary')}
@@ -199,7 +242,7 @@ export default function Production({ loaderData }: Route.ComponentProps) {
       />
       <ControlPanel
         state={state}
-        search="Order number, printer or colour"
+        search="Order number, item, printer or colour"
         filters={filters}
         groups={GROUPS}
         views={['kanban', 'list']}
@@ -225,11 +268,15 @@ export default function Production({ loaderData }: Route.ComponentProps) {
           title={(j) => j.orderNumber}
           card={(j) => (
             <>
+              <span>{what(j)}</span>
               <span className="text-text-muted">
-                {j.grams} g {j.material} · {j.color} · {j.hours} h
+                {reel(j)} · {j.actualGrams ?? j.grams} g ·{' '}
+                {j.actualHours ?? j.hours} h
               </span>
               <span className="flex justify-between gap-2 text-text-muted">
-                <span>{j.machine}</span>
+                <span className={j.printer ? '' : 'text-danger'}>
+                  {j.printer?.name ?? 'No printer yet'}
+                </span>
                 {j.scheduledDate && <span>{day(j.scheduledDate)}</span>}
               </span>
             </>
@@ -249,8 +296,11 @@ export default function Production({ loaderData }: Route.ComponentProps) {
                   of: (j) => PRINT_JOB_STATUS_LABELS[j.status],
                   order: PRINT_JOB_ORDER.map((s) => PRINT_JOB_STATUS_LABELS[s]),
                 }
-              : state.group === 'machine'
-                ? { of: (j) => j.machine, order: machines }
+              : state.group === 'printer'
+                ? {
+                    of: (j) => j.printer?.name ?? NO_PRINTER.name,
+                    order: printers.map((m) => m.name),
+                  }
                 : state.group === 'day'
                   ? {
                       of: (j) => day(j.scheduledDate),

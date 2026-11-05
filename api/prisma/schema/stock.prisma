@@ -20,6 +20,7 @@ model StockItem {
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   movements StockMovement[]
+  printJobs PrintJob[]
 
   @@unique([materialId, colour])
   @@map("stock_items")
@@ -38,6 +39,9 @@ enum StockMovementKind {
   USED
   /// Stock counted or weighed: the difference, either way.
   CORRECTION
+  /// A finished print job: what it took beyond (or short of) its order's estimate, either way;
+  /// all of it for a job that isn't an order line.
+  PRINTED
 }
 
 /// Append-only (a trigger refuses changes): every gram in or out, with why and who.

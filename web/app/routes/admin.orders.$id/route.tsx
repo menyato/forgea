@@ -1,7 +1,9 @@
 import {
   ORDER_STATUS_LABELS,
   OrderStatus,
+  type Page,
   PAYMENT_METHOD_LABELS,
+  type PrintJobListItem,
   type StaffOrder,
 } from '@forgea/types';
 import { ChangeOrderStatusDto, RecordPaymentDto } from '@forgea/validation';
@@ -19,15 +21,20 @@ import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
+import { ProductionPanel } from './production-panel';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [r, related] = await Promise.all([
+  const [r, related, jobs] = await Promise.all([
     api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
     relatedOf(api, 'order', params.id),
+    // Only for staff who run production (others get a 403 and no panel).
+    api.get<Page<PrintJobListItem>>(
+      `/print-jobs?limit=100&orderId=${encodeURIComponent(params.id)}`,
+    ),
   ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { order: r.data, related };
+  return { order: r.data, related, jobs: jobs.ok ? jobs.data.items : null };
 }
 
 /** status (the next step) | deposit-invoice | final-invoice | payment */
@@ -273,6 +280,13 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
               </p>
             )}
           </Panel>
+          {loaderData.jobs && (
+            <ProductionPanel
+              jobs={loaderData.jobs}
+              orderId={o.id}
+              total={o.total}
+            />
+          )}
         </div>
 
         <div className="grid content-start gap-6">

@@ -6,17 +6,26 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
-import type { Page, PrintJobCounts, PrintJobListItem } from '@forgea/types';
+import type {
+  Page,
+  PrinterView,
+  PrintJobCounts,
+  PrintJobListItem,
+} from '@forgea/types';
 import {
   CreatePrintJobDto,
   PrintJobListQuery,
+  SavePrinterDto,
   UpdatePrintJobDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { RequirePermission } from '../authorization/decorators.js';
+import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
+import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import { PrintJobsService } from './print-jobs.service.js';
+import { PrintersService } from './printers.service.js';
 
 /** The production planner, for staff and admins. Changes are audit-logged. */
 @RequirePermission('production.manage')
@@ -50,7 +59,40 @@ export class PrintJobsController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePrintJobDto,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<PrintJobListItem> {
-    return this.jobs.update(id, dto);
+    return this.jobs.update(id, dto, user.id);
+  }
+}
+
+/** The studio's printers: chosen on every print job. Staff with production may change them. */
+@RequirePermission('production.manage')
+@Controller('printers')
+export class PrintersController {
+  constructor(private readonly printers: PrintersService) {}
+
+  @Get()
+  list(): Promise<PrinterView[]> {
+    return this.printers.list();
+  }
+
+  @Get(':id')
+  one(@Param('id', ParseUUIDPipe) id: string): Promise<PrinterView> {
+    return this.printers.one(id);
+  }
+
+  @Audit({ action: 'printer.create', targetType: 'Printer', resultKey: 'id' })
+  @Post()
+  create(@Body() dto: SavePrinterDto): Promise<PrinterView> {
+    return this.printers.save(null, dto);
+  }
+
+  @Audit({ action: 'printer.update', targetType: 'Printer' })
+  @Put(':id')
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SavePrinterDto,
+  ): Promise<PrinterView> {
+    return this.printers.save(id, dto);
   }
 }

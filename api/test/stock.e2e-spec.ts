@@ -7,6 +7,7 @@ import type {
   StockPrintable,
 } from '@forgea/types';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
@@ -210,7 +211,7 @@ describe('Filament stock (e2e)', () => {
     ).rejects.toThrow();
   });
 
-  it('a failed print loses its filament; a finished one changes nothing', async () => {
+  it('a failed print loses its filament; a finished one moves only the difference', async () => {
     const customer = await signedInCustomer(app);
     const order = await placeOrder(
       app,
@@ -224,25 +225,49 @@ describe('Filament stock (e2e)', () => {
       'IN_PRODUCTION',
     ]);
     const red = (await line('Red')).stockGrams;
-    const job = async (status: 'DONE' | 'FAILED') => {
-      const created = await as(staff.cookie)
-        .post('/print-jobs', {
-          orderId: order.id,
-          materialId: studio.material.id,
-          color: 'Red',
-          grams: '12.3',
-          hours: '1',
-          machine: 'Printer 1',
-        })
-        .expect(201);
-      for (const step of ['PRINTING', status])
-        await as(staff.cookie)
-          .patch(`/print-jobs/${created.body.id}`, { status: step })
-          .expect(200);
-    };
-    await job('DONE');
+    // Going into production planned the line's print by itself, from its red reel.
+    const planned = await as(staff.cookie)
+      .get(`/print-jobs?orderId=${order.id}`)
+      .expect(200);
+    expect(planned.body.items).toHaveLength(1);
+    const auto = planned.body.items[0];
+    expect(auto).toMatchObject({
+      status: 'QUEUED',
+      quantity: 1,
+      reel: { colour: 'Red' },
+    });
+    const printer = await as(staff.cookie)
+      .post('/printers', {
+        name: `Stock ${randomUUID().slice(0, 8)}`,
+        watts: 150,
+        active: true,
+      })
+      .expect(201);
+    await as(staff.cookie)
+      .patch(`/print-jobs/${auto.id}`, { printerId: printer.body.id })
+      .expect(200);
+    for (const body of [
+      { status: 'PRINTING' },
+      // Exactly the 100 g the order took: nothing more moves.
+      { status: 'DONE', actualGrams: '100', actualHours: '1' },
+    ])
+      await as(staff.cookie).patch(`/print-jobs/${auto.id}`, body).expect(200);
     expect((await line('Red')).stockGrams).toBe(red);
-    await job('FAILED');
+    // A reprint that failed: what it used is lost.
+    const failed = await as(staff.cookie)
+      .post('/print-jobs', {
+        orderId: order.id,
+        printerId: printer.body.id,
+        stockItemId: auto.reel.id,
+        quantity: 1,
+        grams: '12.3',
+        hours: '1',
+      })
+      .expect(201);
+    for (const step of ['PRINTING', 'FAILED'])
+      await as(staff.cookie)
+        .patch(`/print-jobs/${failed.body.id}`, { status: step })
+        .expect(200);
     // 12.3 g rounds up to 13 g.
     expect((await line('Red')).stockGrams).toBe(red - 13);
   });

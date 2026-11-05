@@ -87,17 +87,33 @@ describe('Emails and the production planner (e2e)', () => {
     const order = await prisma.order.findFirstOrThrow({
       orderBy: { createdAt: 'desc' },
     });
-    const pla = await prisma.material.update({
+    const pla = await prisma.material.findUniqueOrThrow({
       where: { code: 'PLA' },
-      data: { stockGrams: 1000 },
     });
+    const reel = await prisma.stockItem.upsert({
+      where: { materialId_colour: { materialId: pla.id, colour: 'Black' } },
+      create: { materialId: pla.id, colour: 'Black', lowStockGrams: 100 },
+      update: { active: true },
+    });
+    const printer = await http()
+      .post('/printers')
+      .set(CSRF)
+      .set('Cookie', staff.cookie)
+      .send({
+        name: `Notify ${randomUUID().slice(0, 8)}`,
+        watts: 200,
+        priceUsd: '500',
+        lifeHours: 5000,
+        active: true,
+      })
+      .expect(201);
     const job = {
       orderId: order.id,
-      materialId: pla.id,
-      color: 'Black',
+      stockItemId: reel.id,
+      printerId: printer.body.id as string,
+      quantity: 1,
       grams: '60.4',
       hours: '3',
-      machine: 'Printer 1',
     };
     const as = (cookie: string) => ({
       post: (url: string, body: object) =>
@@ -121,20 +137,35 @@ describe('Emails and the production planner (e2e)', () => {
       .expect(200);
     expect(scheduled.body.status).toBe('SCHEDULED');
     await as(staff.cookie)
-      .patch(`/print-jobs/${id}`, { status: 'DONE' })
-      .expect(400);
-    await as(staff.cookie)
       .patch(`/print-jobs/${id}`, { status: 'PRINTING' })
       .expect(200);
+    // Finishing needs what it really used.
     await as(staff.cookie)
       .patch(`/print-jobs/${id}`, { status: 'DONE' })
+      .expect(400);
+    const done = await as(staff.cookie)
+      .patch(`/print-jobs/${id}`, {
+        status: 'DONE',
+        actualGrams: '61.2',
+        actualHours: '2.5',
+      })
       .expect(200);
-    const after = await prisma.material.findUniqueOrThrow({
-      where: { id: pla.id },
+    // Not one of the order's lines: all it used comes off the reel (rounded up).
+    const printed = await prisma.stockMovement.findFirstOrThrow({
+      where: { printJobId: id },
     });
-    // A finished print leaves stock as it is: its order took the filament when it went into
-    // production (failed prints are covered in stock.e2e-spec.ts).
-    expect(after.stockGrams).toBe(pla.stockGrams);
+    expect(printed).toMatchObject({
+      kind: 'PRINTED',
+      grams: -62,
+      stockItemId: reel.id,
+    });
+    // Its real cost: 0.5 kWh of electricity and $0.25 of wear (500 / 5000 × 2.5 h).
+    expect(Number(done.body.cost.electricityKwh)).toBe(0.5);
+    expect(done.body.cost.wear).toBe('0.25');
+    // A finished job can't change.
+    await as(staff.cookie)
+      .patch(`/print-jobs/${id}`, { actualGrams: '70' })
+      .expect(409);
     await as(staff.cookie)
       .patch(`/print-jobs/${id}`, { status: 'QUEUED' })
       .expect(400);

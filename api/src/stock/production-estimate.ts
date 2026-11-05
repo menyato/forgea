@@ -44,6 +44,8 @@ export interface ItemEstimate {
   /** Cost before markup, USD, estimated with today's pricing settings. */
   unitCost: string;
   gramsPerUnit: string;
+  /** Print time for one piece (hours): the print jobs' estimate. */
+  hoursPerUnit: string;
   materialId: string;
   /** The chosen colour (a value with a swatch); "" when none. */
   colour: string;
@@ -105,7 +107,7 @@ export function estimateItem(
   const pricePerGram = catalog.pricePerGram.get(product.materialId);
   if (pricePerGram === undefined) return null;
   try {
-    const { cost, grams } = configuredUnitCost(
+    const { cost, grams, hours } = configuredUnitCost(
       calculator,
       {
         grams: size?.grams ?? product.grams,
@@ -114,7 +116,13 @@ export function estimateItem(
       },
       effects,
     );
-    return { unitCost: cost, gramsPerUnit: grams, materialId, colour };
+    return {
+      unitCost: cost,
+      gramsPerUnit: grams,
+      hoursPerUnit: hours,
+      materialId,
+      colour,
+    };
   } catch (error) {
     if (error instanceof PricingError) return null;
     throw error;

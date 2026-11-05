@@ -131,11 +131,15 @@ export class PrintJobListQuery extends CursorPageQuery {
   @IsIn(Object.values(PrintJobStatus))
   status?: PrintJobStatus;
 
+  /** One printer's jobs ("none": jobs with no printer yet). */
   @IsOptional()
-  @Trim()
-  @IsString()
-  @MaxLength(50)
-  machine?: string;
+  @Matches(/^([0-9a-f-]{36}|none)$/)
+  printer?: string;
+
+  /** One order's jobs (its page shows them, with their costs). */
+  @IsOptional()
+  @IsUUID()
+  orderId?: string;
 
   /** Scheduled on or after (ISO 8601) — the production calendar's visible range. */
   @IsOptional()

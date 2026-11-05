@@ -97,6 +97,7 @@ model OrderItem {
   design    Json?
 
   stockMovements StockMovement[]
+  printJobs      PrintJob[]
 
   @@index([orderId])
   @@map("order_items")

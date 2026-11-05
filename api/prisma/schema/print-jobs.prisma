@@ -7,19 +7,38 @@ enum PrintJobStatus {
   CANCELLED
 }
 
-/// One print run on one machine. Powers the production planner (calendar + kanban).
+/// One print run: one order item (or studio work), on one printer, from one reel. Made by
+/// itself when its order goes into production; it can't start without a printer and a reel,
+/// and finishing it records what it really took (grams, hours) and what that cost.
 model PrintJob {
   id              String         @id @default(uuid(7)) @db.Uuid
   orderId         String         @db.Uuid
   order           Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  materialId      String         @db.Uuid
-  material        Material       @relation(fields: [materialId], references: [id], onDelete: Restrict)
-  color           String
+  /// The order line it prints; null for work that isn't one line (added by hand).
+  orderItemId     String?        @db.Uuid
+  orderItem       OrderItem?     @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  /// The printer, chosen from the studio's printers (required to schedule or start it).
+  printerId       String?        @db.Uuid
+  printer         Printer?       @relation(fields: [printerId], references: [id], onDelete: Restrict)
+  /// The reel: a material and colour from stock (required to schedule or start it).
+  stockItemId     String?        @db.Uuid
+  stockItem       StockItem?     @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  /// Pieces this run makes.
+  quantity        Int            @default(1)
+  /// The estimate (the product's grams and hours × the pieces).
   grams           Decimal        @db.Decimal(10, 2)
   hours           Decimal        @db.Decimal(8, 2)
-  machine         String
   scheduledDate   DateTime?      @db.Timestamptz(3)
   status          PrintJobStatus @default(QUEUED)
+  /// What it really took, recorded when it is done (or the grams lost when it failed).
+  actualGrams     Decimal?       @db.Decimal(10, 2)
+  actualHours     Decimal?       @db.Decimal(8, 2)
+  finishedAt      DateTime?      @db.Timestamptz(3)
+  /// Its real cost when finished, with that day's prices: filament, electricity, printer wear.
+  materialCost    Decimal?       @db.Decimal(12, 2)
+  electricityKwh  Decimal?       @db.Decimal(10, 3)
+  electricityCost Decimal?       @db.Decimal(12, 2)
+  wearCost        Decimal?       @db.Decimal(12, 2)
   /// The event on the studio's Google Calendar while the job is scheduled (Phase 9).
   calendarEventId String?
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
@@ -30,5 +49,27 @@ model PrintJob {
   @@index([status, id])
   @@index([scheduledDate])
   @@index([orderId])
+  @@index([orderItemId])
+  @@index([printerId])
   @@map("print_jobs")
+}
+
+/// A printer of the studio: its power gives each job's electricity, its price over its
+/// expected print hours gives its wear per hour.
+model Printer {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique
+  /// Average draw while printing.
+  watts     Int
+  /// What it cost (USD) and how many print hours it should last; both or neither.
+  priceUsd  Decimal? @db.Decimal(10, 2)
+  lifeHours Int?
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  jobs PrintJob[]
+
+  @@map("printers")
 }

@@ -64,6 +64,7 @@ function toStaffOrder(o: StaffOrderRow): Omit<StaffOrder, 'invoices'> {
     addressLine: o.addressLine,
     deliveryNotes: o.deliveryNotes,
     items: o.items.map((i) => ({
+      id: i.id,
       name: i.name,
       quantity: i.quantity,
       unitPrice: i.unitPrice.toFixed(2),

@@ -18,6 +18,7 @@ export const STOCK_MOVEMENT_LABELS: Readonly<
   FAILED_PRINT: 'Failed print',
   USED: 'Printed for the studio',
   CORRECTION: 'Count correction',
+  PRINTED: 'Print finished (actual use)',
 };
 
 /** One material in one colour (GET /stock): what is left, how fast it goes, what to buy. */
@@ -35,7 +36,7 @@ export interface StockItemView {
   stockGrams: number;
   /** What orders not yet in production will take (estimated from their products). */
   committedGrams: number;
-  /** stockGrams − committedGrams. */
+  /** stockGrams âˆ’ committedGrams. */
   availableGrams: number;
   used30Grams: number;
   used90Grams: number;
@@ -64,7 +65,7 @@ export interface StockMovementView {
   kind: StockMovementKind;
   /** The stock line it moved (its page). */
   stockItemId: string;
-  /** + in, − out. */
+  /** + in, âˆ’ out. */
   grams: number;
   materialCode: string;
   colour: string;
@@ -103,7 +104,7 @@ export interface StockPrintable {
   id: string;
   name: string;
   materialCode: string;
-  /** Its sizes by measurements ("18 × 12 × 9 cm"); empty when it has one size. */
+  /** Its sizes by measurements ("18 Ã— 12 Ã— 9 cm"); empty when it has one size. */
   sizes: string[];
   /** The colours it is offered in (labels), with swatches. */
   colours: { label: string; swatchHex: string | null }[];

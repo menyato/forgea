@@ -279,15 +279,19 @@ export class StockRepository {
     const rows = await this.prisma.$queryRaw<
       { kind: string; grams: number; cost: Prisma.Decimal }[]
     >`
-      SELECT s.kind, abs(sum(s.grams))::int AS grams,
-             coalesce(sum(coalesce(s.cost, abs(s.grams) * coalesce(s."costPerGram", m."pricePerGram"))), 0)
+      -- A finished print's difference counts with its order's filament (what it really used):
+      -- more taken adds to it, any given back takes from it.
+      SELECT CASE WHEN s.kind = 'PRINTED' THEN 'ORDER' ELSE s.kind::text END AS kind,
+             abs(sum(s.grams))::int AS grams,
+             coalesce(sum(coalesce(s.cost, abs(s.grams) * coalesce(s."costPerGram", m."pricePerGram"))
+               * CASE WHEN s.kind = 'PRINTED' AND s.grams > 0 THEN -1 ELSE 1 END), 0)
                ::decimal(12, 2) AS cost
       FROM stock_movements s
       JOIN stock_items i ON i.id = s."stockItemId"
       JOIN materials m ON m.id = i."materialId"
-      WHERE s.kind IN ('RECEIVED', 'ORDER', 'USED', 'FAILED_PRINT')
+      WHERE s.kind IN ('RECEIVED', 'ORDER', 'USED', 'FAILED_PRINT', 'PRINTED')
         AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
-      GROUP BY s.kind
+      GROUP BY 1
     `;
     return new Map(rows.map((r) => [r.kind, r]));
   }

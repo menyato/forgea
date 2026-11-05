@@ -12,6 +12,7 @@ import {
 import { OrderStatus } from '../generated/prisma/enums.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
+import { PrintJobsService } from '../print-jobs/print-jobs.service.js';
 import { OrderStock } from '../stock/order-stock.service.js';
 import { OrdersRepository } from './orders.repository.js';
 
@@ -32,6 +33,7 @@ export class OrderStatusService {
     private readonly notifications: Notifications,
     private readonly invoicing: Invoicing,
     private readonly stock: OrderStock,
+    private readonly printJobs: PrintJobsService,
   ) {}
 
   async change(
@@ -76,6 +78,9 @@ export class OrderStatusService {
         'Someone else just changed this order. Reload and try again.',
       );
     // The invoices and payments that follow (deposit received, delivered); never blocks this.
+    // Going into production: a print job for each line (never blocks the change).
+    if (to === OrderStatus.IN_PRODUCTION)
+      await this.printJobs.createForOrder(orderId);
     await this.invoicing.onOrderStatus(orderId, order.status, to, actorUserId);
     const contact = await this.orders.contactOf(orderId);
     if (contact) {
