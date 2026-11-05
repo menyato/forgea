@@ -10,7 +10,7 @@ param(
   [string]$Key = "$env:USERPROFILE\.ssh\forgea_backups"
 )
 $ErrorActionPreference = 'Stop'
-$pattern = '^(production|staging)/(forgea-(production|staging)-\d{4}-\d{2}-\d{2}-\d{6}(-[a-z]{1,20}(-[a-z]{1,20})?)?\.tar) (\d+)$'
+$pattern = '^(?<env>production|staging)/(?<file>forgea-(production|staging)-\d{4}-\d{2}-\d{2}-\d{6}(-[a-z]{1,20}(-[a-z]{1,20})?)?\.tar) (?<size>\d+)$'
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $log = Join-Path $Destination 'pull.log'
 function Log([string]$line) {
@@ -24,7 +24,9 @@ try {
   $copied = 0
   foreach ($line in $list) {
     if ($line -notmatch $pattern) { continue }
-    $envName = $Matches[1]; $file = $Matches[2]; $size = [long]$Matches[7]
+    $envName = $Matches['env']; $file = $Matches['file']; $size = [long]$Matches['size']
+    # The file must belong to the environment it is listed under.
+    if (-not $file.StartsWith("forgea-$envName-")) { continue }
     $folder = Join-Path $Destination $envName
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $target = Join-Path $folder $file
