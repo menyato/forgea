@@ -55,6 +55,9 @@ export default defineConfig({
         UPLOAD_DIR: '.uploads-test',
         // Emails as files the tests read (browser/mail.ts).
         MAIL_OUTBOX_DIR: '.outbox-browser',
+        // The Backups page reads these (browser/backups.spec.ts fills them).
+        BACKUP_DIR: '.backups-browser/backups',
+        BACKUP_REQUEST_DIR: '.backups-browser/requests',
         PUBLIC_WEB_URL: WEB,
         PUBLIC_API_URL: API,
         INTERNAL_PROXY_SECRET: PROXY_SECRET,

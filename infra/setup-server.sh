@@ -45,6 +45,10 @@ EOF
 # deploy/README.md step 7), which can only ask forgea-deploy for an image tag. No shell, no
 # sudo of its own, not in the docker group.
 id ci >/dev/null 2>&1 || useradd --create-home --shell /bin/sh ci
+# The PC that keeps copies of the backups: its key only lists and sends them
+# (forgea-backup-serve, forced in authorized_keys; see deploy/README.md, "Backups on your PC").
+id backups >/dev/null 2>&1 || useradd --create-home --shell /bin/sh backups
+apt-get install -y acl >/dev/null
 passwd --lock ci >/dev/null
 # Its keys file belongs to root: even a ci session that escaped the gate couldn't change it.
 install -d -o root -g root -m 755 /home/ci/.ssh
@@ -90,6 +94,8 @@ fi
 
 install -d -o deploy -g deploy -m 0750 /srv/forgea /srv/forgea/edge \
   /srv/forgea/production /srv/forgea/staging
+# The backups account passes through to each environment's backups (sync-config.sh) only.
+setfacl -m u:backups:x /srv/forgea
 # The certificates belong to root alone: Caddy reads them as root (with no other powers), and
 # nobody else on the server can (deploy/README.md, step 4, copies them in with sudo).
 install -d -o root -g root -m 0700 /srv/forgea/edge/certs
@@ -115,9 +121,31 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+# The Backups page's requests (back up now, restore, delete), run as soon as one arrives.
+cat >/etc/systemd/system/forgea-backup-requests@.service <<'EOF'
+[Unit]
+Description=Forgea backup requests from the dashboard (%i)
+After=docker.service
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/srv/forgea/%i/backup.sh process
+EOF
+cat >/etc/systemd/system/forgea-backup-requests@.path <<'EOF'
+[Unit]
+Description=Forgea backup requests from the dashboard (%i)
+[Path]
+DirectoryNotEmpty=/srv/forgea/%i/backup-requests/queue
+MakeDirectory=true
+DirectoryMode=0770
+[Install]
+WantedBy=paths.target
+EOF
+
 systemctl daemon-reload
 systemctl enable --now fail2ban
 systemctl enable forgea-backup@production.timer forgea-backup@staging.timer
+systemctl enable forgea-backup-requests@production.path forgea-backup-requests@staging.path
 systemctl restart ssh
 
 echo "Done. From now on log in as: ssh deploy@<server IP>  (root login is off)"

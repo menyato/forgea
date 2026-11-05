@@ -167,6 +167,19 @@ export class EnvironmentVariables {
   @IsString()
   GOOGLE_CALENDAR_ID?: string;
 
+  /**
+   * The Backups page (set by deploy/app/compose.yaml on the server): the backups folder,
+   * mounted read-only, and where requests for backup.sh are left. Unset: the page says
+   * backups aren't set up here (development, tests).
+   */
+  @IsOptional()
+  @IsString()
+  BACKUP_DIR?: string;
+
+  @IsOptional()
+  @IsString()
+  BACKUP_REQUEST_DIR?: string;
+
   /** Where the studio's alerts go (new orders, requests, leads); defaults to MAIL_SENDER. */
   @IsOptional()
   @Matches(/^[^@\s]+@[^@\s]+$/)

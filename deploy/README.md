@@ -23,7 +23,7 @@ Server layout:
 
 ```
 /srv/forgea/edge/        Caddy: compose.yaml, Caddyfile, certs/ (only changed by deploy/sync-config.sh)
-/srv/forgea/production/  compose.yaml, backup.sh, .env, api.env, web.env, migrate.env, db.env, backup.env, backup-key.json
+/srv/forgea/production/  compose.yaml, backup.sh, .env, api.env, web.env, migrate.env, db.env, backup.env, backups/
 /srv/forgea/staging/     the same files, staging's values
 ```
 
@@ -172,17 +172,9 @@ Credentials → Create credentials → OAuth client ID → Web application):
 Each environment's `api.env` gets its own client ID and secret, so staging never holds
 production's.
 
-**Backups:** Google Cloud console → Cloud Storage → two buckets, `forgea-backups-production` and
-`forgea-backups-staging`:
-
-- region europe-west3, Standard class, **public access prevention on**;
-- **Protection → Soft delete: 30 days**. Anything deleted (by mistake, or by someone who broke
-  into the server with its key) can be recovered for 30 days.
-
-IAM → one service account per bucket with the role **Storage Object Admin on that bucket only**
-→ Keys → JSON → copy each to its environment as `/srv/forgea/<env>/backup-key.json`
-(`chmod 600`), then delete them from your laptop. Keep each restic password in a password
-manager too: without it the backups can't be read.
+**Backups:** nothing to set up outside the server: each environment keeps its own encrypted
+backups (see "Backups" below) and your PC keeps copies. Put a long random `BACKUP_PASSWORD` in
+each `backup.env` and keep it in a password manager too: without it the backups can't be read.
 
 Optional but recommended: a free check on <https://healthchecks.io> per environment (daily,
 1 hour grace); put its ping URL in `backup.env` as `HEALTHCHECK_URL`. It emails you if a night's
@@ -282,26 +274,41 @@ catalog there the same way (in `/srv/forgea/production`).
 | Front door logs | `cd /srv/forgea/edge && docker compose logs -f caddy` |
 | Back up now | `/srv/forgea/production/backup.sh` (runs by itself every night, both environments) |
 
-## Restore from a backup
+## Backups
 
-Each night makes two snapshots: the database (`forgea.dump`) and the uploaded files.
+Every night (03:30, server time) each environment saves its database and every uploaded file
+into one file in `/srv/forgea/<env>/backups`, encrypted on the server with `BACKUP_PASSWORD`
+(`backup.env`; keep it in your password manager: without it no backup can be read). The newest
+5 are kept (change it on the dashboard). Nothing is sent to a cloud service, nothing costs money.
+
+**Dashboard → Settings → Backups** (admins only) shows the server's disk, every backup, and:
+**Back up now**, **Download** (to your PC), **Restore** (type the environment's name; a backup
+of the current state is made first, so a wrong restore can be undone; the shop pauses about a
+minute and sessions may end) and **Delete**. The website only *reads* the backups folder: it
+asks the server for these by leaving a request (`backup-requests/queue`) that `backup.sh`
+checks and carries out, so the website can never alter or remove a backup by itself.
+
+By hand on the server (as `deploy`): `./backup.sh list`, `./backup.sh now`,
+`./backup.sh restore <file>`, `./backup.sh delete <file>`.
+
+### Backups on your PC
+
+A scheduled task copies new backups to `C:\Files\Backups\Forgea\<env>` and keeps the newest 5
+there (`deploy/pc/forgea-pull-backups.ps1`, log in `pull.log`). It uses its own key
+(`~/.ssh/forgea_backups`) that the server lets do nothing but list and send backups
+(`forgea-backup-serve`, account `backups`); the files are encrypted, so the key reveals no data.
+
+### Restore on a new server
+
+Copy a backup to `/srv/forgea/<env>/backups/` (as `deploy`, after setting the server up and
+putting the same `backup.env` back), then `./backup.sh restore <file>`.
+
+### Open a backup on your PC (Git Bash)
 
 ```sh
-ssh deploy@<IP> && cd /srv/forgea/production
-./backup.sh snapshots                         # note the IDs of the night you want
-restic_run() {
-  docker run --rm -i --env-file backup.env -e GOOGLE_APPLICATION_CREDENTIALS=/key.json \
-    -v "$PWD/backup-key.json:/key.json:ro" -v "$PWD/restore:/restore" \
-    restic/restic:0.18.0 "$@"
-}
-docker compose stop web api
-restic_run dump <database snapshot ID> /forgea.dump |
-  docker compose exec -T postgres pg_restore --username postgres --clean --if-exists --dbname forgea
-restic_run restore <files snapshot ID> --target /restore
-docker run --rm -v forgea-production_uploads:/data/uploads -v "$PWD/restore/data/uploads:/from:ro" \
-  alpine:3.22 cp -a /from/. /data/uploads/
-rm -rf restore                                # no plain copy of the files stays behind
-docker compose start api web
+tar -xf forgea-production-2026-11-05-033012.tar     # manifest.json + two encrypted parts
+gpg -d forgea.dump.gpg > forgea.dump                 # asks for BACKUP_PASSWORD; a pg_restore file
+gpg -d uploads.tar.gz.gpg | tar -xz                  # the uploaded files
 ```
 
 Try a restore on staging once, so the day it matters it is routine.
