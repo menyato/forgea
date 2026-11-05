@@ -8,7 +8,7 @@ import type { Route } from './+types/route';
  */
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const key = `clean/${params.file}`;
-  if (!isMediaKey(key)) throw new Response('Not found', { status: 404 });
+  if (!isMediaKey(key)) throw notFound();
   const api = context.get(apiContext);
   // ?download=1: the dashboard's Download button (the API only honours it for staff).
   const download = url.searchParams.get('download') === '1';
@@ -20,11 +20,13 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
   if (upstream.status === 429) {
     throw new Response('Too many requests', {
       status: 429,
-      headers: { 'retry-after': upstream.headers.get('retry-after') ?? '5' },
+      headers: {
+        'retry-after': upstream.headers.get('retry-after') ?? '5',
+        'cache-control': 'no-store',
+      },
     });
   }
-  if (!upstream.ok || !upstream.body)
-    throw new Response('Not found', { status: 404 });
+  if (!upstream.ok || !upstream.body) throw notFound();
   // Session cookies the API set are added by apiMiddleware.
   const headers = new Headers();
   for (const name of [
@@ -46,3 +48,13 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
   headers.set('x-content-type-options', 'nosniff');
   return new Response(upstream.body, { headers });
 }
+
+/**
+ * Never kept by a cache (Cloudflare caches /media): a file that is private to someone, or
+ * not made yet, must not stay "not found" for the person allowed to see it.
+ */
+const notFound = () =>
+  new Response('Not found', {
+    status: 404,
+    headers: { 'cache-control': 'no-store' },
+  });

@@ -29,14 +29,17 @@ import {
   apiMiddleware,
   sameOriginMiddleware,
 } from './lib/request.server';
+import { pageCacheMiddleware } from './lib/page-cache.server';
 
 // The F mark from @forgea/brand; it switches colours with the browser's own light/dark theme.
 export const links: Route.LinksFunction = () => [
   { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
 ];
 
-// Refuse cross-site form posts first, then give every loader/action one shared API client.
+// Public pages for visitors without our cookies are reused for a moment (page-cache); then
+// cross-site form posts are refused, then every loader/action gets one shared API client.
 export const middleware: Route.MiddlewareFunction[] = [
+  pageCacheMiddleware,
   sameOriginMiddleware,
   apiMiddleware,
 ];
