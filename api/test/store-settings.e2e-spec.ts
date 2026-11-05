@@ -50,7 +50,11 @@ describe('Store settings (e2e)', () => {
 
   it('anyone can read the payment and WhatsApp numbers (seeded with 70 904 044)', async () => {
     const res = await http().get('/store-settings').expect(200);
-    expect(res.body).toEqual({ ...SEEDED, requests: RULES });
+    expect(res.body).toEqual({
+      ...SEEDED,
+      requests: RULES,
+      deliveryAreas: expect.arrayContaining(['Beirut', 'Matn', 'Tripoli']),
+    });
   });
 
   it('only an admin can change them; staff and customers get 403, anonymous 401', async () => {
@@ -78,6 +82,7 @@ describe('Store settings (e2e)', () => {
       transferInstructions: 'Whish or OMT, with your order number in the note',
       whatsappPhone: '+961 70 904 044',
       requests: RULES,
+      deliveryAreas: expect.arrayContaining(['Beirut']),
     });
     await http().get('/store-settings').expect(200, res.body);
 
@@ -129,5 +134,50 @@ describe('Store settings (e2e)', () => {
         action: 'store-settings.requests.update',
       },
     });
+  });
+
+  it('delivery goes only to an area on the list: checked on quotations, edited by the owner', async () => {
+    const admin = await cookieFor(Role.ADMIN);
+    const quotation = (city: string) =>
+      http()
+        .post('/quotations')
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .send({
+          customerEmail: `areas-${Date.now()}@example.com`,
+          validUntil: '2099-12-31',
+          customerName: 'Rana Areas',
+          phone: '70 123 456',
+          paymentMethod: 'COD',
+          delivery: true,
+          city,
+          addressLine: 'Main road, building 3',
+          lines: [{ description: 'Sign', quantity: 1, unitPrice: '10.00' }],
+        });
+    expect((await quotation('Narnia').expect(400)).body.message).toBe(
+      'Choose the delivery area from the list',
+    );
+    // Written as the list writes it.
+    expect((await quotation('  beirut ').expect(201)).body.city).toBe('Beirut');
+
+    const areas = (list: string[]) =>
+      http()
+        .put('/store-settings/delivery-areas')
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .send({ areas: list });
+    const before = (await http().get('/store-settings').expect(200)).body
+      .deliveryAreas as string[];
+    await areas([]).expect(400);
+    await areas(['Beirut', 'beirut']).expect(400);
+    await http()
+      .put('/store-settings/delivery-areas')
+      .set(CSRF)
+      .set('Cookie', (await cookieFor(Role.STAFF)).cookie)
+      .send({ areas: ['Beirut'] })
+      .expect(403);
+    await areas([...before, 'Narnia']).expect(200);
+    await quotation('Narnia').expect(201);
+    await areas(before).expect(200);
   });
 });

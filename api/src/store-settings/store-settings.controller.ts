@@ -2,6 +2,7 @@ import { Body, Controller, Get, Put } from '@nestjs/common';
 import type { QuotationEmailSettings, StoreSettings } from '@forgea/types';
 import {
   UpdateQuotationEmailDto,
+  DeliveryAreasDto,
   UpdateRequestSettingsDto,
   UpdateStoreSettingsDto,
 } from '@forgea/validation';
@@ -38,6 +39,21 @@ export class StoreSettingsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StoreSettings> {
     return this.storeSettings.update(dto, user.id);
+  }
+
+  /** Where the studio delivers: checkout and quotations offer only these. Audit-logged. */
+  @RequirePermission('store.manage')
+  @Audit({
+    action: 'store-settings.delivery-areas.update',
+    targetType: 'StoreSettings',
+    targetId: 'store',
+  })
+  @Put('delivery-areas')
+  updateDeliveryAreas(
+    @Body() dto: DeliveryAreasDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StoreSettings> {
+    return this.storeSettings.updateDeliveryAreas(dto.areas, user.id);
   }
 
   /** Admin only: quote validity, deposit refunds, upload limit, estimate rules. Audit-logged. */

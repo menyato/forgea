@@ -97,6 +97,7 @@ test('Maya, on her phone: two sizes of a vase, delivered, cash on delivery; the 
 
   // Sizes are measurements; a bigger one costs more.
   const sizes = sizeChoices(page);
+  await expect(sizes.nth(1)).toBeVisible();
   expect(await sizes.count()).toBeGreaterThanOrEqual(2);
   const price = productPrice(page);
   await sizes.last().check({ force: true });
@@ -139,13 +140,14 @@ test('Maya, on her phone: two sizes of a vase, delivered, cash on delivery; the 
     'aria-invalid',
     'true',
   );
-  await expect(page.getByLabel('City or area')).toHaveAttribute(
+  await expect(page.getByLabel('Delivery area')).toHaveAttribute(
     'aria-invalid',
     'true',
   );
   await expect(page).toHaveURL(/\/checkout/);
   await page.getByLabel('Phone').fill('03 456 789');
-  await page.getByLabel('City or area').fill('Beirut, Achrafieh');
+  // A delivery area from the studio's list, not free text.
+  await page.getByLabel('Delivery area').selectOption('Beirut');
   await page
     .getByLabel('Street, building, floor')
     .fill('Sursock St, Bldg 4, 2nd floor');
@@ -175,7 +177,7 @@ test('Maya, on her phone: two sizes of a vase, delivered, cash on delivery; the 
   await admin.goto('/admin/orders');
   await closeDashboardMenu(admin);
   await admin.getByRole('link', { name: order }).click();
-  await expect(admin.getByText('Beirut, Achrafieh')).toBeVisible();
+  await expect(admin.getByText(/Sursock St, Bldg 4, 2nd floor/)).toBeVisible();
   await expect(admin.getByText('Blue door next to the bakery')).toBeVisible();
   await expect(
     admin.getByText(/Size: [0-9.]+ × [0-9.]+ × [0-9.]+ cm/),
@@ -291,8 +293,8 @@ test('Lina, in a hurry: rush, pickup, a full transfer; she cancels the order her
     page.getByLabel('Pick up from the studio (no delivery fee)'),
   ).toBeChecked();
   await expect(page.getByLabel(/Rush/)).toBeChecked();
-  await expect(page.getByLabel('City or area')).toHaveCount(0);
-  await page.getByLabel('Phone').fill('76 222 333');
+  await expect(page.getByLabel('Delivery area')).toHaveCount(0);
+  await page.getByLabel('Phone').fill('76 123 456');
   await page.getByLabel('Money transfer to our number').check();
   await page.getByRole('button', { name: 'Place order' }).click();
   await expect(page.getByText('Order placed')).toBeVisible();

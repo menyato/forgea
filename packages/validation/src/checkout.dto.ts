@@ -1,3 +1,4 @@
+import { IsPhone } from './phone.js';
 import { PaymentMethod } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
@@ -20,7 +21,7 @@ import {
 import { OptionSelectionDto } from './catalog.dto.js';
 import { MONEY_PATTERN } from './constants.js';
 import { Trim } from './email.js';
-import { CART_QUANTITY_MAX, PHONE_PATTERN } from './constants.js';
+import { CART_QUANTITY_MAX } from './constants.js';
 import { DesignMeasurementDto, TextDesignDto } from './text-studio.dto.js';
 
 export class AddCartItemDto {
@@ -78,7 +79,7 @@ export class CheckoutDto {
   name!: string;
 
   @Trim()
-  @Matches(PHONE_PATTERN, { message: 'Enter a valid phone number' })
+  @IsPhone()
   phone!: string;
 
   @IsIn(Object.values(PaymentMethod))

@@ -1,3 +1,4 @@
+import { IsPhone } from './phone.js';
 import {
   IsEmail,
   IsOptional,
@@ -6,17 +7,17 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { NormalizeEmail, Trim } from './email.js';
+import { NormalizeEmail, Trim, NoEmailTypo } from './email.js';
 import {
   EMAIL_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  PHONE_PATTERN,
 } from './constants.js';
 
 export class RegisterDto {
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 
@@ -58,6 +59,7 @@ export class ResendEmailCodeDto {
 export class LoginDto {
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 
@@ -73,6 +75,7 @@ export class LoginDto {
 export class ForgotPasswordDto {
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 }
@@ -115,6 +118,6 @@ export class UpdateProfileDto {
   name!: string;
 
   @Trim()
-  @Matches(PHONE_PATTERN, { message: 'Enter a valid phone number' })
+  @IsPhone()
   phone!: string;
 }

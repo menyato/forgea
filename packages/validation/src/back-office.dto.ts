@@ -1,3 +1,4 @@
+import { IsPhone } from './phone.js';
 import {
   AccountType,
   ActivityKind,
@@ -33,11 +34,16 @@ import {
   LEAD_SORTS,
   MONEY_PATTERN,
   PERCENT_PATTERN,
-  PHONE_PATTERN,
   QUOTATION_SORTS,
   SIZE_CM_PATTERN,
 } from './constants.js';
-import { CommaList, NormalizeEmail, QueryBoolean, Trim } from './email.js';
+import {
+  CommaList,
+  NormalizeEmail,
+  QueryBoolean,
+  Trim,
+  NoEmailTypo,
+} from './email.js';
 import { CursorPageQuery } from './pagination.dto.js';
 
 const money = { message: 'Enter an amount, e.g. 12.50' };
@@ -97,12 +103,13 @@ export class SaveLeadDto {
 
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 
   @IsOptional()
   @Trim()
-  @Matches(PHONE_PATTERN, { message: 'Enter a valid phone number' })
+  @IsPhone()
   phone?: string;
 
   @Trim()
@@ -258,6 +265,7 @@ export class SaveQuotationDto {
   /** Who it is for: an account is not needed, the quotation is emailed to this address. */
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter the email of the customer' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   customerEmail!: string;
 
@@ -281,7 +289,7 @@ export class SaveQuotationDto {
   customerName!: string;
 
   @Trim()
-  @Matches(PHONE_PATTERN, { message: 'Enter a valid phone number' })
+  @IsPhone()
   phone!: string;
 
   @IsIn(Object.values(PaymentMethod))
@@ -506,6 +514,7 @@ export class CustomerListQuery {
 export class CustomerEmailQuery {
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 }

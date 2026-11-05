@@ -25,6 +25,9 @@ model StoreSettings {
   quotationEmailSubject   String?
   quotationEmailIntro     String?
   quotationEmailClosing   String?
+  /// Where the studio delivers: checkout and quotations offer only these (Lebanon's 26
+  /// districts to start with; the owner edits the list on the Settings page).
+  deliveryAreas           String[] @default([])
   updatedAt               DateTime @updatedAt @db.Timestamptz(3)
   updatedByUserId         String?  @db.Uuid
   updatedBy               User?    @relation(fields: [updatedByUserId], references: [id], onDelete: Restrict)

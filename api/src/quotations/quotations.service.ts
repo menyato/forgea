@@ -440,6 +440,8 @@ export class QuotationsService {
 
   /** Checks the address, products, sizes and lead, and computes the total. */
   private async prepare(dto: SaveQuotationDto): Promise<QuotationData> {
+    // Delivered only to an area on the studio's list (as the list writes it).
+    if (dto.delivery) dto.city = await this.store.requireDeliveryArea(dto.city);
     const customer = await this.quotations.customerByEmail(dto.customerEmail);
     if (customer && customer.role !== Role.CUSTOMER) {
       throw new BadRequestException(

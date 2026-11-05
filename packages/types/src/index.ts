@@ -47,6 +47,7 @@ export {
   formatSizeCm,
   PAYMENT_METHOD_LABELS,
   QUOTATION_EMAIL_DEFAULTS,
+  deliveryArea,
   whatsappNumber,
   whatsappUrl,
 } from './store.js';

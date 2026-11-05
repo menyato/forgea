@@ -188,6 +188,9 @@ catalogs:
     harfbuzzjs:
       specifier: 1.6.3
       version: 1.6.3
+    libphonenumber-js:
+      specifier: 1.13.15
+      version: 1.13.15
     reflect-metadata:
       specifier: ^0.2.2
       version: 0.2.2
@@ -448,6 +451,9 @@ importers:
       class-validator:
         specifier: 'catalog:'
         version: 0.14.4
+      libphonenumber-js:
+        specifier: 'catalog:'
+        version: 1.13.15
       reflect-metadata:
         specifier: 'catalog:'
         version: 0.2.2

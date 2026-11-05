@@ -17,6 +17,7 @@ import {
 import { OrderSummary } from '~/features/cart/order-summary';
 import type { FieldErrors } from '~/lib/forms.server';
 import type { loader as rootLoader } from '~/root';
+import { DeliveryAreaField } from './delivery-area-field';
 import { TransferDetails } from './transfer-details';
 
 /**
@@ -127,13 +128,7 @@ export function OrderForm({
             <legend className="mb-2 font-display text-xl font-bold">
               Delivery address
             </legend>
-            <Field
-              label="City or area"
-              name="city"
-              autoComplete="address-level2"
-              required
-              error={errors['city']}
-            />
+            <DeliveryAreaField error={errors['city']} />
             <Field
               label="Street, building, floor"
               name="addressLine"

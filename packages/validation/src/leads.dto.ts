@@ -1,3 +1,4 @@
+import { IsPhone } from './phone.js';
 import {
   IsEmail,
   IsIn,
@@ -7,12 +8,11 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { NormalizeEmail, Trim } from './email.js';
+import { NormalizeEmail, Trim, NoEmailTypo } from './email.js';
 import {
   BUDGET_RANGES,
   type BudgetRange,
   EMAIL_MAX_LENGTH,
-  PHONE_PATTERN,
 } from './constants.js';
 
 /** Public custom-design inquiry. The optional reference image arrives as a separate file part. */
@@ -25,12 +25,13 @@ export class CreateLeadDto {
 
   @NormalizeEmail()
   @IsEmail({}, { message: 'Enter a valid email address' })
+  @NoEmailTypo()
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 
   @IsOptional()
   @Trim()
-  @Matches(PHONE_PATTERN, { message: 'Enter a valid phone number' })
+  @IsPhone()
   phone?: string;
 
   @Trim()

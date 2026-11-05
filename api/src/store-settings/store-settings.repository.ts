@@ -26,6 +26,13 @@ export class StoreSettingsRepository {
     });
   }
 
+  updateDeliveryAreas(areas: string[], updatedByUserId: string) {
+    return this.prisma.storeSettings.update({
+      where: SINGLETON,
+      data: { deliveryAreas: areas, updatedByUserId },
+    });
+  }
+
   updateRequestRules(
     data: Pick<
       StoreSettings,

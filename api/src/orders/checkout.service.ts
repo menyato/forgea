@@ -97,6 +97,8 @@ export class CheckoutService {
   ): Promise<CheckoutResult> {
     const repeated = await this.repeated(dto, userId);
     if (repeated) return repeated;
+    // Delivered only to an area on the studio's list (as the list writes it).
+    if (dto.delivery) dto.city = await this.store.requireDeliveryArea(dto.city);
     const { cartId, lines } = await this.cart.linesForCheckout({
       userId,
       guestCartId,
@@ -127,6 +129,8 @@ export class CheckoutService {
   ): Promise<CheckoutResult> {
     const repeated = await this.repeated(dto, userId);
     if (repeated) return repeated;
+    // Delivered only to an area on the studio's list (as the list writes it).
+    if (dto.delivery) dto.city = await this.store.requireDeliveryArea(dto.city);
     try {
       return await this.place(dto, userId, {
         cartId: null,

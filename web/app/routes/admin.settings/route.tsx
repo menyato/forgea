@@ -5,6 +5,7 @@ import {
 } from '@forgea/types';
 import {
   UpdateQuotationEmailDto,
+  DeliveryAreasDto,
   UpdateRequestSettingsDto,
   UpdateStoreSettingsDto,
 } from '@forgea/validation';
@@ -49,6 +50,16 @@ export async function action({ request, context }: Route.ActionArgs) {
       },
       (dto) =>
         context.get(apiContext).put('/store-settings/quotation-email', dto),
+    );
+  }
+  if (form.get('intent') === 'areas') {
+    // One area per line.
+    const areas = String(form.get('areas') ?? '')
+      .split(/\r?\n/)
+      .map((a) => a.trim())
+      .filter(Boolean);
+    return save(DeliveryAreasDto, { areas }, (dto) =>
+      context.get(apiContext).put('/store-settings/delivery-areas', dto),
     );
   }
   if (form.get('intent') === 'requests') {
@@ -128,9 +139,39 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </div>
         </fetcher.Form>
       </Panel>
+      <DeliveryAreas areas={settings.deliveryAreas} />
       <RequestRules settings={settings} />
       <QuotationEmail email={loaderData.email} />
     </>
+  );
+}
+
+/** Where the studio delivers: checkout and quotations offer only these. */
+function DeliveryAreas({ areas }: { areas: string[] }) {
+  const fetcher = useFetcher<SaveResult>();
+  return (
+    <Panel title="Delivery areas" className="mt-6">
+      <fetcher.Form method="post" className="grid max-w-xl gap-3">
+        <input type="hidden" name="intent" value="areas" />
+        <TextAreaField
+          label="One area per line"
+          name="areas"
+          rows={12}
+          defaultValue={areas.join('\n')}
+          hint="Customers choose one of these at checkout, and you choose one on a quotation. Orders already placed keep the area they had."
+          error={fetcher.data?.errors?.['areas']}
+        />
+        <Button
+          type="submit"
+          variant="secondary"
+          className="justify-self-start"
+          disabled={fetcher.state !== 'idle'}
+        >
+          Save the areas
+        </Button>
+        <SaveStatus state={fetcher.state} result={fetcher.data} />
+      </fetcher.Form>
+    </Panel>
   );
 }
 
