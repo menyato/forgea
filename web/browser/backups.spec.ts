@@ -9,6 +9,7 @@ const ROOT = fileURLToPath(
   new URL('../../api/.backups-browser/', import.meta.url),
 );
 const FILE = 'forgea-staging-2026-11-04-101500-manual.tar';
+const NEWEST = 'forgea-staging-2026-11-05-033012.tar';
 
 test.skip(({ isMobile }) => isMobile, 'The Backups page: one run is enough');
 
@@ -17,6 +18,8 @@ test.beforeAll(async () => {
   await mkdir(join(ROOT, 'backups'), { recursive: true });
   await mkdir(join(ROOT, 'requests', 'queue'), { recursive: true });
   await writeFile(join(ROOT, 'backups', FILE), Buffer.alloc(4096, 1));
+  // A newer one: the newest always stays, so only older ones have a Delete button.
+  await writeFile(join(ROOT, 'backups', NEWEST), Buffer.alloc(2048, 1));
 });
 
 const requests = async () =>

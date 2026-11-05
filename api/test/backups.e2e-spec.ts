@@ -120,6 +120,8 @@ describe('Backups (e2e)', () => {
       .post(`/backups/${MANUAL}/restore`, { confirm: 'Staging' })
       .expect(202);
     await me.delete(`/backups/${OLD}`).expect(202);
+    // The newest always stays.
+    await me.delete(`/backups/${SAFETY}`).expect(409);
     // Only real backups, by their exact name.
     await me.delete('/backups/notes.txt').expect(404);
     await me.delete(`/backups/..%2F${OLD}`).expect(404);
