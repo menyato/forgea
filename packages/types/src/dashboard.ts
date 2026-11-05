@@ -248,3 +248,47 @@ export interface CustomerSummary {
   /** Visitors with something in a cart who never signed in. */
   guestCarts: number;
 }
+
+/** One backup on the server: the database and every uploaded file, encrypted, in one file. */
+export interface BackupItem {
+  file: string;
+  createdAt: string;
+  sizeBytes: number;
+  /** The nightly one, one made with "Back up now", or the one made just before a restore. */
+  kind: 'nightly' | 'manual' | 'before-restore';
+}
+
+/** Something the server did with backups, and how it went. */
+export interface BackupEvent {
+  action: 'backup' | 'restore' | 'delete';
+  file: string;
+  ok: boolean;
+  message: string;
+  /** Who asked (their email), "nightly", or "server" (by hand on the server). */
+  by: string;
+  at: string;
+}
+
+export interface BackupRunning {
+  action: BackupEvent['action'];
+  file: string;
+  since: string;
+}
+
+/** The dashboard's Backups page. */
+export type BackupsView =
+  | { configured: false }
+  | {
+      configured: true;
+      /** The server's disk (shared by both environments and their backups). */
+      disk: { totalBytes: number; freeBytes: number; backupsBytes: number };
+      /** How many backups are kept; older ones are deleted after each new one. */
+      keep: number;
+      /** Newest first. */
+      items: BackupItem[];
+      running: BackupRunning | null;
+      /** The latest results, newest first. */
+      last: BackupEvent[];
+      /** Requests waiting for the server (it picks them up within seconds). */
+      pending: number;
+    };

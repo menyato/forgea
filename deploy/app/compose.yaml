@@ -37,9 +37,16 @@ services:
     <<: *app
     image: ${IMAGE_PREFIX}-api:${TAG}
     env_file: api.env
+    environment:
+      BACKUP_DIR: /backups
+      BACKUP_REQUEST_DIR: /backup-requests
     volumes:
       - uploads:/data/uploads
       - outbox:/data/outbox
+      # The Backups page: it lists and downloads backups but can't change them (read-only);
+      # it asks for a backup, restore or delete with a request backup.sh checks and runs.
+      - ./backups:/backups:ro
+      - ./backup-requests:/backup-requests
     networks:
       # "app" also reaches the internet (Google sign-in, Gmail, Calendar).
       app: { aliases: ['${ENV_NAME}-api'] }

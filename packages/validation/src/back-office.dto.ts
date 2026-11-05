@@ -504,3 +504,19 @@ export class CustomerEmailQuery {
   @MaxLength(EMAIL_MAX_LENGTH)
   email!: string;
 }
+
+/** How many backups the server keeps (older ones are deleted after each new one). */
+export class BackupKeepDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  keep!: number;
+}
+
+/** Restoring replaces everything since the backup: the environment's name, typed, confirms it. */
+export class RestoreBackupDto {
+  @IsString()
+  @MaxLength(20)
+  confirm!: string;
+}

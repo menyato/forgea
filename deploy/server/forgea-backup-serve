@@ -1,0 +1,40 @@
+#!/bin/sh
+# /usr/local/sbin/forgea-backup-serve (root-owned, installed by deploy/sync-config.sh). The only
+# thing the `backups` account can run: its SSH key is locked to this command
+# (authorized_keys: restrict,command="..."), used by the PC that keeps copies
+# (deploy/pc/forgea-pull-backups.ps1). It can list the backups and send one; nothing else, no
+# shell, no other file. The backups are encrypted, so even a stolen key reveals no data.
+#   list                       one line per backup: <env>/<file> <bytes>
+#   get <env>/<file>           the file's bytes
+set -eu
+
+# shellcheck disable=SC2086 # the request is split into its words on purpose
+set -- ${SSH_ORIGINAL_COMMAND:-}
+pattern='^forgea-(production|staging)-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}(-[a-z]{1,20}(-[a-z]{1,20})?)?\.tar$'
+
+case "${1:-}" in
+  list)
+    for env in production staging; do
+      for f in /srv/forgea/"$env"/backups/forgea-"$env"-*.tar; do
+        [ -f "$f" ] || continue
+        name="$(basename "$f")"
+        printf '%s\n' "$name" | grep -Eq "$pattern" || continue
+        printf '%s/%s %s\n' "$env" "$name" "$(stat -c %s "$f")"
+      done
+    done
+    ;;
+  get)
+    [ "$#" -eq 2 ] || { echo "usage: get <env>/<file>" >&2; exit 2; }
+    env="${2%%/*}"
+    name="${2#*/}"
+    case "$env" in production | staging) ;; *) echo "No such backup" >&2; exit 2 ;; esac
+    printf '%s\n' "$name" | grep -Eq "$pattern" || { echo "No such backup" >&2; exit 2; }
+    case "$name" in "forgea-$env-"*) ;; *) echo "No such backup" >&2; exit 2 ;; esac
+    [ -f "/srv/forgea/$env/backups/$name" ] || { echo "No such backup" >&2; exit 2; }
+    exec cat -- "/srv/forgea/$env/backups/$name"
+    ;;
+  *)
+    echo "This key can only list and download backups." >&2
+    exit 2
+    ;;
+esac

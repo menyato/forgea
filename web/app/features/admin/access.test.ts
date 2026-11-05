@@ -50,6 +50,9 @@ describe('pageAccess', () => {
       if (pageAccess(path) === 'admin') adminOnly.push(path);
     }
     expect(adminOnly.sort()).toEqual([
+      // Backups hold everyone's data, and a restore replaces it all: admins only.
+      '/admin/backups',
+      '/admin/backups/some-id/download',
       '/admin/permissions',
       '/admin/team',
       '/admin/team/new',

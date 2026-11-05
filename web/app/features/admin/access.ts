@@ -205,6 +205,12 @@ export const PAGES: readonly {
     group: 'Settings',
   },
   { path: '/admin/team', access: 'admin', label: 'Team', group: 'Settings' },
+  {
+    path: '/admin/backups',
+    access: 'admin',
+    label: 'Backups',
+    group: 'Settings',
+  },
   { path: '/admin/team/new', access: 'admin' },
   {
     path: '/admin/permissions',
