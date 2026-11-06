@@ -2,8 +2,9 @@
 # Backups of one environment (/srv/forgea/<production|staging>), managed from the dashboard's
 # Backups page. Each backup is one file in ./backups: the database and every uploaded file,
 # encrypted on this server (gpg, AES-256, BACKUP_PASSWORD in backup.env) before it is written,
-# so no plain copy ever touches the disk. The newest N are kept (N from the dashboard, 1-30,
-# default 5); older ones are deleted after each new backup.
+# so no plain copy ever touches the disk. Kept after each new backup: the newest N (N from the
+# dashboard, 1-30, default 5, never below MIN_KEEP in backup.env, default 3), plus the newest of
+# each of the last 8 weeks and of the last 6 months; older ones are deleted.
 #
 #   ./backup.sh                  the nightly backup (systemd timer forgea-backup@<env>)
 #   ./backup.sh now [label]      a backup now
@@ -36,7 +37,16 @@ BACKUP_PASSWORD="$(setting BACKUP_PASSWORD)"
 # gpg in a throwaway home: nothing (no passphrase) is cached between runs.
 GNUPGHOME="$(mktemp -d)"
 export GNUPGHOME
-cleanup() { gpgconf --kill gpg-agent >/dev/null 2>&1 || true; rm -rf "$GNUPGHOME"; }
+# Also what a run cut short leaves behind (its work folder, a half-written file, "running").
+cleanup() {
+  gpgconf --kill gpg-agent >/dev/null 2>&1 || true
+  rm -rf "$GNUPGHOME"
+  if [ -n "${owns_lock:-}" ]; then
+    rm -rf "$dir"/.work.* "$dir"/.*.part "$dir/.restoring.tar"
+    [ -f "$dir/.running" ] && { rm -f "$dir/.running"; status; }
+  fi
+  return 0
+}
 trap cleanup EXIT
 encrypt() {
   gpg --batch --yes --quiet --pinentry-mode loopback --no-symkey-cache --passphrase-fd 3 \
@@ -48,10 +58,40 @@ decrypt() {
     --decrypt "$1" 3<<<"$BACKUP_PASSWORD"
 }
 
+# How many of the newest to keep: the dashboard's choice, never below the server's minimum (a
+# compromised dashboard can't shrink the history to one).
 keep() {
-  local n
+  local n min
   n="$(grep -o '"keep" *: *[0-9]\{1,2\}' "$requests/settings.json" 2>/dev/null | grep -o '[0-9]*$' || true)"
-  [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le 30 ] && echo "$n" || echo 5
+  [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le 30 ] || n=5
+  min="$(setting MIN_KEEP)"
+  [[ "$min" =~ ^[0-9]+$ ]] && [ "$min" -ge 1 ] && [ "$min" -le 30 ] || min=3
+  [ "$n" -ge "$min" ] && echo "$n" || echo "$min"
+}
+
+# Deletes what is no longer kept: beyond the newest N, only the newest backup of each of the
+# last 8 weeks and of the last 6 months stays (so a problem noticed late still has a copy).
+rotate() {
+  local n i=0 f day week month weeks=0 months=0 keepit
+  local seen_weeks=" " seen_months=" "
+  n="$(keep)"
+  for f in $(ls -1t "$dir"/forgea-"$env_name"-*.tar 2>/dev/null); do
+    i=$(( i + 1 ))
+    day="$(basename "$f" | grep -o '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | head -n 1)"
+    week="$(date -u -d "$day" +%G-%V)"
+    month="${day:0:7}"
+    keepit=false
+    [ "$i" -le "$n" ] && keepit=true
+    if [[ "$seen_weeks" != *" $week "* ]]; then
+      seen_weeks="$seen_weeks$week "
+      if [ "$weeks" -lt 8 ]; then weeks=$(( weeks + 1 )); keepit=true; fi
+    fi
+    if [[ "$seen_months" != *" $month "* ]]; then
+      seen_months="$seen_months$month "
+      if [ "$months" -lt 6 ]; then months=$(( months + 1 )); keepit=true; fi
+    fi
+    $keepit || rm -f -- "$f"
+  done
 }
 
 # What the dashboard shows: what is running now, and the last results (status.json).
@@ -77,7 +117,10 @@ idle() { rm -f "$dir/.running"; status; }
 
 exec 9>"$dir/.lock"
 # One at a time; the dashboard's requests wait (up to an hour) for a running backup to end.
-lock() { flock -w "${1:-0}" 9 || { echo "Another backup or restore is running" >&2; exit 4; }; }
+lock() {
+  flock -w "${1:-0}" 9 || { echo "Another backup or restore (or a deploy) is running" >&2; exit 4; }
+  owns_lock=1
+}
 
 # One backup: the database straight from pg_dump into gpg, the files straight from tar into gpg.
 backup() {
@@ -105,8 +148,8 @@ backup() {
     chmod 640 "$dir/.$name.part"
     mv "$dir/.$name.part" "$dir/$name"
     rm -rf "$work"
-    # Only the newest N stay.
-    ls -1t "$dir"/forgea-"$env_name"-*.tar | tail -n +"$(( $(keep) + 1 ))" | xargs -r rm -f --
+    # Only what the keep rule says stays.
+    rotate
     idle
     event backup "$name" true "Saved"
   else
@@ -118,30 +161,44 @@ backup() {
 }
 
 restore() {
-  local file="$1" work
+  local file="$1" work source="$dir/.restoring.tar"
   name_ok "$file" && [ -f "$dir/$file" ] || { event restore "" false "No such backup"; return 1; }
+  # A second name for it while it is restored: the safety backup's clean-up may delete the
+  # oldest backup, which may be this one.
+  ln -f "$dir/$file" "$source"
   # The state before, kept as a backup of its own: a wrong restore can be undone.
-  backup before-restore || { event restore "$file" false "Not restored: the safety backup failed"; return 1; }
+  backup before-restore || { rm -f "$source"; event restore "$file" false "Not restored: the safety backup failed"; return 1; }
   running restore "$file"
   work="$(mktemp -d "$dir/.work.XXXXXX")"
-  if ! tar -C "$work" -xf "$dir/$file" forgea.dump.gpg uploads.tar.gz.gpg ||
+  if ! tar -C "$work" -xf "$source" forgea.dump.gpg uploads.tar.gz.gpg ||
      ! decrypt "$work/forgea.dump.gpg" >/dev/null || ! decrypt "$work/uploads.tar.gz.gpg" >/dev/null; then
     rm -rf "$work"; idle
     event restore "$file" false "Not restored: this backup can't be read (wrong password or damaged)"
     return 1
   fi
+  rm -f "$source"
   docker compose stop web api
   local ok=true
+  # The whole database replaced in one transaction: emptied first (tables a newer release
+  # added included, which pg_restore --clean would leave and the migrations would then trip
+  # on), then the backup's contents. Any error and nothing changed.
   decrypt "$work/forgea.dump.gpg" |
-    docker compose exec -T postgres pg_restore --username postgres --clean --if-exists \
-      --single-transaction --exit-on-error --dbname forgea || ok=false
+    docker compose exec -T postgres sh -c '
+      { echo "BEGIN;"
+        echo "DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION pg_database_owner;"
+        # A backup that ends early (damaged) fails the transaction: nothing is committed.
+        pg_restore --file - || echo "SELECT 1/0;"
+        echo "COMMIT;"
+      } | psql --username postgres --dbname forgea --set ON_ERROR_STOP=1 \
+          --quiet --output /dev/null' || ok=false
   if $ok; then
     decrypt "$work/uploads.tar.gz.gpg" |
       docker run --rm -i -v "forgea-${env_name}_uploads:/data/uploads" alpine:3.22 \
         sh -c 'find /data/uploads -mindepth 1 -delete && tar -C /data -xzf -' || ok=false
   fi
   rm -rf "$work"
-  # An older backup is brought up to the running version's database.
+  # An older backup is brought up to the running version's database (its newer migrations
+  # apply on top, as on the day they were released).
   $ok && { docker compose run --rm migrate || ok=false; }
   docker compose up --detach --wait api web || ok=false
   idle

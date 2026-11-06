@@ -53,10 +53,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Three images from one Dockerfile; the shared build stage is cached between them.
+      # Three images from one Dockerfile; the shared build stage is cached between them. A tag
+      # already pushed (production after staging, same commit) is used as it is: production
+      # runs the very images staging was checked with, and a tag never changes its contents.
       - name: Build and push api, web and migrate
         run: |
           for target in api web migrate; do
+            image="$IMAGE_PREFIX-$target:${{ steps.tag.outputs.tag }}"
+            if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+              echo "$image exists: reused"
+              continue
+            fi
             docker buildx build . --target "$target" --push \
               --tag "$IMAGE_PREFIX-$target:${{ steps.tag.outputs.tag }}" \
               --cache-from type=gha,scope=forgea \
@@ -67,7 +74,8 @@ jobs:
     if: always() && (needs.images.result == 'success' || github.event_name == 'workflow_dispatch')
     needs: images
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Production backs up before migrating: a few minutes more.
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read

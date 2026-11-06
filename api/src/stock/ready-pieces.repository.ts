@@ -4,7 +4,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { ReadyPieceMovementKind } from '../generated/prisma/enums.js';
 
 /** Which pieces: a product with its colour and size, or a custom design. */
-export interface PieceKind {
+interface PieceKind {
   productId: string | null;
   name: string;
   details: string;
@@ -35,7 +35,7 @@ const movementInclude = {
   order: { select: { id: true, orderNumber: true } },
   createdBy: { select: { email: true, name: true } },
 } as const satisfies Prisma.ReadyPieceMovementInclude;
-export type ReadyPieceMovementRow = Prisma.ReadyPieceMovementGetPayload<{
+type ReadyPieceMovementRow = Prisma.ReadyPieceMovementGetPayload<{
   include: typeof movementInclude;
 }>;
 

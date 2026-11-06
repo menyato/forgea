@@ -34,7 +34,7 @@ Server layout:
 | Server | Hostinger **KVM 2** (2 vCPU, 8 GB, 100 GB NVMe) | ~$9 for the first 24 months (paid upfront), then ~$15 |
 | Cloudflare | Free plan | $0 |
 | GitHub | private repository, Actions (2,000 free minutes; a deploy uses ~15), container images (currently free) | $0 |
-| Backups | Google Cloud Storage (on top of Hostinger's own weekly backups) | a few cents |
+| Backups | On the server, copied to your PC (on top of Hostinger's own weekly backups) | $0 |
 
 Prices checked 2026-10-28 on review sites; check Hostinger's order page. If the shop grows, or
 uploads of big 3D models make the server slow, upgrade to **KVM 4** (4 vCPU, 16 GB) in the panel:
@@ -279,7 +279,9 @@ catalog there the same way (in `/srv/forgea/production`).
 Every night (03:30, server time) each environment saves its database and every uploaded file
 into one file in `/srv/forgea/<env>/backups`, encrypted on the server with `BACKUP_PASSWORD`
 (`backup.env`; keep it in your password manager: without it no backup can be read). The newest
-5 are kept (change it on the dashboard). Nothing is sent to a cloud service, nothing costs money.
+5 are kept (change it on the dashboard; never fewer than `MIN_KEEP` in `backup.env`), plus the
+newest of each of the last 8 weeks and 6 months. Production is also backed up before every
+deploy. Nothing is sent to a cloud service, nothing costs money.
 
 **Dashboard → Settings → Backups** (admins only) shows the server's disk, every backup, and:
 **Back up now**, **Download** (to your PC), **Restore** (type the environment's name; a backup

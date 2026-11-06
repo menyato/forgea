@@ -2,11 +2,16 @@ import type { WhatsApp } from './whatsapp.js';
 import { ConfigService } from '@nestjs/config';
 import type { EnvironmentVariables } from '../config/environment.js';
 import { MailTemplates } from './mail-templates.js';
-import { type Email, Mailer, toMime } from './mailer.js';
+import { type Email, Mailer, toMime, OutboxMailer } from './mailer.js';
 import { Notifications } from './notifications.service.js';
 
 /** WhatsApp is tested on its own (whatsapp.spec.ts). */
 const noWhatsApp = { send: async () => undefined } as unknown as WhatsApp;
+/** Where emails go when they may not be sent (staging's allow-list). */
+const kept: Email[] = [];
+const outbox = {
+  send: async (e: Email) => void kept.push(e),
+} as unknown as OutboxMailer;
 
 const config = new ConfigService<EnvironmentVariables, true>({
   PUBLIC_WEB_URL: 'https://forgea-lab.com',
@@ -163,6 +168,7 @@ describe('Notifications', () => {
       mailer,
       templates,
       noWhatsApp,
+      outbox,
       config,
     );
     notifications.send('emailCode', { to: 'a@example.com', code: '111111' });
@@ -185,6 +191,7 @@ describe('Notifications', () => {
       mailer,
       templates,
       noWhatsApp,
+      outbox,
       studio,
     );
     notifications.alertStudio(
@@ -200,7 +207,13 @@ describe('Notifications', () => {
     expect(sent[0]!.text).toContain('https://forgea-lab.com/admin/orders/o-1');
 
     // No studio address configured: no alert.
-    const silent = new Notifications(mailer, templates, noWhatsApp, config);
+    const silent = new Notifications(
+      mailer,
+      templates,
+      noWhatsApp,
+      outbox,
+      config,
+    );
     silent.alertStudio('x', [], '/admin');
     await silent.settled();
     expect(sent).toHaveLength(1);
@@ -213,6 +226,7 @@ describe('Notifications', () => {
       mailer,
       templates,
       noWhatsApp,
+      outbox,
       config,
     );
     const results = [1, 2, 3, 4].map(() =>
@@ -224,5 +238,34 @@ describe('Notifications', () => {
     await notifications.settled();
     expect(results).toEqual([true, true, true, false]);
     expect(sent).toHaveLength(3);
+  });
+
+  it('staging emails only its allow-list; the rest stays in the outbox', async () => {
+    const sent: Email[] = [];
+    const mailer = { send: async (e: Email) => void sent.push(e) } as Mailer;
+    kept.length = 0;
+    const staging = new ConfigService<EnvironmentVariables, true>({
+      PUBLIC_WEB_URL: 'https://staging.forgea-lab.com',
+      MAIL_ALLOWED_RECIPIENTS: 'owner@example.com, @forgea-lab.com',
+    });
+    const notifications = new Notifications(
+      mailer,
+      templates,
+      noWhatsApp,
+      outbox,
+      staging,
+    );
+    for (const to of [
+      'Owner@Example.com',
+      'team@forgea-lab.com',
+      'customer@gmail.com',
+    ])
+      notifications.send('emailCode', { to, code: '111111' });
+    await notifications.settled();
+    expect(sent.map((e) => e.to)).toEqual([
+      'Owner@Example.com',
+      'team@forgea-lab.com',
+    ]);
+    expect(kept.map((e) => e.to)).toEqual(['customer@gmail.com']);
   });
 });

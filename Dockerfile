@@ -24,12 +24,18 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
  && pnpm --filter @forgea/api deploy --prod /out/api \
  && pnpm --filter @forgea/web deploy --prod /out/web
 
-# Migrations need the Prisma CLI (a dev dependency), so this image keeps the build tree.
-# Short-lived: started by the deploy, never serves traffic.
-FROM build AS migrate
-WORKDIR /repo/api
-USER node
-CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
+# What migrations need, and nothing else: the schema, the migrations, its config, and the
+# Prisma CLI and dotenv at exactly the versions the lockfile installed (the CLI is a dev
+# dependency, so it isn't in /out/api). About 200 MB instead of the whole build tree.
+RUN mkdir -p /out/migrate/prisma \
+ && cp -r api/prisma/schema api/prisma/migrations /out/migrate/prisma/ \
+ && cp api/prisma7.config.ts /out/migrate/ \
+ && cd /out/migrate \
+ && printf '{"name":"forgea-migrate","private":true,"type":"module"}\n' > package.json \
+ && npm install --omit=dev --no-audit --no-fund --no-save \
+      "prisma@$(node -p "require('/repo/api/node_modules/prisma/package.json').version")" \
+      "dotenv@$(node -p "require('/repo/api/node_modules/dotenv/package.json').version")" \
+ && npm cache clean --force
 
 FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS runtime
 ENV NODE_ENV=production PORT=3000
@@ -40,19 +46,25 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
 WORKDIR /app
 EXPOSE 3000
 
+# Applies pending migrations, then exits: started by the deploy, never serves traffic.
+FROM runtime AS migrate
+COPY --from=build --chown=node:node /out/migrate ./
+USER node
+CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+
 FROM runtime AS api
 COPY --from=build --chown=node:node /out/api ./
 # Uploads and unsent emails live on volumes mounted here, owned by the unprivileged user.
-RUN mkdir -p /data/uploads /data/outbox && chown -R node:node /data
+RUN mkdir -p /data/uploads /data/outbox /data/outbox-whatsapp && chown -R node:node /data
 ENV UPLOAD_DIR=/data/uploads MAIL_OUTBOX_DIR=/data/outbox
 USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "dist/main.js"]
 
 FROM runtime AS web
 COPY --from=build --chown=node:node /out/web ./
 USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/favicon.svg').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/shop').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node_modules/.bin/react-router-serve", "build/server/index.js"]

@@ -5,9 +5,13 @@
 # From GitHub the registry token comes on stdin. By hand (a rollback), log in once first with a
 # GitHub token that can read packages: docker login ghcr.io -u <your GitHub name>
 # Pulls that version's images, applies database migrations, then replaces that environment's
-# containers. If migrations fail, nothing is replaced and the running version keeps serving.
+# containers. If migrations fail, nothing is replaced and the running version keeps serving;
+# if the new version doesn't come up healthy, the previous one is started again. Production
+# is backed up first. Never at the same time as a backup or restore of that environment.
 # The other environment and the shared front door are never touched.
 set -eu
+# A dropped SSH connection (GitHub's job timing out) must not stop a deploy half-way.
+trap '' HUP
 
 ENV_NAME="${1:-}"
 TAG="${2:-}"
@@ -35,8 +39,26 @@ if [ ! -t 0 ]; then
 fi
 
 docker compose --profile tools pull --quiet
+
+# Production: a backup of the state before this release (restorable from the dashboard).
+if [ "$ENV_NAME" = production ]; then
+  ./backup.sh now predeploy || { echo "The pre-deploy backup failed: not deploying" >&2; exit 5; }
+fi
+
+# One at a time with backups and restores (a migration waiting behind a nightly dump would
+# hold every query of the site behind it): wait up to 15 minutes for one that is running.
+exec 9>"backups/.lock"
+flock -w 900 9 || { echo "A backup or restore is still running: try again later" >&2; exit 4; }
+
+previous="$(sed -n 's/^TAG=//p' .env)"
 docker compose run --rm migrate
-docker compose up --detach --remove-orphans --wait
+if ! docker compose up --detach --remove-orphans --wait; then
+  echo "$TAG did not come up healthy: starting $previous again" >&2
+  if [ -n "$previous" ]; then
+    TAG="$previous" docker compose up --detach --remove-orphans --wait || true
+  fi
+  exit 6
+fi
 
 # Recorded only once the new version is up, so a restart never picks a half-deployed one.
 sed -i "s/^TAG=.*/TAG=$TAG/" .env

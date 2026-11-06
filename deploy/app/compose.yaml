@@ -23,9 +23,12 @@ x-app: &app
     options: { max-size: 10m, max-file: '5' }
 
 services:
+  # Memory caps (set per environment in .env; staging lower): a heavy 3D upload on staging
+  # can't take the memory production's database needs.
   web:
     <<: *app
     image: ${IMAGE_PREFIX:?}-web:${TAG:?}
+    mem_limit: ${WEB_MEMORY:-512m}
     env_file: web.env
     networks:
       app: {}
@@ -36,6 +39,8 @@ services:
   api:
     <<: *app
     image: ${IMAGE_PREFIX}-api:${TAG}
+    # Its 3D-model worker alone may use 1 GB.
+    mem_limit: ${API_MEMORY:-2g}
     env_file: api.env
     environment:
       BACKUP_DIR: /backups
@@ -43,6 +48,8 @@ services:
     volumes:
       - uploads:/data/uploads
       - outbox:/data/outbox
+      # WhatsApp messages that couldn't be sent (no token yet), like unsent emails.
+      - outbox-whatsapp:/data/outbox-whatsapp
       # The Backups page: it lists and downloads backups but can't change them (read-only);
       # it asks for a backup, restore or delete with a request backup.sh checks and runs.
       - ./backups:/backups:ro
@@ -59,6 +66,9 @@ services:
     image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     restart: unless-stopped
     security_opt: ['no-new-privileges:true']
+    mem_limit: ${DB_MEMORY:-1g}
+    # The last thing the kernel kills when memory runs out (production: -500; staging: 0).
+    oom_score_adj: ${DB_OOM_SCORE_ADJ:--500}
     env_file: db.env
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -92,6 +102,7 @@ volumes:
   pgdata:
   uploads:
   outbox:
+  outbox-whatsapp:
 
 networks:
   app:

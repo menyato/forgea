@@ -149,6 +149,15 @@ export class EnvironmentVariables {
   @Matches(/^[^@\s]+@[^@\s]+$/)
   MAIL_FROM?: string;
 
+  /**
+   * Staging: the only people it may email or message, comma-separated: addresses
+   * (owner@example.com) and/or domains (@forgea-lab.com). Everything else is written to the
+   * outbox folder instead, and WhatsApp is never sent. Empty (production): everyone.
+   */
+  @IsOptional()
+  @IsString()
+  MAIL_ALLOWED_RECIPIENTS?: string;
+
   /** Where emails are written as .eml files when they aren't sent (development, tests). */
   @IsString()
   MAIL_OUTBOX_DIR: string = '.outbox';
