@@ -290,18 +290,18 @@ export default function Production({ loaderData }: Route.ComponentProps) {
           href={href}
           state={state}
           empty="No print runs here."
-          group={
-            state.group === 'status'
+          group={(k) =>
+            k === 'status'
               ? {
                   of: (j) => PRINT_JOB_STATUS_LABELS[j.status],
                   order: PRINT_JOB_ORDER.map((s) => PRINT_JOB_STATUS_LABELS[s]),
                 }
-              : state.group === 'printer'
+              : k === 'printer'
                 ? {
                     of: (j) => j.printer?.name ?? NO_PRINTER.name,
                     order: printers.map((m) => m.name),
                   }
-                : state.group === 'day'
+                : k === 'day'
                   ? {
                       of: (j) => day(j.scheduledDate),
                       // Soonest first; "Not scheduled" last.

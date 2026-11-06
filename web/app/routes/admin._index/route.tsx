@@ -59,7 +59,9 @@ export async function loader({ context }: Route.LoaderArgs) {
           .then(ok)
       : null,
     may('leads.view')
-      ? api.get<{ unopened: number }>('/leads/counts').then(ok)
+      ? api
+          .get<{ unopened: number; followUpsDue: number }>('/leads/counts')
+          .then(ok)
       : null,
     may('quotations.view')
       ? api
@@ -121,6 +123,13 @@ export async function loader({ context }: Route.LoaderArgs) {
     });
   }
   if (leads) {
+    cards.push({
+      key: 'follow-ups',
+      count: leads.followUpsDue,
+      label: 'of my follow-ups due today or late',
+      to: '/admin/todo',
+      urgent: leads.followUpsDue > 0,
+    });
     cards.push({
       key: 'leads',
       count: leads.unopened,

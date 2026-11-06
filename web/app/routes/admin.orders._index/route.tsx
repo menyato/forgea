@@ -210,13 +210,13 @@ export default function Orders({ loaderData }: Route.ComponentProps) {
           href={href}
           state={state}
           empty="No orders here."
-          group={
-            state.group === 'status'
+          group={(k) =>
+            k === 'status'
               ? {
                   of: (o) => ORDER_STATUS_LABELS[o.status].title,
                   order: FLOW.map((s) => ORDER_STATUS_LABELS[s].title),
                 }
-              : state.group === 'month'
+              : k === 'month'
                 ? { of: (o) => month(o.createdAt) }
                 : undefined
           }

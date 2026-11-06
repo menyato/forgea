@@ -90,7 +90,9 @@ export function ControlPanel({
     if (facet) facet.push(f);
     else facets.push([f]);
   }
-  const group = groups.find((g) => g.key === state.group);
+  const grouped = state.groups.flatMap((k) =>
+    groups.filter((g) => g.key === k),
+  );
   const toggle = (f: ListFilter) => {
     const next = state.filters.includes(f.key)
       ? state.filters.filter((k) => k !== f.key)
@@ -131,10 +133,10 @@ export function ControlPanel({
               })}
             />
           ))}
-          {group && (
+          {grouped.length > 0 && (
             <Facet
               kind="Group by"
-              value={group.label}
+              value={grouped.map((g) => g.label).join(' › ')}
               remove={href({ group: null })}
             />
           )}
@@ -158,9 +160,13 @@ export function ControlPanel({
             groups={groups}
             state={state}
             toggle={toggle}
-            groupHref={(key) =>
-              href({ group: key === state.group ? null : key })
-            }
+            groupHref={(key) => {
+              // Adds a level (inside the ones on), or takes it away.
+              const next = state.groups.includes(key)
+                ? state.groups.filter((k) => k !== key)
+                : [...state.groups, key];
+              return href({ group: next.length ? next.join(',') : null });
+            }}
           />
         )}
       </div>
@@ -305,7 +311,8 @@ function FilterMenu({
             </h3>
             <ul className="grid gap-0.5">
               {groups.map((g) => {
-                const active = state.group === g.key;
+                const level = state.groups.indexOf(g.key);
+                const active = level >= 0;
                 return (
                   <li key={g.key}>
                     <Link
@@ -319,6 +326,11 @@ function FilterMenu({
                         </span>
                         {g.label}
                       </span>
+                      {active && state.groups.length > 1 && (
+                        <span className="text-xs tabular-nums">
+                          {level + 1}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -405,9 +417,80 @@ export interface ListColumn<T> {
   cell: (row: T) => ReactNode;
 }
 
+/** How rows are grouped at one level: each row's group, and the groups' natural order. */
+export interface Grouping<T> {
+  of: (row: T) => string;
+  order?: readonly string[];
+}
+
+interface GroupNode<T> {
+  key: string;
+  /** The keys from the outermost group down to this one. */
+  path: string;
+  rows: T[];
+  children: GroupNode<T>[];
+}
+
+function groupRows<T>(
+  rows: readonly T[],
+  levels: readonly Grouping<T>[],
+  parent = '',
+): GroupNode<T>[] {
+  const [level, ...inner] = levels;
+  if (!level) return [];
+  const nodes: GroupNode<T>[] = [];
+  for (const row of rows) {
+    const key = level.of(row);
+    const node = nodes.find((n) => n.key === key);
+    if (node) node.rows.push(row);
+    else
+      nodes.push({
+        key,
+        path: parent ? `${parent}\u001f${key}` : key,
+        rows: [row],
+        children: [],
+      });
+  }
+  const rank = (key: string) => {
+    const i = level.order?.indexOf(key) ?? -1;
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  nodes.sort((x, y) => rank(x.key) - rank(y.key));
+  for (const n of nodes) n.children = groupRows(n.rows, inner, n.path);
+  return nodes;
+}
+
+/** The groups opened on a list, per list and grouping, for this browser tab only. */
+function useOpenGroups(id: string) {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  // Read after the first paint, so server and browser start alike (all closed).
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(id);
+      setOpen(new Set(saved ? (JSON.parse(saved) as string[]) : []));
+    } catch {
+      setOpen(new Set());
+    }
+  }, [id]);
+  const flip = (path: string) =>
+    setOpen((now) => {
+      const next = new Set(now);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      try {
+        sessionStorage.setItem(id, JSON.stringify([...next]));
+      } catch {
+        // Storage refused: the groups still open, they just aren't remembered.
+      }
+      return next;
+    });
+  return [open, flip] as const;
+}
+
 /**
- * A list view: one row per record, the whole row opening it; sortable headers; grouped,
- * each group folding away, when a grouping is on (the rows of this page).
+ * A list view: one row per record, the whole row opening it; sortable headers. With
+ * groupings on, rows sit in groups (inside groups, for several), each closed until opened;
+ * the groups opened are remembered when coming back to the list.
  */
 export function ListView<T extends { id: string }>({
   label,
@@ -423,36 +506,95 @@ export function ListView<T extends { id: string }>({
   columns: readonly ListColumn<T>[];
   href: (row: T) => string;
   state: ListState;
-  /** The current grouping's value for a row; `order` puts the groups in their natural order. */
-  group?: { of: (row: T) => string; order?: readonly string[] } | undefined;
+  /**
+   * The grouping for a grouping key (several nest, in the order they were turned on), or one
+   * fixed grouping.
+   */
+  group?: Grouping<T> | ((key: string) => Grouping<T> | undefined) | undefined;
   empty: string;
 }) {
   const link = useWith();
+  const { pathname } = useLocation();
   useRememberRecords(rows.map(href));
-  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const levels: Grouping<T>[] =
+    typeof group === 'function'
+      ? state.groups.flatMap((k) => {
+          const g = group(k);
+          return g ? [g] : [];
+        })
+      : group
+        ? [group]
+        : [];
+  const [open, flip] = useOpenGroups(
+    `forgea_groups:${pathname}:${state.groups.join(',')}`,
+  );
   if (rows.length === 0) return <p className="text-text-muted">{empty}</p>;
 
-  const groups: { key: string; rows: T[] }[] = [];
-  for (const row of rows) {
-    const key = group ? group.of(row) : '';
-    const g = groups.find((x) => x.key === key);
-    if (g) g.rows.push(row);
-    else groups.push({ key, rows: [row] });
-  }
-  const rank = (key: string) => {
-    const i = group?.order?.indexOf(key) ?? -1;
-    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-  };
-  groups.sort((a, b) => rank(a.key) - rank(b.key));
-  const flip = (key: string) =>
-    setClosed((now) => {
-      const next = new Set(now);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   const cellClass = (c: ListColumn<T>) =>
     `px-4 py-2.5 ${c.align === 'right' ? 'text-right tabular-nums' : ''}`;
+  const rowsOf = (list: readonly T[]) =>
+    list.map((row) => (
+      <tr
+        key={row.id}
+        className="relative border-t border-border hover:bg-surface-raised"
+      >
+        {columns.map((c, i) => (
+          <td key={c.key} className={cellClass(c)}>
+            {i === 0 ? (
+              // The first cell's link covers the row: the whole row opens it.
+              <Link
+                to={href(row)}
+                className="font-semibold after:absolute after:inset-0 hover:underline"
+              >
+                {c.cell(row)}
+              </Link>
+            ) : (
+              c.cell(row)
+            )}
+          </td>
+        ))}
+      </tr>
+    ));
+  const nodesOf = (nodes: GroupNode<T>[], depth: number): ReactNode[] =>
+    nodes.flatMap((n) => {
+      const isOpen = open.has(n.path);
+      return [
+        <tr
+          key={`group:${n.path}`}
+          className="border-t border-border bg-surface-raised/60"
+        >
+          <th
+            scope="rowgroup"
+            colSpan={columns.length}
+            className="px-4 py-2 text-left"
+            style={{ paddingLeft: `${1 + depth * 1.5}rem` }}
+          >
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              onClick={() => flip(n.path)}
+              className="flex items-center gap-2 font-semibold"
+            >
+              <span
+                aria-hidden
+                className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}
+              >
+                ›
+              </span>
+              {n.key}
+              <span className="font-normal text-text-muted">
+                ({n.rows.length})
+              </span>
+            </button>
+          </th>
+        </tr>,
+        ...(isOpen
+          ? n.children.length
+            ? nodesOf(n.children, depth + 1)
+            : rowsOf(n.rows)
+          : []),
+      ];
+    });
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface">
@@ -495,60 +637,9 @@ export function ListView<T extends { id: string }>({
             })}
           </tr>
         </thead>
-        {groups.map((g) => (
-          <tbody key={g.key}>
-            {group && (
-              <tr className="border-t border-border bg-surface-raised/60">
-                <th
-                  scope="rowgroup"
-                  colSpan={columns.length}
-                  className="px-4 py-2 text-left"
-                >
-                  <button
-                    type="button"
-                    aria-expanded={!closed.has(g.key)}
-                    onClick={() => flip(g.key)}
-                    className="flex items-center gap-2 font-semibold"
-                  >
-                    <span
-                      aria-hidden
-                      className={`transition-transform ${closed.has(g.key) ? '' : 'rotate-90'}`}
-                    >
-                      ›
-                    </span>
-                    {g.key}
-                    <span className="font-normal text-text-muted">
-                      ({g.rows.length})
-                    </span>
-                  </button>
-                </th>
-              </tr>
-            )}
-            {!closed.has(g.key) &&
-              g.rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="relative border-t border-border hover:bg-surface-raised"
-                >
-                  {columns.map((c, i) => (
-                    <td key={c.key} className={cellClass(c)}>
-                      {i === 0 ? (
-                        // The first cell's link covers the row: the whole row opens it.
-                        <Link
-                          to={href(row)}
-                          className="font-semibold after:absolute after:inset-0 hover:underline"
-                        >
-                          {c.cell(row)}
-                        </Link>
-                      ) : (
-                        c.cell(row)
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-          </tbody>
-        ))}
+        <tbody>
+          {levels.length ? nodesOf(groupRows(rows, levels), 0) : rowsOf(rows)}
+        </tbody>
       </table>
     </div>
   );

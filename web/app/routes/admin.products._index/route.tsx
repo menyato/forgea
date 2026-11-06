@@ -77,12 +77,14 @@ const href = (p: AdminProductListItem) => `/admin/products/${p.id}`;
 export default function Products({ loaderData }: Route.ComponentProps) {
   const { state, products } = loaderData;
   const mayAdd = useCan()('catalog.manage');
-  const groupOf =
-    state.group === 'category'
+  const groupOf = (k: string) =>
+    k === 'category'
       ? category
-      : state.group === 'material'
+      : k === 'material'
         ? (p: AdminProductListItem) => p.material
         : undefined;
+  // The kanban's columns follow the outermost grouping.
+  const columnOf = state.group ? groupOf(state.group) : undefined;
   return (
     <>
       <AdminHeader
@@ -114,13 +116,13 @@ export default function Products({ loaderData }: Route.ComponentProps) {
       {state.view === 'kanban' ? (
         <KanbanView
           href={href}
-          layout={groupOf ? 'columns' : 'grid'}
+          layout={columnOf ? 'columns' : 'grid'}
           columns={
-            groupOf
-              ? [...new Set(products.items.map(groupOf))].map((g) => ({
+            columnOf
+              ? [...new Set(products.items.map(columnOf))].map((g) => ({
                   key: g,
                   title: g,
-                  items: products.items.filter((p) => groupOf(p) === g),
+                  items: products.items.filter((p) => columnOf(p) === g),
                 }))
               : [{ key: 'all', title: 'Products', items: products.items }]
           }
@@ -150,7 +152,10 @@ export default function Products({ loaderData }: Route.ComponentProps) {
               ? 'No products here. Add one with New product.'
               : 'No products here.'
           }
-          group={groupOf ? { of: groupOf } : undefined}
+          group={(k) => {
+            const of = groupOf(k);
+            return of ? { of } : undefined;
+          }}
         />
       )}
     </>

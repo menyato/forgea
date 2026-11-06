@@ -205,15 +205,15 @@ export default function Books({ loaderData }: Route.ComponentProps) {
         href={(e) => `/admin/accounting/books/entries/${e.id}`}
         state={state}
         empty="No entries here."
-        group={
-          state.group === 'type'
+        group={(k) =>
+          k === 'type'
             ? {
                 of: (e) => TYPE_NAMES[e.type],
                 order: Object.values(TYPE_NAMES),
               }
-            : state.group === 'journal'
+            : k === 'journal'
               ? { of: (e) => e.journal.name }
-              : state.group === 'month'
+              : k === 'month'
                 ? { of: (e) => month(e.date) }
                 : undefined
         }

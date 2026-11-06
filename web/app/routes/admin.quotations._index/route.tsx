@@ -198,13 +198,13 @@ export default function Quotations({ loaderData }: Route.ComponentProps) {
           href={href}
           state={state}
           empty="No quotations here."
-          group={
-            state.group === 'status'
+          group={(k) =>
+            k === 'status'
               ? {
                   of: (q) => LABELS[q.status],
                   order: STATUSES.map((s) => LABELS[s]),
                 }
-              : state.group === 'customer'
+              : k === 'customer'
                 ? { of: customer }
                 : undefined
           }

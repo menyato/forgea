@@ -9,6 +9,9 @@ export interface ListState {
   q: string | null;
   /** The filters on (their keys); none means everything. */
   filters: string[];
+  /** The groupings on, outermost first ("group=stage,assigned"). */
+  groups: string[];
+  /** The outermost grouping (what a kanban's columns follow). */
   group: string | null;
   sort: string;
   order: 'asc' | 'desc';
@@ -48,10 +51,14 @@ export function listState(
   const order = params.get('order');
   const at = Number(params.get('at'));
   const view = params.get('view');
+  const groups = [
+    ...new Set((params.get('group') ?? '').split(',').filter(Boolean)),
+  ];
   return {
     q,
     filters,
-    group: params.get('group') || null,
+    groups,
+    group: groups[0] ?? null,
     sort: sort && defaults.sorts.includes(sort) ? sort : defaults.sorts[0]!,
     order:
       order === 'asc' || order === 'desc' ? order : (defaults.order ?? 'desc'),

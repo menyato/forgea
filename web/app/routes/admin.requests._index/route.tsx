@@ -169,8 +169,8 @@ export default function Requests({ loaderData }: Route.ComponentProps) {
           href={href}
           state={state}
           empty="No requests here."
-          group={
-            state.group === 'status'
+          group={(k) =>
+            k === 'status'
               ? {
                   of: status,
                   order: FLOW.map((s) => CUSTOM_REQUEST_STATUS_LABELS[s].title),

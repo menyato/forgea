@@ -138,8 +138,15 @@ export class LeadsService {
     return lead;
   }
 
-  async counts(): Promise<{ unopened: number }> {
-    return { unopened: await this.leads.countUnopened() };
+  /** New leads nobody opened; my follow-ups due by the end of today (studio time) or late. */
+  async counts(
+    userId: string,
+  ): Promise<{ unopened: number; followUpsDue: number }> {
+    const [unopened, followUpsDue] = await Promise.all([
+      this.leads.countUnopened(),
+      this.leads.countDue(userId, endOfStudioDay()),
+    ]);
+    return { unopened, followUpsDue };
   }
 
   async detail(id: string): Promise<LeadDetail> {
@@ -507,4 +514,35 @@ function toDetail(l: LeadDetailRow): LeadDetail {
       total: q.total.toFixed(2),
     })),
   };
+}
+
+/** The end of today in the studio's time (Beirut), as an instant. */
+export function endOfStudioDay(now = new Date()): Date {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Beirut',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+      .formatToParts(now)
+      .map((x) => [x.type, Number(x.value)]),
+  ) as Record<string, number>;
+  const wall = Date.UTC(
+    p['year']!,
+    p['month']! - 1,
+    p['day']!,
+    p['hour']!,
+    p['minute']!,
+    p['second']!,
+  );
+  // The studio's offset from UTC now (+2 or +3), taken off the wall-clock midnight.
+  const offset = wall - Math.floor(now.getTime() / 1000) * 1000;
+  return new Date(
+    Date.UTC(p['year']!, p['month']! - 1, p['day']! + 1) - offset,
+  );
 }
