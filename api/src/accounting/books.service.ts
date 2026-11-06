@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { AccountType, EntryType } from '../generated/prisma/enums.js';
 import type { Amount } from './ledger-math.js';
 import { Ledger } from './ledger.service.js';
+import { onceForKey } from '../common/request-key.js';
 
 const D = (v: Amount) => new Prisma.Decimal(v);
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -139,10 +141,21 @@ export class Books {
     if (current.lockDate && (!lock || lock < current.lockDate)) {
       throw new BadRequestException('The lock date can only move forward');
     }
-    await this.prisma.accountingSettings.update({
-      where: { id: 1 },
+    // Saved only if the lock date is still at most the new one: two admins saving at once
+    // can't move it back with the older page's date.
+    const { count } = await this.prisma.accountingSettings.updateMany({
+      where: {
+        id: 1,
+        ...(lock
+          ? { OR: [{ lockDate: null }, { lockDate: { lte: lock } }] }
+          : { lockDate: null }),
+      },
       data: { salesTaxId: dto.salesTaxId, lockDate: lock },
     });
+    if (count !== 1)
+      throw new ConflictException(
+        'Someone else just moved the lock date. Reload and try again.',
+      );
     return this.settings();
   }
 
@@ -162,20 +175,27 @@ export class Books {
     ) {
       throw new BadRequestException('Use active accounts only');
     }
-    const { id } = await this.ledger.post(
-      {
-        type: EntryType.ENTRY,
-        journalId: settings.generalJournalId,
-        date: new Date(dto.date),
-        label: dto.label,
-        lines: dto.lines.map((l) => ({
-          accountId: l.accountId,
-          label: l.label || dto.label,
-          debit: l.debit,
-          credit: l.credit,
-        })),
-      },
-      actorId,
+    // The same form sent twice is one entry: the second opens the first.
+    const id = await this.prisma.$transaction((tx) =>
+      onceForKey(tx, dto.requestKey, 'manual-entry', async () => {
+        const posted = await this.ledger.post(
+          {
+            type: EntryType.ENTRY,
+            journalId: settings.generalJournalId,
+            date: new Date(dto.date),
+            label: dto.label,
+            lines: dto.lines.map((l) => ({
+              accountId: l.accountId,
+              label: l.label || dto.label,
+              debit: l.debit,
+              credit: l.credit,
+            })),
+          },
+          actorId,
+          tx,
+        );
+        return posted.id;
+      }),
     );
     return this.entry(id);
   }

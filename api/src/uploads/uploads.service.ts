@@ -139,10 +139,15 @@ export class UploadsService {
       where: { id: upload.id },
       data: { status: UploadStatus.REJECTED, rejectionReason: reason },
     });
-    await this.storage.remove(upload.storageKey);
-    if (isModelKey(upload.storageKey)) {
+    await this.removeFiles(upload.storageKey);
+  }
+
+  /** An upload's bytes (and a model's compressed copies), once it is marked removed. */
+  async removeFiles(storageKey: string): Promise<void> {
+    await this.storage.remove(storageKey);
+    if (isModelKey(storageKey)) {
       for (const variant of ['view', 'lite'] as const) {
-        await this.storage.remove(modelVariantKey(upload.storageKey, variant));
+        await this.storage.remove(modelVariantKey(storageKey, variant));
       }
     }
   }

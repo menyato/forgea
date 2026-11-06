@@ -129,10 +129,11 @@ describe('Auth (e2e)', () => {
       first[REFRESH_COOKIE]?.value,
     );
 
-    // An attacker replays the first refresh token…
+    // An attacker replays the first refresh token from another browser…
     await http()
       .post('/auth/refresh')
       .set(CSRF)
+      .set('User-Agent', 'attacker/1.0')
       .set('Cookie', cookieHeader(first))
       .expect(401);
     // …which also kills the legitimate user's newer token: both must sign in again.

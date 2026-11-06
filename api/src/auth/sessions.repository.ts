@@ -32,11 +32,29 @@ export class SessionsRepository {
    */
   rotate(oldId: string, replacement: NewSession): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
+      const now = new Date();
       const { count } = await tx.session.updateMany({
         where: { id: oldId, revokedAt: null },
-        data: { revokedAt: new Date() },
+        data: { revokedAt: now, rotatedAt: now },
       });
       if (count !== 1) return false;
+      await tx.session.create({
+        data: { ...replacement, ipAddress: inet(replacement.ipAddress) },
+      });
+      return true;
+    });
+  }
+
+  /**
+   * A second session from a token rotated a moment ago (two tabs refreshing together), only
+   * while its login is still live: one of its sessions not ended. False otherwise.
+   */
+  async sibling(familyId: string, replacement: NewSession): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const live = await tx.session.count({
+        where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } },
+      });
+      if (live === 0) return false;
       await tx.session.create({
         data: { ...replacement, ipAddress: inet(replacement.ipAddress) },
       });

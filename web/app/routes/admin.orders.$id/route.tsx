@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ORDER_STATUS_LABELS,
   OrderStatus,
@@ -34,7 +35,13 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     ),
   ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { order: r.data, related, jobs: jobs.ok ? jobs.data.items : null };
+  return {
+    order: r.data,
+    related,
+    jobs: jobs.ok ? jobs.data.items : null,
+    // A fresh one-time key per load (after a save too): a payment sent twice counts once.
+    requestKey: randomUUID(),
+  };
 }
 
 /** status (the next step) | deposit-invoice | final-invoice | post-invoice | payment */
@@ -85,6 +92,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
         amount: text(form, 'amount'),
         method: text(form, 'method'),
         date: text(form, 'date'),
+        requestKey: text(form, 'requestKey'),
       },
       (dto) => api.post('/accounting/payments', dto),
     );
@@ -349,7 +357,13 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
               </fetcher.Form>
             )}
           </Panel>
-          {o.invoices && <InvoicesPanel order={o} invoices={o.invoices} />}
+          {o.invoices && (
+            <InvoicesPanel
+              order={o}
+              invoices={o.invoices}
+              requestKey={loaderData.requestKey}
+            />
+          )}
           <Panel title="History">
             <ol className="grid gap-3 border-l border-border pl-4 text-sm">
               {o.history.map((h) => (

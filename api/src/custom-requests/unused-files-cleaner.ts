@@ -59,10 +59,17 @@ export class UnusedFilesCleaner
         ORDER BY u."createdAt"
         LIMIT ${BATCH}`;
       for (const upload of unused) {
-        await this.uploads.discard(
-          upload,
-          'Removed: never attached to a request',
-        );
+        // Marked removed only if still unattached at this moment (a request may have just
+        // taken it); only then are its bytes deleted.
+        const marked = await this.prisma.$executeRaw`
+          UPDATE uploads u SET status = 'REJECTED',
+            "rejectionReason" = 'Removed: never attached to a request'
+          WHERE u.id = ${upload.id}::uuid AND u.status = 'CLEAN'
+            AND NOT EXISTS (
+              SELECT 1 FROM custom_requests r
+              WHERE r."fileKey" = u."storageKey" OR r."designPreviewKey" = u."storageKey"
+            )`;
+        if (marked === 1) await this.uploads.removeFiles(upload.storageKey);
       }
       removed += unused.length;
       if (unused.length < BATCH) return removed;

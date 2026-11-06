@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type {
   CursorPageQuery,
   CustomRequestListQuery,
@@ -47,6 +47,16 @@ export class CustomRequestsRepository {
       try {
         return await this.prisma.$transaction(async (tx) => {
           await setStatusActor(tx, r.userId, null);
+          // The file held while it is attached: the clean-up of unused files waits (and then
+          // sees it attached), or ran first and the file is gone (refused).
+          if (r.fileKey) {
+            const [file] = await tx.$queryRaw<{ status: string }[]>`
+              SELECT "status" FROM "uploads" WHERE "storageKey" = ${r.fileKey} FOR SHARE`;
+            if (file?.status !== 'CLEAN')
+              throw new ConflictException(
+                'That file is no longer here (files not sent within a day are removed): upload it again',
+              );
+          }
           return tx.customRequest.create({
             data: {
               requestNumber: generateRequestNumber(),

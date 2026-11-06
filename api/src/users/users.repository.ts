@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { UserListQuery } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
@@ -145,20 +145,25 @@ export class UsersRepository {
     return this.prisma.user.create({ data });
   }
 
-  /** Active admins other than `exceptId`: the team must always keep one. */
-  countOtherActiveAdmins(exceptId: string): Promise<number> {
-    return this.prisma.user.count({
-      where: { role: Role.ADMIN, disabledAt: null, id: { not: exceptId } },
-    });
-  }
-
   /**
    * Changes a team member's role and access. A change ends every session they have, in the
    * same transaction, so the new role (or the lockout) applies at their next sign-in.
    */
   updateTeamMember(id: string, role: Role, active: boolean): Promise<User> {
     return this.prisma.$transaction(async (tx) => {
+      // Every active admin locked first: two admins taking each other's role at once can't
+      // both see the other still there and leave the team with none.
+      const admins = await tx.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "users"
+        WHERE "role" = 'ADMIN' AND "disabledAt" IS NULL
+        ORDER BY "id" FOR UPDATE`;
       const current = await tx.user.findUniqueOrThrow({ where: { id } });
+      const losesAdmin =
+        current.role === Role.ADMIN &&
+        current.disabledAt === null &&
+        (role !== Role.ADMIN || !active);
+      if (losesAdmin && admins.every((a) => a.id === id))
+        throw new BadRequestException('The team must keep at least one admin');
       const user = await tx.user.update({
         where: { id },
         data: {
@@ -181,11 +186,18 @@ export class UsersRepository {
   }
 
   /** A team member's own permission changes on top of their role (checked by the service). */
-  setAccess(id: string, granted: string[], denied: string[]): Promise<User> {
-    return this.prisma.user.update({
-      where: { id },
+  /** Only while they still have `role` (a role change meanwhile resets their exceptions). */
+  async setAccess(
+    id: string,
+    role: Role,
+    granted: string[],
+    denied: string[],
+  ): Promise<User | null> {
+    const { count } = await this.prisma.user.updateMany({
+      where: { id, role },
       data: { grantedPermissions: granted, deniedPermissions: denied },
     });
+    return count === 1 ? this.prisma.user.findUnique({ where: { id } }) : null;
   }
 
   /** What one role may do; the next request of everyone with that role uses it. */

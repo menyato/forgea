@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -38,6 +39,8 @@ import {
  * lost with a reason, reopened if needed. Every move is written in the lead's log, with who
  * made it.
  */
+const CHANGED = 'Someone else just changed this lead. Reload and try again.';
+
 @Injectable()
 export class LeadsService {
   constructor(
@@ -174,7 +177,7 @@ export class LeadsService {
     if (lead.lostReasonId) {
       throw new BadRequestException('Reopen the lost lead before moving it');
     }
-    await this.leads.change(
+    const moved = await this.leads.change(
       id,
       {
         stageId,
@@ -189,7 +192,9 @@ export class LeadsService {
           : `Moved to ${stage.name}.`,
         authorId: actorId,
       },
+      { lostReasonId: null },
     );
+    if (!moved) throw new ConflictException(CHANGED);
     return this.detail(id);
   }
 
@@ -204,7 +209,7 @@ export class LeadsService {
     const reason = await this.leads.lostReason(dto.lostReasonId);
     if (!reason || !reason.active)
       throw new BadRequestException('Choose a reason');
-    await this.leads.change(
+    const lost = await this.leads.change(
       id,
       {
         closedAt: new Date(),
@@ -216,7 +221,9 @@ export class LeadsService {
         body: `Lost: ${reason.name}.${dto.note ? ` ${dto.note}` : ''}`,
         authorId: actorId,
       },
+      { closedAt: null },
     );
+    if (!lost) throw new ConflictException(CHANGED);
     return this.detail(id);
   }
 
@@ -236,6 +243,7 @@ export class LeadsService {
         decisionNeeded: null,
       },
       { body: `Reopened in ${stage.name}.`, authorId: actorId },
+      { closedAt: { not: null } },
     );
     return this.detail(id);
   }
@@ -295,23 +303,24 @@ export class LeadsService {
     }
     if (event.kind === 'accepted') {
       const won = open ? await this.leads.markedStage('isWon') : null;
-      const result = won ? `. Won (moved to ${won.name})` : '';
-      await this.leads.change(
-        leadId,
-        won
-          ? {
-              stageId: won.id,
-              stageChangedAt: new Date(),
-              probability: 100,
-              closedAt: new Date(),
-              decisionNeeded: null,
-            }
-          : {},
-        {
-          authorId,
-          body: `Quotation ${event.number} accepted: order ${event.orderNumber}${result}.`,
-        },
-      );
+      const accepted = `Quotation ${event.number} accepted: order ${event.orderNumber}`;
+      // Won only if still open (lost a moment ago stays lost); the log says it either way.
+      const closed =
+        won !== null &&
+        (await this.leads.change(
+          leadId,
+          {
+            stageId: won.id,
+            stageChangedAt: new Date(),
+            probability: 100,
+            closedAt: new Date(),
+            decisionNeeded: null,
+          },
+          { authorId, body: `${accepted}. Won (moved to ${won.name}).` },
+          { closedAt: null },
+        ));
+      if (!closed)
+        await this.leads.change(leadId, {}, { authorId, body: `${accepted}.` });
       return;
     }
     if (event.kind === 'declined') {

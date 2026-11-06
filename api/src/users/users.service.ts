@@ -72,13 +72,6 @@ export class UsersService {
         `Customer accounts cannot join the team; add their @${this.workspaceDomain} address instead`,
       );
     }
-    const losesAdmin =
-      user.role === Role.ADMIN &&
-      user.disabledAt === null &&
-      (dto.role !== Role.ADMIN || !dto.active);
-    if (losesAdmin && (await this.users.countOtherActiveAdmins(id)) === 0) {
-      throw new BadRequestException('The team must keep at least one admin');
-    }
     return toListItem(
       await this.users.updateTeamMember(id, dto.role, dto.active),
     );

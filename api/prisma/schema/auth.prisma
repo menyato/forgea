@@ -11,6 +11,8 @@ model Session {
   familyId  String    @db.Uuid
   expiresAt DateTime  @db.Timestamptz(3)
   revokedAt DateTime? @db.Timestamptz(3)
+  /// Set when it was replaced by rotation (its revokedAt too); null when ended otherwise.
+  rotatedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   ipAddress String?   @db.Inet
   userAgent String?

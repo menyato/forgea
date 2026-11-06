@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AccountView, JournalEntryView } from '@forgea/types';
 import { ManualEntryDto } from '@forgea/validation';
 import { useState } from 'react';
@@ -22,7 +23,11 @@ export async function loader({ context }: Route.LoaderArgs) {
     .get(apiContext)
     .get<AccountView[]>('/accounting/accounts');
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { accounts: r.data.filter((a) => a.active) };
+  return {
+    accounts: r.data.filter((a) => a.active),
+    // Sent twice, the entry is posted once (the second opens it).
+    requestKey: randomUUID(),
+  };
 }
 
 /** Posts the entry and opens it. */
@@ -35,6 +40,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       date: text(form, 'date'),
       label: text(form, 'label'),
       lines: jsonField(form, 'lines') ?? [],
+      requestKey: text(form, 'requestKey'),
     },
     async (dto) => {
       const r = await context
@@ -81,6 +87,11 @@ export default function NewEntry({ loaderData }: Route.ComponentProps) {
       <Panel>
         <ViewOnly editable={mayManage}>
           <fetcher.Form method="post" className="grid gap-3">
+            <input
+              type="hidden"
+              name="requestKey"
+              value={loaderData.requestKey}
+            />
             <input
               type="hidden"
               name="lines"

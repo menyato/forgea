@@ -118,9 +118,11 @@ export class Ledger {
     });
     if (entry.state !== 'DRAFT')
       throw new BadRequestException('This entry is already posted');
-    const settings = await tx.accountingSettings.findUniqueOrThrow({
-      where: { id: 1 },
-    });
+    // Read under a share lock: a lock date being moved past this entry waits for it, or it
+    // for the move (then refused), never both at once.
+    const [settings] = await tx.$queryRaw<{ lockDate: Date | null }[]>`
+      SELECT "lockDate" FROM "accounting_settings" WHERE "id" = 1 FOR SHARE`;
+    if (!settings) throw new Error('Accounting settings are missing');
     if (settings.lockDate && entry.date <= settings.lockDate) {
       throw new BadRequestException(
         `The books are locked up to ${settings.lockDate.toISOString().slice(0, 10)}`,

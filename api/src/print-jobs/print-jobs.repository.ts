@@ -16,6 +16,7 @@ import {
   ReadyPiecesRepository,
 } from '../stock/ready-pieces.repository.js';
 import { StockRepository } from '../stock/stock.repository.js';
+import { onceForKey } from '../common/request-key.js';
 
 const withRefs = {
   order: { select: { orderNumber: true, status: true } },
@@ -169,8 +170,24 @@ export class PrintJobsRepository {
     });
   }
 
-  create(job: NewPrintJob): Promise<PrintJobRow> {
-    return this.prisma.printJob.create({ data: job, include: withRefs });
+  /** A run planned by hand; the same form sent twice plans it once. */
+  async create(
+    requestKey: string | undefined,
+    job: NewPrintJob,
+  ): Promise<PrintJobRow> {
+    const id = await this.prisma.$transaction((tx) =>
+      onceForKey(tx, requestKey, 'print-job', async () => {
+        const made = await tx.printJob.create({
+          data: job,
+          select: { id: true },
+        });
+        return made.id;
+      }),
+    );
+    return this.prisma.printJob.findUniqueOrThrow({
+      where: { id },
+      include: withRefs,
+    });
   }
 
   /**
@@ -189,6 +206,13 @@ export class PrintJobsRepository {
     reprint = false,
   ): Promise<PrintJobRow | null> {
     return this.prisma.$transaction(async (tx) => {
+      // Its order, locked against a change meanwhile: a cancel waits for this step (or this
+      // step for the cancel), so its pieces and reprints follow the order as it really is.
+      await tx.$queryRaw`
+        SELECT o."id" FROM "orders" o
+        JOIN "print_jobs" j ON j."orderId" = o."id"
+        WHERE j."id" = ${id}::uuid
+        FOR SHARE OF o`;
       const { count } = await tx.printJob.updateMany({
         where: { id, status: from },
         data,
@@ -595,7 +619,23 @@ export class PrintJobsRepository {
     );
   }
 
-  createMany(jobs: NewPrintJob[]) {
-    return this.prisma.printJob.createMany({ data: jobs });
+  /**
+   * The runs an order going into production makes by itself, only if it still is (a cancel
+   * a moment later would otherwise leave runs on a cancelled order) and still has none.
+   */
+  createForOrder(orderId: string, jobs: NewPrintJob[]) {
+    return this.prisma.$transaction(async (tx) => {
+      const [order] = await tx.$queryRaw<{ status: string }[]>`
+        SELECT "status" FROM "orders" WHERE "id" = ${orderId}::uuid FOR SHARE`;
+      if (order?.status !== OrderStatus.IN_PRODUCTION) return;
+      const taken = await tx.printJob.findMany({
+        where: { orderId, orderItemId: { not: null } },
+        select: { orderItemId: true },
+      });
+      const has = new Set(taken.map((j) => j.orderItemId));
+      await tx.printJob.createMany({
+        data: jobs.filter((j) => !j.orderItemId || !has.has(j.orderItemId)),
+      });
+    });
   }
 }
