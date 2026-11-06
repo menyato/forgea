@@ -200,6 +200,15 @@ export class AuthService {
 
   /** At most one code a minute (EmailCodes) and a few an hour per address. */
   private async sendCode(user: User): Promise<boolean> {
+    // No new code (with its fresh tries) unless its email may go out: the hourly email cap
+    // also caps guessing.
+    if (
+      !this.notifications.mayStillSend(
+        `email-code:${user.email}`,
+        CODES_PER_HOUR,
+      )
+    )
+      return false;
     const code = await this.codes.issue(user.id);
     if (!code) return false;
     return this.notifications.sendAtMost(

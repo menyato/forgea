@@ -12,6 +12,7 @@ import { isMediaKey } from '@forgea/validation';
 import type { Response } from 'express';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import { OptionalUser, Public } from '../authorization/decorators.js';
+import { TeamPermissions } from '../authorization/team-permissions.js';
 import { Role } from '../generated/prisma/enums.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { UploadsService } from './uploads.service.js';
@@ -30,7 +31,10 @@ function attachment(name: string): string {
 @Throttle(THROTTLE.media)
 @Controller('media')
 export class MediaController {
-  constructor(private readonly uploads: UploadsService) {}
+  constructor(
+    private readonly uploads: UploadsService,
+    private readonly team: TeamPermissions,
+  ) {}
 
   @Get('clean/:file')
   async file(
@@ -42,9 +46,19 @@ export class MediaController {
   ): Promise<StreamableFile> {
     const key = `clean/${file}`;
     if (!isMediaKey(key)) throw new NotFoundException('File not found');
-    const staff = user !== undefined && user.role !== Role.CUSTOMER;
+    // A team member's access as it is now (not as their token says): switched off or a
+    // permission taken away applies to their next file.
+    const access =
+      user !== undefined && user.role !== Role.CUSTOMER
+        ? await this.team.current(user.id)
+        : null;
+    const permissions =
+      access && !access.disabled && access.role !== Role.CUSTOMER
+        ? access.permissions
+        : null;
+    const staff = permissions !== null;
     const media = await this.uploads.media(key, {
-      staff,
+      staff: permissions,
       userId: user?.id ?? null,
     });
     // Keys are random and never reused, so a file's bytes never change.

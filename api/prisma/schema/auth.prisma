@@ -31,6 +31,8 @@ model EmailCode {
   expiresAt    DateTime @db.Timestamptz(3)
   /// Wrong codes left before this one stops working (CHECK >= 0).
   attemptsLeft Int
+  /// Wrong codes over the account's life (not reset by a new code): past the limit, none works.
+  wrongTotal   Int      @default(0)
   /// When it was emailed: a new one is sent at most once a minute.
   sentAt       DateTime @default(now()) @db.Timestamptz(3)
 

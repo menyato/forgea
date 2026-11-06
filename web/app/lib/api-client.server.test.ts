@@ -49,7 +49,7 @@ describe('ApiClient', () => {
     const api = fakeApi(json(200, { ok: true }));
     const client = new ApiClient(
       browser({
-        cookie: 'forgea_at=abc; forgea_cart=s%3Axyz',
+        cookie: '__Host-forgea_at=abc; __Host-forgea_cart=s%3Axyz',
         'cf-connecting-ip': '203.0.113.9',
       }),
       env,
@@ -59,7 +59,7 @@ describe('ApiClient', () => {
 
     const sent = api.calls[0]!;
     expect(sent.headers.get('cookie')).toBe(
-      'forgea_at=abc; forgea_cart=s%3Axyz',
+      '__Host-forgea_at=abc; __Host-forgea_cart=s%3Axyz',
     );
     expect(sent.headers.get('x-forgea-csrf')).toBe('1');
     expect(sent.headers.get('x-forgea-client-ip')).toBe('203.0.113.9');
@@ -83,13 +83,13 @@ describe('ApiClient', () => {
   it('relays the cookies the API sets back to the browser', async () => {
     const api = fakeApi(
       json(201, {}, [
-        'forgea_cart=s%3Anew; Path=/; HttpOnly; Secure; SameSite=Lax',
+        '__Host-forgea_cart=s%3Anew; Path=/; HttpOnly; Secure; SameSite=Lax',
       ]),
     );
     const client = new ApiClient(browser({}), env, api.fetchImpl);
     await client.post('/cart/items', {});
     expect(client.headers.getSetCookie()).toEqual([
-      'forgea_cart=s%3Anew; Path=/; HttpOnly; Secure; SameSite=Lax',
+      '__Host-forgea_cart=s%3Anew; Path=/; HttpOnly; Secure; SameSite=Lax',
     ]);
   });
 
@@ -97,13 +97,13 @@ describe('ApiClient', () => {
     const api = fakeApi(
       json(401, { message: 'Unauthorized' }),
       json(200, { id: 'u1' }, [
-        'forgea_at=fresh; Path=/; HttpOnly',
-        'forgea_rt=rotated; Path=/; HttpOnly',
+        '__Host-forgea_at=fresh; Path=/; HttpOnly',
+        '__Host-forgea_rt=rotated; Path=/; HttpOnly',
       ]),
       json(200, { email: 'a@b.co' }),
     );
     const client = new ApiClient(
-      browser({ cookie: 'forgea_at=stale; forgea_rt=old' }),
+      browser({ cookie: '__Host-forgea_at=stale; __Host-forgea_rt=old' }),
       env,
       api.fetchImpl,
     );
@@ -121,7 +121,7 @@ describe('ApiClient', () => {
     ]);
     // The retry carries the new cookies, and the browser gets them too.
     expect(api.calls[2]!.headers.get('cookie')).toBe(
-      'forgea_at=fresh; forgea_rt=rotated',
+      '__Host-forgea_at=fresh; __Host-forgea_rt=rotated',
     );
     expect(client.headers.getSetCookie()).toHaveLength(2);
   });
@@ -137,7 +137,7 @@ describe('ApiClient', () => {
       json(401, { message: 'Email or password is incorrect' }),
     );
     const r = await new ApiClient(
-      browser({ cookie: 'forgea_rt=x' }),
+      browser({ cookie: '__Host-forgea_rt=x' }),
       env,
       authRoute.fetchImpl,
     ).post('/auth/login', {});
@@ -152,12 +152,12 @@ describe('ApiClient', () => {
   it('forgets cookies the API clears', async () => {
     const api = fakeApi(
       json(201, {}, [
-        'forgea_cart=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+        '__Host-forgea_cart=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT',
       ]),
       json(200, {}),
     );
     const client = new ApiClient(
-      browser({ cookie: 'forgea_cart=s%3Aold' }),
+      browser({ cookie: '__Host-forgea_cart=s%3Aold' }),
       env,
       api.fetchImpl,
     );
@@ -185,12 +185,15 @@ describe('ApiClient', () => {
     const api = fakeApi(
       json(401, {}),
       json(401, {}),
-      json(200, {}, ['forgea_at=fresh; Path=/', 'forgea_rt=rotated; Path=/']),
+      json(200, {}, [
+        '__Host-forgea_at=fresh; Path=/',
+        '__Host-forgea_rt=rotated; Path=/',
+      ]),
       json(200, { a: 1 }),
       json(200, { b: 2 }),
     );
     const client = new ApiClient(
-      browser({ cookie: 'forgea_rt=old' }),
+      browser({ cookie: '__Host-forgea_rt=old' }),
       env,
       api.fetchImpl,
     );
@@ -205,11 +208,11 @@ describe('ApiClient', () => {
   it('renews for GET /auth/me (the header needs to know who is signed in)', async () => {
     const api = fakeApi(
       json(401, {}),
-      json(200, {}, ['forgea_at=fresh; Path=/']),
+      json(200, {}, ['__Host-forgea_at=fresh; Path=/']),
       json(200, { email: 'a@b.co' }),
     );
     const r = await new ApiClient(
-      browser({ cookie: 'forgea_rt=old' }),
+      browser({ cookie: '__Host-forgea_rt=old' }),
       env,
       api.fetchImpl,
     ).get('/auth/me');

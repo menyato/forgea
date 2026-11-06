@@ -98,6 +98,14 @@ export class Notifications {
     return true;
   }
 
+  /** Whether `sendAtMost(key, max, …)` would send now (nothing is counted). */
+  mayStillSend(key: string, max: number): boolean {
+    const now = Date.now();
+    return (
+      (this.recent.get(key) ?? []).filter((t) => now - t < HOUR_MS).length < max
+    );
+  }
+
   /** When each limited email went out, per key, over the last hour (bounded). */
   private readonly recent = new Map<string, number[]>();
 

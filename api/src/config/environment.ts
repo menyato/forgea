@@ -65,15 +65,6 @@ export class EnvironmentVariables {
   @IsUrl(urlOptions, { each: true })
   DEV_CORS_ORIGINS: string[] = ['http://localhost:5173'];
 
-  /**
-   * Leave unset (host-only cookies): the deployed API has no address of its own, its Google
-   * sign-in paths are served from the website's host (deploy/edge/Caddyfile). Setting a parent
-   * domain would hand production's cookies to staging.forgea-lab.com too.
-   */
-  @IsOptional()
-  @Matches(/^\.?[a-z0-9.-]+$/)
-  COOKIE_DOMAIN?: string;
-
   /** HMAC key for access-token JWTs. Generate with: openssl rand -base64 48 */
   @IsString()
   @MinLength(32, {

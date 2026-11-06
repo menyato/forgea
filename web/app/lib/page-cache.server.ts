@@ -48,7 +48,14 @@ export async function pageCacheMiddleware(
     new URL(request.url).pathname.startsWith('/admin')
   ) {
     const response = await next();
-    if (response.status < 400) entries.clear();
+    // A save: a success, or a redirect within the dashboard. Anyone else is turned away
+    // with a redirect out of it (to sign in), which must not empty the cache for everyone.
+    const to = response.headers.get('Location') ?? '';
+    const saved =
+      response.status < 300 ||
+      (response.status < 400 &&
+        new URL(to, request.url).pathname.startsWith('/admin'));
+    if (saved) entries.clear();
     return response;
   }
   const key = cacheKey(request);
@@ -116,7 +123,11 @@ function cacheKey(request: Request): string | null {
   if (request.headers.has('authorization')) return null;
   let theme = '';
   for (const part of (request.headers.get('cookie') ?? '').split(';')) {
-    const name = part.split('=')[0]!.trim();
+    // Our session and cart cookies are "__Host-forgea_…".
+    const name = part
+      .split('=')[0]!
+      .trim()
+      .replace(/^__Host-/, '');
     if (name === 'forgea_theme')
       theme = part.slice(part.indexOf('=') + 1).trim();
     // Signed in, a cart, mid-sign-up…: this visitor's page is their own.

@@ -85,9 +85,10 @@ describe('Text studio (e2e)', () => {
         name: `Text colours ${tag}`,
         values: {
           create: [
-            { label: 'Red', swatchHex: '#b3282d' },
-            { label: 'White', swatchHex: '#f2f2ee' },
-            { label: 'Gold', swatchHex: '#c9a227' },
+            // In this order (made in the same instant, their ids alone don't order them).
+            { label: 'Red', swatchHex: '#b3282d', sortOrder: 0 },
+            { label: 'White', swatchHex: '#f2f2ee', sortOrder: 1 },
+            { label: 'Gold', swatchHex: '#c9a227', sortOrder: 2 },
           ],
         },
       },

@@ -68,6 +68,10 @@
 		# page fetches and shows images only from this site (a 3D file can't call out).
 		# Scripts are left to the app: React Router's hydration uses inline scripts.
 		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com; object-src 'none'; connect-src 'self'; img-src 'self' data: blob:"
+		# Scripts only from this site (React Router's inline hydration, the 3D viewer's
+		# WebAssembly and workers). Report-only until a week of staging and production shows
+		# no report in the browser console; then move these into the policy above.
+		Content-Security-Policy-Report-Only "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; worker-src 'self' blob:"
 		X-Frame-Options DENY
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 	}
