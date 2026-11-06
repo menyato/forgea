@@ -42,6 +42,23 @@ export async function nextOrderNumber(
   return orderNumber(year, Number(row!.last));
 }
 
+/**
+ * Brings every year's counter up to the highest number already given that year. Needed only
+ * when orders exist that the counter doesn't know of (a restored backup, a hand-made row).
+ */
+export async function catchUpOrderSequences(
+  db: Prisma.TransactionClient,
+): Promise<void> {
+  await db.$executeRaw`
+    INSERT INTO "order_sequences" ("year", "last")
+    SELECT split_part("orderNumber", '-', 2)::int, MAX(split_part("orderNumber", '-', 3)::int)
+    FROM "orders"
+    WHERE "orderNumber" ~ '^FG-[0-9]{4}-[0-9]+$'
+    GROUP BY 1
+    ON CONFLICT ("year") DO UPDATE
+    SET "last" = GREATEST("order_sequences"."last", EXCLUDED."last")`;
+}
+
 export const orderNumber = (year: number, n: number) =>
   `FG-${year}-${String(n).padStart(4, '0')}`;
 

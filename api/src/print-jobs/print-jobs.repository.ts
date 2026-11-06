@@ -302,13 +302,21 @@ export class PrintJobsRepository {
         COALESCE(SUM(j."materialCost"), 0) AS "material",
         COALESCE(SUM(j."electricityCost"), 0) AS "electricity",
         COALESCE(SUM(j."wearCost"), 0) AS "wear",
-        COALESCE(SUM(i."unitPrice" * j."quantity") FILTER (WHERE j."status" = 'DONE'), 0) AS "sold"
+        COALESCE(SUM(i."lineTotal" * j."quantity" / i."quantity") FILTER (WHERE j."status" = 'DONE'), 0) AS "sold"
       FROM "print_jobs" j
       JOIN "order_items" i ON i."id" = j."orderItemId"
       WHERE i."productId" = ${productId}::uuid
-        AND j."status" IN ('DONE', 'FAILED')
-        AND j."materialCost" IS NOT NULL`;
+        AND j."status" IN ('DONE', 'FAILED')`;
     return row!;
+  }
+
+  /** The shop's sales tax rate (percent), or null when prices carry none. */
+  async salesTaxRate(): Promise<Prisma.Decimal | null> {
+    const s = await this.prisma.accountingSettings.findUnique({
+      where: { id: 1 },
+      select: { salesTax: { select: { ratePercent: true } } },
+    });
+    return s?.salesTax?.ratePercent ?? null;
   }
 
   async electricityPerKwh(): Promise<Prisma.Decimal | null> {

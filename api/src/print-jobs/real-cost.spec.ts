@@ -32,6 +32,24 @@ describe('realCostPerPiece', () => {
     });
   });
 
+  it('leaves the sales tax out of what customers paid', () => {
+    const cost = realCostPerPiece(
+      {
+        done: 1,
+        failed: 0,
+        pieces: 1,
+        grams: '10',
+        hours: '1',
+        material: '1.00',
+        electricity: '0',
+        wear: '0',
+        sold: '11.00',
+      },
+      '10',
+    );
+    expect(cost.perPiece).toMatchObject({ soldAt: '10.00', margin: '9.00' });
+  });
+
   it('has nothing per piece before a run is done', () => {
     expect(
       realCostPerPiece({

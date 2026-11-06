@@ -16,7 +16,7 @@ import {
   type OrderStatus,
   QuotationStatus,
 } from '../generated/prisma/enums.js';
-import { nextOrderNumber } from './order-number.js';
+import { catchUpOrderSequences, nextOrderNumber } from './order-number.js';
 
 const withCustomer = {
   user: { select: { email: true } },
@@ -97,7 +97,7 @@ export class QuoteNoLongerOpenError extends Error {
   }
 }
 
-/** Number of fresh order numbers to try if one collides (≈ never at 50 bits). */
+/** Tries before giving up when the order number is taken (the counter is caught up between). */
 const ORDER_NUMBER_ATTEMPTS = 3;
 
 @Injectable()
@@ -200,8 +200,10 @@ export class OrdersRepository {
         const raced = await this.findByIdempotencyKey(o.dto.idempotencyKey);
         if (raced?.userId === o.userId) return raced;
         if (raced) throw error;
-        // Otherwise the random order number collided; try a fresh one.
+        // Otherwise the order number was taken: the year's counter is behind the orders
+        // (a restored backup). Catch it up and try again.
         if (attempt >= ORDER_NUMBER_ATTEMPTS) throw error;
+        await catchUpOrderSequences(this.prisma);
       }
     }
   }

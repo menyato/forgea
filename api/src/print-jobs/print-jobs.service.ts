@@ -177,8 +177,12 @@ export class PrintJobsService {
       data.status === PrintJobStatus.FAILED &&
       dto.actualGrams !== undefined
     ) {
-      data.actualGrams = dto.actualGrams;
-      data.finishedAt = new Date();
+      // What it used before failing is a real cost too (the product's real cost counts it).
+      Object.assign(
+        data,
+        await this.costs(job, data, dto.actualGrams, dto.actualHours ?? '0'),
+      );
+      if (dto.actualHours === undefined) delete data.actualHours;
     }
     const updated = await this.jobs.update(id, job.status, data, actorId);
     if (!updated)
@@ -246,7 +250,11 @@ export class PrintJobsService {
 
   /** What a product's pieces really cost to print, from its finished runs. */
   async productCost(productId: string): Promise<ProductRealCost> {
-    return realCostPerPiece(await this.jobs.productTotals(productId));
+    const [totals, taxRate] = await Promise.all([
+      this.jobs.productTotals(productId),
+      this.jobs.salesTaxRate(),
+    ]);
+    return realCostPerPiece(totals, taxRate);
   }
 
   /**
@@ -329,17 +337,21 @@ export class PrintJobsService {
 type Amount = string | number | Prisma.Decimal;
 
 /** Totals over a product's finished runs, per piece printed. */
-export function realCostPerPiece(t: {
-  done: number;
-  failed: number;
-  pieces: number;
-  grams: Amount;
-  hours: Amount;
-  material: Amount;
-  electricity: Amount;
-  wear: Amount;
-  sold: Amount;
-}): ProductRealCost {
+export function realCostPerPiece(
+  t: {
+    done: number;
+    failed: number;
+    pieces: number;
+    grams: Amount;
+    hours: Amount;
+    material: Amount;
+    electricity: Amount;
+    wear: Amount;
+    /** What customers paid for the pieces: after discounts, tax included. */
+    sold: Amount;
+  },
+  taxRatePercent: Amount | null = null,
+): ProductRealCost {
   const per = (v: Amount, places = 2) =>
     new Prisma.Decimal(v).div(t.pieces).toFixed(places);
   if (t.pieces === 0)
@@ -348,7 +360,13 @@ export function realCostPerPiece(t: {
     .plus(t.electricity)
     .plus(t.wear)
     .div(t.pieces);
-  const soldAt = new Prisma.Decimal(t.sold).div(t.pieces);
+  // Prices include the sales tax, which isn't the studio's money.
+  const sold = new Prisma.Decimal(t.sold);
+  const net =
+    taxRatePercent === null || new Prisma.Decimal(taxRatePercent).isZero()
+      ? sold
+      : sold.times(100).div(new Prisma.Decimal(100).plus(taxRatePercent));
+  const soldAt = net.div(t.pieces);
   return {
     done: t.done,
     failed: t.failed,
