@@ -30,6 +30,7 @@ import { jsonField } from '~/lib/forms.server';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
 import { DeliveryAreaField } from '~/features/orders/delivery-area-field';
+import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import type { QuotationLookup } from '../admin.quotations.lookup/route';
@@ -39,7 +40,8 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
   // The shop's own list (what is for sale, at today's prices): quoting needs no catalog access.
   const isNew = params.id === 'new';
   const [products, quotation] = await Promise.all([
-    api.get<Page<ProductListItem>>('/products?limit=100&sort=name&order=asc'),
+    // Every product for sale, however many pages.
+    allPages<ProductListItem>(api, '/products?limit=100&sort=name&order=asc'),
     isNew
       ? null
       : api.get<QuotationDetail>(
@@ -54,7 +56,7 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
   return {
     quotation: quotation?.ok ? quotation.data : null,
     related: isNew ? [] : await relatedOf(api, 'quotation', params.id),
-    products: products.ok ? products.data.items : [],
+    products,
     // Coming from a lead: who it's for.
     prefill: {
       leadId: url.searchParams.get('lead'),

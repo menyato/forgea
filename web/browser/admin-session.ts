@@ -52,7 +52,9 @@ async function useSession(
     ].map(([name, value]) => ({
       name: name!,
       value: value!,
-      url: baseURL,
+      // "__Host-" cookies are taken only from a secure origin: the same host over https
+      // (cookies don't keep the scheme or port, so http://localhost sends them too).
+      url: baseURL.replace(/^http:/, 'https:'),
       httpOnly: true,
       // "__Host-" cookies must be Secure (localhost counts as secure).
       secure: true,

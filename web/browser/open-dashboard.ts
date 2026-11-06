@@ -25,7 +25,7 @@ await context.addCookies(
   ].map(([name, value]) => ({
     name: name!,
     value: value!,
-    url: web,
+    url: web.replace(/^http:/, 'https:'),
     httpOnly: true,
     secure: true,
     sameSite: 'Lax' as const,
