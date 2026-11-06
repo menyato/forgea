@@ -47,7 +47,9 @@ export const ENTRY_SORTS = ['date', 'number'] as const;
 export const STOCK_MOVEMENT_SORTS = ['createdAt', 'grams'] as const;
 
 /** "FG-" + 10 Crockford base-32 characters (no I, L, O or U). Also enforced by the database. */
-export const ORDER_NUMBER_PATTERN = /^FG-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{10}$/;
+/** "FG-2026-0001" (the year, then a running count); older orders kept a random one. */
+export const ORDER_NUMBER_PATTERN =
+  /^FG-([0-9]{4}-[0-9]{4,}|[0-9ABCDEFGHJKMNPQRSTVWXYZ]{10})$/;
 export const STATUS_NOTE_MAX_LENGTH = 500;
 
 // Catalog (dashboard). Decimals are strings, as in the database.

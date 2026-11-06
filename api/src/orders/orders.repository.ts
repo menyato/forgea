@@ -16,7 +16,7 @@ import {
   type OrderStatus,
   QuotationStatus,
 } from '../generated/prisma/enums.js';
-import { generateOrderNumber } from './order-number.js';
+import { nextOrderNumber } from './order-number.js';
 
 const withCustomer = {
   user: { select: { email: true } },
@@ -120,7 +120,7 @@ export class OrdersRepository {
           await setStatusActor(tx, o.actorId ?? o.userId, null);
           const order = await tx.order.create({
             data: {
-              orderNumber: generateOrderNumber(),
+              orderNumber: await nextOrderNumber(tx),
               idempotencyKey: o.dto.idempotencyKey,
               userId: o.userId,
               status: o.status,

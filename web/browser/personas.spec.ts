@@ -159,7 +159,7 @@ test('Maya, on her phone: two sizes of a vase, delivered, cash on delivery; the 
   await expect(page.getByText('Order placed')).toBeVisible();
   const order =
     (await page.locator('strong.font-mono').first().textContent()) ?? '';
-  expect(order).toMatch(/^FG-[0-9A-Z]{10}$/);
+  expect(order).toMatch(/^FG-\d{4}-\d{4,}$/);
   expect(await lastEmailTo(email)).toContain(order);
 
   // My orders lists both vases with their sizes.

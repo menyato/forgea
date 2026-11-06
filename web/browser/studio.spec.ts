@@ -118,10 +118,10 @@ test('a lead from first contact to a confirmed order, for someone without an acc
 
   // They said yes on the phone: the studio confirms, which makes their account and the order.
   await page.getByRole('button', { name: 'Confirm: create the order' }).click();
-  const created = page.getByText(/Sales order FG-[0-9A-Z]{10} created/);
+  const created = page.getByText(/Sales order FG-\d{4}-\d{4,} created/);
   await expect(created).toBeVisible();
   const order =
-    (await created.textContent())?.match(/FG-[0-9A-Z]{10}/)?.[0] ?? '';
+    (await created.textContent())?.match(/FG-\d{4}-\d{4,}/)?.[0] ?? '';
   // The quotation is now a sales order, and leads to it.
   await expect(
     page
