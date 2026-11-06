@@ -231,10 +231,10 @@ export default function Leads({ loaderData }: Route.ComponentProps) {
               ? 'No new leads: every one has been opened.'
               : 'No leads here.'
           }
-          group={
-            state.group === 'stage'
+          group={(k) =>
+            k === 'stage'
               ? { of: (l) => l.stage.name, order: stages.map((s) => s.name) }
-              : state.group === 'assigned'
+              : k === 'assigned'
                 ? {
                     of: (l) =>
                       l.assignedTo

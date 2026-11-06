@@ -88,12 +88,12 @@ export class LeadsController {
   /** Leads nobody has opened yet: the "New" tab's number. */
   @RequirePermission('leads.view')
   @Get('counts')
-  counts(): Promise<{ unopened: number }> {
-    return this.leads.counts();
+  counts(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ unopened: number; followUpsDue: number }> {
+    return this.leads.counts(user.id);
   }
 
-  /** Opening it in the dashboard marks it as seen (no longer "New"). */
-  @RequirePermission('leads.view')
   /** Follow-ups not done yet: mine, or the whole team's. */
   @RequirePermission('leads.view')
   @Get('activities')
@@ -104,6 +104,8 @@ export class LeadsController {
     return this.leads.todo(query.who === 'all' ? null : user.id);
   }
 
+  /** Opening it in the dashboard marks it as seen (no longer "New"). */
+  @RequirePermission('leads.view')
   @Get(':id')
   detail(@Param('id', ParseUUIDPipe) id: string): Promise<LeadDetail> {
     return this.leads.open(id);

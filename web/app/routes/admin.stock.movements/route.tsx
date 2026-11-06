@@ -157,10 +157,10 @@ export default function StockMovements({ loaderData }: Route.ComponentProps) {
       ? [{ key: lineFilter(line.id), label: line.name, apart: true }]
       : []),
   ];
-  const groupOf =
-    state.group === 'kind'
+  const groupOf = (k: string) =>
+    k === 'kind'
       ? (m: Row) => STOCK_MOVEMENT_LABELS[m.kind]
-      : state.group === 'filament'
+      : k === 'filament'
         ? filamentOf
         : undefined;
   return (
@@ -242,7 +242,10 @@ export default function StockMovements({ loaderData }: Route.ComponentProps) {
         columns={COLUMNS}
         href={href}
         state={state}
-        group={groupOf ? { of: groupOf } : undefined}
+        group={(k) => {
+          const of = groupOf(k);
+          return of ? { of } : undefined;
+        }}
         empty="Nothing recorded yet."
       />
     </>

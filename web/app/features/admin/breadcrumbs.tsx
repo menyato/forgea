@@ -12,14 +12,50 @@ export interface Crumb {
  * so a breadcrumb leads back to the list as it was left. Kept in the browser only: filled
  * after the page shows, never on the server.
  */
-const lastSeen = new Map<string, string>();
+const SEEN_KEY = 'forgea_last_seen';
+let lastSeen: Map<string, string> | null = null;
+
+function seen(): Map<string, string> {
+  if (!lastSeen) {
+    try {
+      lastSeen = new Map(
+        Object.entries(
+          JSON.parse(sessionStorage.getItem(SEEN_KEY) ?? '{}') as Record<
+            string,
+            string
+          >,
+        ),
+      );
+    } catch {
+      lastSeen = new Map();
+    }
+  }
+  return lastSeen;
+}
 
 /** Remembers where each dashboard page was last seen (DashboardShell calls it once). */
 export function useRememberAddresses() {
   const { pathname, search } = useLocation();
   useEffect(() => {
-    lastSeen.set(pathname, search);
+    const all = seen();
+    all.set(pathname, search);
+    try {
+      sessionStorage.setItem(SEEN_KEY, JSON.stringify(Object.fromEntries(all)));
+    } catch {
+      // Storage refused: remembered until the page reloads.
+    }
   }, [pathname, search]);
+}
+
+/**
+ * A page's address as it was last seen ("/admin/orders?filter=late"): the plain one first
+ * (server and first paint agree), then the remembered one.
+ */
+export function useLastSeen(): (path: string) => string {
+  const { pathname, search } = useLocation();
+  const [known, setKnown] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => setKnown(new Map(seen())), [pathname, search]);
+  return (path) => `${path}${known.get(path) ?? ''}`;
 }
 
 /** The records each list last showed (their pages' addresses, in order), by the list's path. */
@@ -100,13 +136,9 @@ export function Breadcrumbs({
 
 function CrumbLink({ crumb }: { crumb: Crumb }) {
   // The plain address first (server and first paint agree), then the one last seen.
-  const [search, setSearch] = useState('');
-  useEffect(() => setSearch(lastSeen.get(crumb.to) ?? ''), [crumb.to]);
+  const back = useLastSeen();
   return (
-    <Link
-      to={`${crumb.to}${search}`}
-      className="hover:text-text hover:underline"
-    >
+    <Link to={back(crumb.to)} className="hover:text-text hover:underline">
       {crumb.label}
     </Link>
   );

@@ -223,6 +223,17 @@ export class LeadsRepository {
     return this.prisma.leadActivity.create({ data: a });
   }
 
+  countDue(assignedToId: string, before: Date) {
+    return this.prisma.leadActivity.count({
+      where: {
+        doneAt: null,
+        assignedToId,
+        dueAt: { lt: before },
+        lead: { closedAt: null },
+      },
+    });
+  }
+
   /** Follow-ups not done yet on open leads, soonest first (the to-do page). */
   openActivities(assignedToId: string | null) {
     return this.prisma.leadActivity.findMany({

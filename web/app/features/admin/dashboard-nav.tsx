@@ -2,6 +2,7 @@ import type { Profile } from '@forgea/types';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { MENU_GROUPS, type MenuGroup, mayOpen, PAGES } from './access';
+import { useLastSeen } from './breadcrumbs';
 
 const STORAGE_KEY = 'forgea_dashboard_menu';
 
@@ -27,18 +28,21 @@ function remembered(): Partial<Record<MenuGroup, boolean>> {
 /**
  * The dashboard menu, grouped like apps (Sales, Orders, Accounting, Catalog, Settings), each
  * folding open to its pages. Only pages this person may open are listed; a group with none
- * is left out. The group of the current page is always open.
+ * is left out. Groups start folded; the group of the current page is always open. Each link
+ * goes back to its list as it was last left (search, filters, grouping).
  */
 export function DashboardNav({ staff }: { staff: Profile }) {
   const { pathname } = useLocation();
   const pages = PAGES.filter((p) => p.label && mayOpen(staff, p.access));
+  const back = useLastSeen();
   const current = pages
     .filter(
       (p) =>
         p.group && (pathname === p.path || pathname.startsWith(`${p.path}/`)),
     )
     .sort((a, b) => b.path.length - a.path.length)[0]?.group;
-  // The server renders every group open; this browser's choices apply once it has loaded.
+  // Folded by default (the current page's group open); this browser's choices apply once
+  // it has loaded.
   const [open, setOpen] = useState<Partial<Record<MenuGroup, boolean>>>({});
   useEffect(() => setOpen(remembered()), []);
   // A long menu scrolls to the page you are on.
@@ -70,7 +74,7 @@ export function DashboardNav({ staff }: { staff: Profile }) {
       {MENU_GROUPS.map((group) => {
         const inGroup = pages.filter((p) => p.group === group);
         if (inGroup.length === 0) return null;
-        const isOpen = group === current || (open[group] ?? true);
+        const isOpen = group === current || (open[group] ?? false);
         return (
           <details
             key={group}
@@ -108,7 +112,7 @@ export function DashboardNav({ staff }: { staff: Profile }) {
                 .map((p) => (
                   <li key={p.path}>
                     <NavLink
-                      to={p.path}
+                      to={back(p.path)}
                       end={p.path === '/admin/accounting'}
                       className={linkClass}
                     >
@@ -125,7 +129,7 @@ export function DashboardNav({ staff }: { staff: Profile }) {
                 .filter((p) => p.config)
                 .map((p) => (
                   <li key={p.path}>
-                    <NavLink to={p.path} className={linkClass}>
+                    <NavLink to={back(p.path)} className={linkClass}>
                       {p.label}
                     </NavLink>
                   </li>

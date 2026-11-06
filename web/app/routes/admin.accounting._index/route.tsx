@@ -190,12 +190,12 @@ export default function Accounting({ loaderData }: Route.ComponentProps) {
         href={(i) => `/admin/accounting/invoices/${i.id}`}
         state={state}
         empty="No invoices here."
-        group={
-          state.group === 'state'
+        group={(k) =>
+          k === 'state'
             ? { of: (i) => stateOf(i).label, order: STATE_ORDER }
-            : state.group === 'customer'
+            : k === 'customer'
               ? { of: customerOf }
-              : state.group === 'month'
+              : k === 'month'
                 ? { of: (i) => month(i.date) }
                 : undefined
         }
