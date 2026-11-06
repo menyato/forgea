@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { EnvironmentVariables } from '../config/environment.js';
 import type { QuotationEmailSettings, StoreSettings } from '@forgea/types';
 import {
   UpdateQuotationEmailDto,
@@ -17,7 +19,35 @@ import { StoreSettingsService } from './store-settings.service.js';
 
 @Controller('store-settings')
 export class StoreSettingsController {
-  constructor(private readonly storeSettings: StoreSettingsService) {}
+  constructor(
+    private readonly storeSettings: StoreSettingsService,
+    private readonly config: ConfigService<EnvironmentVariables, true>,
+  ) {}
+
+  /**
+   * What the server's own settings leave undone, for admins to see on the Overview (rather
+   * than in a log nobody reads): no email in production; email limited to a few people.
+   */
+  @RequirePermission('store.manage')
+  @Get('setup-warnings')
+  setupWarnings(): string[] {
+    const get = <K extends keyof EnvironmentVariables>(k: K) =>
+      this.config.get(k, { infer: true });
+    const warnings: string[] = [];
+    const allowed = get('MAIL_ALLOWED_RECIPIENTS')?.trim();
+    if (allowed)
+      warnings.push(
+        `This site only emails ${allowed}; everyone else's emails stay unsent (a test site).`,
+      );
+    else if (
+      get('NODE_ENV') === 'production' &&
+      !(get('GOOGLE_SERVICE_ACCOUNT_KEY') && get('MAIL_SENDER'))
+    )
+      warnings.push(
+        "Email isn't set up on the server: customers get no order emails or sign-up codes.",
+      );
+    return warnings;
+  }
 
   /** Public: checkout shows the transfer number, every page links to WhatsApp. */
   @Public()

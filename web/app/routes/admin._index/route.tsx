@@ -83,6 +83,11 @@ export async function loader({ context }: Route.LoaderArgs) {
       ? api.get<CustomerSummary>('/customers/summary').then(ok)
       : null,
   ]);
+  // What the server's settings leave undone (no email in production…): admins only.
+  const warnings = may('store.manage')
+    ? ((await api.get<string[]>('/store-settings/setup-warnings').then(ok)) ??
+      [])
+    : [];
 
   const cards: Card[] = [];
   if (orders) {
@@ -180,11 +185,11 @@ export async function loader({ context }: Route.LoaderArgs) {
       urgent: false,
     });
   }
-  return { cards, customers, name: staff.name ?? staff.email };
+  return { cards, customers, warnings, name: staff.name ?? staff.email };
 }
 
 export default function Overview({ loaderData }: Route.ComponentProps) {
-  const { cards, customers, name } = loaderData;
+  const { cards, customers, warnings, name } = loaderData;
   const waiting = cards.filter((c) => c.urgent);
   return (
     <>
@@ -197,6 +202,16 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
             : `Hello ${name}. Nothing is waiting right now.`
         }
       />
+      {warnings.length > 0 && (
+        <div
+          role="alert"
+          className="mb-6 grid gap-1 rounded-lg border-2 border-danger bg-surface p-4 text-sm"
+        >
+          {warnings.map((w) => (
+            <p key={w}>{w}</p>
+          ))}
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
           <Link

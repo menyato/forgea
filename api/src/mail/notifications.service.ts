@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EnvironmentVariables } from '../config/environment.js';
 import type { Email } from './mailer.js';
-import { Mailer } from './mailer.js';
+import { Mailer, OutboxMailer } from './mailer.js';
 import { MailTemplates } from './mail-templates.js';
 import { WhatsApp, type WhatsAppUpdate } from './whatsapp.js';
 
@@ -29,12 +29,22 @@ export class Notifications {
 
   private readonly site: string;
 
+  /** Staging's allow-list (lower-case addresses and "@domain"s); null: everyone. */
+  private readonly allowedTo: readonly string[] | null;
+
   constructor(
     private readonly mailer: Mailer,
     readonly templates: MailTemplates,
     private readonly whatsApp: WhatsApp,
+    private readonly outbox: OutboxMailer,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
+    const allowed = config
+      .get('MAIL_ALLOWED_RECIPIENTS', { infer: true })
+      ?.split(',')
+      .map((a) => a.trim().toLowerCase())
+      .filter(Boolean);
+    this.allowedTo = allowed?.length ? allowed : null;
     this.studioEmail =
       config.get('STUDIO_NOTIFY_EMAIL', { infer: true }) ??
       config.get('MAIL_SENDER', { infer: true });
@@ -55,11 +65,16 @@ export class Notifications {
       return;
     }
     const sending = this.whatsApp
-      .send(phone, {
-        about: message.about,
-        update: message.update,
-        link: new URL(message.path, this.site).href,
-      })
+      .send(
+        phone,
+        {
+          about: message.about,
+          update: message.update,
+          link: new URL(message.path, this.site).href,
+        },
+        // Staging (an allow-list is set) never messages real customers.
+        this.allowedTo !== null,
+      )
       .catch((error: unknown) => {
         this.logger.warn(
           `Could not send WhatsApp "${message.about}": ${String(error)}`,
@@ -128,7 +143,9 @@ export class Notifications {
   ): void {
     const build = this.templates[template] as (d: typeof data) => Email;
     const email = build.call(this.templates, data);
-    const sending = this.mailer
+    // Staging: anyone not on its allow-list gets nothing; the email is kept in the outbox.
+    const mailer = this.mayEmail(email.to) ? this.mailer : this.outbox;
+    const sending = mailer
       .send(email)
       .catch((error: unknown) => {
         this.logger.warn(
@@ -137,6 +154,14 @@ export class Notifications {
       })
       .finally(() => this.pending.delete(sending));
     this.pending.add(sending);
+  }
+
+  private mayEmail(to: string): boolean {
+    if (!this.allowedTo) return true;
+    const address = to.trim().toLowerCase();
+    return this.allowedTo.some((a) =>
+      a.startsWith('@') ? address.endsWith(a) : address === a,
+    );
   }
 
   /** Resolves once every email started so far has been sent (or has failed). */

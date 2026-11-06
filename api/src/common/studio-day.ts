@@ -2,7 +2,7 @@
  * The studio's calendar: it is in Lebanon, so "today" (invoice dates, quotation expiry, the
  * year in a number) is Beirut's day, whatever the server's clock zone. Timestamps stay UTC.
  */
-export const STUDIO_TIME_ZONE = 'Asia/Beirut';
+const STUDIO_TIME_ZONE = 'Asia/Beirut';
 
 const DAY = new Intl.DateTimeFormat('en-CA', { timeZone: STUDIO_TIME_ZONE });
 

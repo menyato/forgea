@@ -59,7 +59,7 @@ EOF
 chmod 440 /etc/sudoers.d/ci
 
 # Updates installed automatically every day — Ubuntu's security fixes and Docker's own
-# packages — and a restart at 04:30 when a fix needs one (the containers come back by
+# packages — and a restart at 05:30 when a fix needs one (the containers come back by
 # themselves).
 cat >/etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
 APT::Periodic::Update-Package-Lists "1";
@@ -68,7 +68,7 @@ EOF
 cat >/etc/apt/apt.conf.d/52forgea-upgrades <<'EOF'
 Unattended-Upgrade::Origins-Pattern { "origin=Docker,label=Docker CE"; };
 Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+Unattended-Upgrade::Automatic-Reboot-Time "05:30";
 EOF
 
 # Docker Engine and the Compose plugin, from Docker's apt repository.

@@ -48,7 +48,12 @@ export class WhatsApp {
     return Boolean(this.token && this.phoneNumberId);
   }
 
-  async send(phone: string, message: WhatsAppUpdate): Promise<void> {
+  /** `outboxOnly`: written to the outbox even when configured (staging). */
+  async send(
+    phone: string,
+    message: WhatsAppUpdate,
+    outboxOnly = false,
+  ): Promise<void> {
     const to = whatsappNumber(phone);
     const body = {
       messaging_product: 'whatsapp',
@@ -71,7 +76,7 @@ export class WhatsApp {
         ],
       },
     };
-    if (!this.configured) {
+    if (!this.configured || outboxOnly) {
       await mkdir(this.dir, { recursive: true });
       const name = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID().slice(0, 8)}.json`;
       await writeFile(join(this.dir, name), JSON.stringify(body, null, 2));
