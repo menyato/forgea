@@ -34,17 +34,28 @@ const D = (v: Amount | undefined) => new Prisma.Decimal(v ?? 0);
 /**
  * The only code that writes journal entries. An entry is checked (it balances; its date is
  * after the lock date), numbered from its journal's sequence and posted in one transaction —
- * and the database checks the balance again and refuses any later change.
+ * and the database checks the balance again and refuses any later change. An invoice may
+ * first be saved as a draft (no number, outside the books, still editable), then posted.
  */
 @Injectable()
 export class Ledger {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Writes the entry and posts it at once. */
   async post(
     entry: NewEntry,
     actorId: string | null,
     tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; number: string }> {
+    const run = async (t: Prisma.TransactionClient) => {
+      const id = await this.draft(entry, t);
+      return { id, number: await this.postDraft(id, actorId, t) };
+    };
+    return tx ? run(tx) : this.prisma.$transaction(run);
+  }
+
+  /** Writes the entry as a draft: no number, not in the books. Returns its id. */
+  async draft(entry: NewEntry, tx: Prisma.TransactionClient): Promise<string> {
     const lines = entry.lines
       .map((l) => ({
         ...l,
@@ -57,77 +68,90 @@ export class Ledger {
         'The entry does not balance: debits must equal credits',
       );
     }
-    const run = async (t: Prisma.TransactionClient) => {
-      const settings = await t.accountingSettings.findUniqueOrThrow({
-        where: { id: 1 },
-      });
-      if (settings.lockDate && entry.date <= settings.lockDate) {
-        throw new BadRequestException(
-          `The books are locked up to ${settings.lockDate.toISOString().slice(0, 10)}`,
-        );
-      }
-      const journal = await t.journal.findUniqueOrThrow({
-        where: { id: entry.journalId },
-      });
-      const series = entry.type === EntryType.CREDIT_NOTE ? 'R' : '';
-      const year = entry.date.getUTCFullYear();
-      const [counter] = await t.$queryRaw<{ last: number }[]>`
-        INSERT INTO "entry_sequences" ("journalId", "year", "series", "last")
-        VALUES (${journal.id}::uuid, ${year}, ${series}, 1)
-        ON CONFLICT ("journalId", "year", "series")
-        DO UPDATE SET "last" = "entry_sequences"."last" + 1
-        RETURNING "last"`;
-      const rate = D(entry.exchangeRate ?? 1);
-      // Written as a draft with its lines, then posted: the database refuses lines added to
-      // an entry that is already posted.
-      const draft = await t.journalEntry.create({
-        data: {
-          type: entry.type,
-          journalId: journal.id,
-          date: entry.date,
-          label: entry.label,
-          customerId: entry.customerId ?? null,
-          orderId: entry.orderId ?? null,
-          invoiceKind: entry.invoiceKind ?? null,
-          currencyCode: entry.currencyCode ?? 'USD',
-          exchangeRate: rate,
-          reversedEntryId: entry.reversedEntryId ?? null,
-          lines: {
-            create: lines.map((l) => ({
-              accountId: l.accountId,
-              label: l.label,
-              debit: l.debit,
-              credit: l.credit,
-              // The document's currency, signed (+ debit, − credit).
-              amountCurrency: l.debit
-                .minus(l.credit)
-                .times(rate)
-                .toDecimalPlaces(4),
-              customerId: l.customerId ?? null,
-              taxId: l.taxId ?? null,
-              dueDate: l.dueDate ?? null,
-            })),
-          },
+    const rate = D(entry.exchangeRate ?? 1);
+    const draft = await tx.journalEntry.create({
+      data: {
+        type: entry.type,
+        journalId: entry.journalId,
+        date: entry.date,
+        label: entry.label,
+        customerId: entry.customerId ?? null,
+        orderId: entry.orderId ?? null,
+        invoiceKind: entry.invoiceKind ?? null,
+        currencyCode: entry.currencyCode ?? 'USD',
+        exchangeRate: rate,
+        reversedEntryId: entry.reversedEntryId ?? null,
+        lines: {
+          create: lines.map((l) => ({
+            accountId: l.accountId,
+            label: l.label,
+            debit: l.debit,
+            credit: l.credit,
+            // The document's currency, signed (+ debit, − credit).
+            amountCurrency: l.debit
+              .minus(l.credit)
+              .times(rate)
+              .toDecimalPlaces(4),
+            customerId: l.customerId ?? null,
+            taxId: l.taxId ?? null,
+            dueDate: l.dueDate ?? null,
+          })),
         },
-        select: { id: true },
-      });
-      const number = entryNumber(
-        `${series}${journal.code}`,
-        year,
-        Number(counter!.last),
+      },
+      select: { id: true },
+    });
+    return draft.id;
+  }
+
+  /**
+   * Posts a draft: checks its date against the lock date, gives it the next number of its
+   * journal and year, and makes it final. Returns the number.
+   */
+  async postDraft(
+    id: string,
+    actorId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
+    const entry = await tx.journalEntry.findUniqueOrThrow({
+      where: { id },
+      include: { journal: true },
+    });
+    if (entry.state !== 'DRAFT')
+      throw new BadRequestException('This entry is already posted');
+    const settings = await tx.accountingSettings.findUniqueOrThrow({
+      where: { id: 1 },
+    });
+    if (settings.lockDate && entry.date <= settings.lockDate) {
+      throw new BadRequestException(
+        `The books are locked up to ${settings.lockDate.toISOString().slice(0, 10)}`,
       );
-      await t.journalEntry.update({
-        where: { id: draft.id },
-        data: {
-          state: 'POSTED',
-          number,
-          postedAt: new Date(),
-          postedById: actorId,
-        },
-      });
-      return { id: draft.id, number };
-    };
-    return tx ? run(tx) : this.prisma.$transaction(run);
+    }
+    const series = entry.type === EntryType.CREDIT_NOTE ? 'R' : '';
+    const year = entry.date.getUTCFullYear();
+    const [counter] = await tx.$queryRaw<{ last: number }[]>`
+      INSERT INTO "entry_sequences" ("journalId", "year", "series", "last")
+      VALUES (${entry.journalId}::uuid, ${year}, ${series}, 1)
+      ON CONFLICT ("journalId", "year", "series")
+      DO UPDATE SET "last" = "entry_sequences"."last" + 1
+      RETURNING "last"`;
+    const number = entryNumber(
+      `${series}${entry.journal.code}`,
+      year,
+      Number(counter!.last),
+    );
+    // Only a draft moves: two posts at once can't both number it.
+    const { count } = await tx.journalEntry.updateMany({
+      where: { id, state: 'DRAFT' },
+      data: {
+        state: 'POSTED',
+        number,
+        postedAt: new Date(),
+        postedById: actorId,
+      },
+    });
+    if (count !== 1)
+      throw new BadRequestException('This entry is already posted');
+    return number;
   }
 
   /**

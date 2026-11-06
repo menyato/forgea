@@ -84,6 +84,8 @@ export {
   QuotationLineDto,
   QuotationListQuery,
   RecordPaymentDto,
+  CreateInvoiceDto,
+  InvoiceDatesDto,
   ReportPeriodQuery,
   SaveAccountDto,
   SaveLeadDto,

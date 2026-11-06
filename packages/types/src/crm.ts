@@ -146,7 +146,12 @@ export interface InvoiceListItem {
   number: string;
   type: EntryType;
   invoiceKind: InvoiceKind | null;
+  /** Draft: no number yet, outside the books, its dates still editable. */
+  state: 'DRAFT' | 'POSTED';
+  /** The invoice date (the accounting date). */
   date: string;
+  /** When the customer should have paid it. */
+  dueDate: string | null;
   customer: { id: string; email: string; name: string | null } | null;
   orderId: string | null;
   orderNumber: string | null;
@@ -161,6 +166,7 @@ export interface InvoiceListItem {
 
 /** The invoice list's filters, counted over every invoice, and what customers still owe. */
 export interface InvoiceCounts {
+  draft: number;
   unpaid: number;
   paid: number;
   credit: number;

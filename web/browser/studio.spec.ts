@@ -209,7 +209,7 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
   await page.goto(`/admin/orders?q=${order}`);
   await page.getByRole('link', { name: order }).first().click();
   const invoices = page.getByRole('region', { name: 'Invoices' });
-  await page.getByRole('button', { name: 'Invoice the deposit' }).click();
+  await invoices.getByRole('button', { name: 'Post the invoice' }).click();
   await expect(
     invoices.getByRole('row', { name: /Deposit.*Not paid/ }),
   ).toBeVisible();

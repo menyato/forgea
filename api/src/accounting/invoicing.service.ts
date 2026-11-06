@@ -6,7 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { InvoiceCounts, InvoiceListItem, Page } from '@forgea/types';
-import type { InvoiceListQuery, RecordPaymentDto } from '@forgea/validation';
+import type {
+  CreateInvoiceDto,
+  InvoiceDatesDto,
+  InvoiceListQuery,
+  RecordPaymentDto,
+} from '@forgea/validation';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -46,6 +51,25 @@ async function lock(tx: Prisma.TransactionClient, name: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`;
 }
 const today = () => new Date(new Date().toISOString().slice(0, 10));
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/** An invoice's dates, checked: dated today or earlier, due on or after its date. */
+function invoiceDates(dto: CreateInvoiceDto | InvoiceDatesDto = {}): {
+  date: Date;
+  dueDate: Date;
+} {
+  const date = dto.date ? new Date(dto.date) : today();
+  const dueDate = dto.dueDate ? new Date(dto.dueDate) : date;
+  if (Number.isNaN(date.getTime()) || Number.isNaN(dueDate.getTime()))
+    throw new BadRequestException('Enter real dates');
+  if (date > today())
+    throw new BadRequestException('An invoice cannot be dated in the future');
+  if (dueDate < date)
+    throw new BadRequestException(
+      'The due date cannot be before the invoice date',
+    );
+  return { date, dueDate };
+}
 
 /**
  * Invoices and payments for orders (Odoo's invoicing from sales orders, simplified):
@@ -77,6 +101,13 @@ export class Invoicing {
     actorId: string,
   ): Promise<void> {
     try {
+      // A cancelled order is not invoiced: drafts made for it go.
+      if (to === OrderStatus.CANCELLED) {
+        await this.prisma.journalEntry.deleteMany({
+          where: { orderId, state: 'DRAFT' },
+        });
+        return;
+      }
       if (
         from === OrderStatus.AWAITING_DEPOSIT &&
         to === OrderStatus.CONFIRMED
@@ -190,7 +221,16 @@ export class Invoicing {
   async depositInvoice(
     orderId: string,
     actorId: string,
+    options: CreateInvoiceDto = {},
   ): Promise<InvoiceListItem> {
+    const posted = await this.postWaitingDraft(
+      orderId,
+      InvoiceKind.DEPOSIT,
+      actorId,
+      options,
+    );
+    if (posted) return posted;
+    const { date, dueDate } = invoiceDates(options);
     const { order, settings, rate } = await this.context(orderId);
     if (D(order.depositRequired).lte(0)) {
       throw new BadRequestException('This order has no deposit');
@@ -202,7 +242,7 @@ export class Invoicing {
         label: `Deposit for ${order.orderNumber}`,
         debit: order.depositRequired,
         customerId: order.userId,
-        dueDate: today(),
+        dueDate,
       },
       {
         accountId: settings.depositAccountId,
@@ -224,12 +264,13 @@ export class Invoicing {
       orderId,
       InvoiceKind.DEPOSIT,
       (tx) =>
-        this.ledger.post(
+        this.write(
+          options.draft === true,
           {
             type: EntryType.INVOICE,
             invoiceKind: InvoiceKind.DEPOSIT,
             journalId: settings.saleJournalId,
-            date: today(),
+            date,
             label: `Deposit invoice for ${order.orderNumber}`,
             customerId: order.userId,
             orderId,
@@ -248,7 +289,16 @@ export class Invoicing {
   async finalInvoice(
     orderId: string,
     actorId: string,
+    options: CreateInvoiceDto = {},
   ): Promise<InvoiceListItem> {
+    const posted = await this.postWaitingDraft(
+      orderId,
+      InvoiceKind.FINAL,
+      actorId,
+      options,
+    );
+    if (posted) return posted;
+    const { date, dueDate } = invoiceDates(options);
     const { order, settings, rate } = await this.context(orderId);
     const credits: NewLine[] = [];
     let taxTotal = D(0);
@@ -289,11 +339,16 @@ export class Invoicing {
     const deposit = await this.prisma.journalEntry.findFirst({
       where: {
         orderId,
+        type: EntryType.INVOICE,
         invoiceKind: InvoiceKind.DEPOSIT,
         reversal: { is: null },
       },
       include: { lines: true },
     });
+    if (deposit?.state === 'DRAFT')
+      throw new ConflictException(
+        'Post or discard the draft deposit invoice first',
+      );
     const debits: NewLine[] = [];
     let owed = D(order.total);
     if (deposit) {
@@ -315,16 +370,17 @@ export class Invoicing {
         label: `Order ${order.orderNumber}`,
         debit: owed,
         customerId: order.userId,
-        dueDate: today(),
+        dueDate,
       });
     }
     const { id } = await this.underOrderLock(orderId, InvoiceKind.FINAL, (tx) =>
-      this.ledger.post(
+      this.write(
+        options.draft === true,
         {
           type: EntryType.INVOICE,
           invoiceKind: InvoiceKind.FINAL,
           journalId: settings.saleJournalId,
-          date: today(),
+          date,
           label: `Invoice for ${order.orderNumber}`,
           customerId: order.userId,
           orderId,
@@ -367,6 +423,8 @@ export class Invoicing {
       const refund = invoice?.type === EntryType.CREDIT_NOTE;
       if (!invoice || (invoice.type !== EntryType.INVOICE && !refund))
         throw new NotFoundException('Invoice not found');
+      if (invoice.state !== 'POSTED')
+        throw new ConflictException('Post the invoice before it is paid');
       const open = toInvoiceItem(invoice);
       if (D(dto.amount).gt(open.residual)) {
         throw new BadRequestException(
@@ -432,6 +490,10 @@ export class Invoicing {
     });
     if (!invoice || invoice.type !== EntryType.INVOICE)
       throw new NotFoundException('Invoice not found');
+    if (invoice.state !== 'POSTED')
+      throw new ConflictException(
+        'A draft has no credit note: discard it instead',
+      );
     if (invoice.reversal)
       throw new ConflictException('This invoice already has a credit note');
     const settings = await this.prisma.accountingSettings.findUniqueOrThrow({
@@ -467,6 +529,126 @@ export class Invoicing {
       return note.id;
     });
     return this.invoice(id);
+  }
+
+  /** Posts a draft invoice: it gets its number and enters the books. */
+  async post(id: string, actorId: string): Promise<InvoiceListItem> {
+    const draft = await this.requireDraft(id);
+    await this.prisma.$transaction(async (tx) => {
+      if (draft.orderId) {
+        await lock(tx, `order:${draft.orderId}`);
+        const [order] = await tx.$queryRaw<{ status: OrderStatus }[]>`
+          SELECT status FROM orders WHERE id = ${draft.orderId}::uuid FOR UPDATE`;
+        if (order?.status === OrderStatus.CANCELLED)
+          throw new ConflictException('A cancelled order is not invoiced');
+        // The deposit is taken off the final invoice: it must be in the books first.
+        if (draft.invoiceKind === InvoiceKind.FINAL) {
+          const deposit = await tx.journalEntry.findFirst({
+            where: {
+              orderId: draft.orderId,
+              type: EntryType.INVOICE,
+              invoiceKind: InvoiceKind.DEPOSIT,
+              state: 'DRAFT',
+            },
+            select: { id: true },
+          });
+          if (deposit)
+            throw new ConflictException(
+              'Post or discard the draft deposit invoice first',
+            );
+        }
+      }
+      await this.ledger.postDraft(id, actorId, tx);
+    });
+    return this.invoice(id);
+  }
+
+  /** Changes a draft's invoice and due dates. */
+  async redate(id: string, dto: InvoiceDatesDto): Promise<InvoiceListItem> {
+    await this.requireDraft(id);
+    const { date, dueDate } = invoiceDates(dto);
+    const settings = await this.prisma.accountingSettings.findUniqueOrThrow({
+      where: { id: 1 },
+    });
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.journalEntry.updateMany({
+        where: { id, state: 'DRAFT' },
+        data: { date },
+      });
+      if (count !== 1)
+        throw new ConflictException('Only a draft invoice can change');
+      await tx.journalLine.updateMany({
+        where: { entryId: id, accountId: settings.receivableAccountId },
+        data: { dueDate },
+      });
+    });
+    return this.invoice(id);
+  }
+
+  /** Deletes a draft invoice (posted ones are reversed with a credit note instead). */
+  async discard(id: string): Promise<void> {
+    await this.requireDraft(id);
+    const { count } = await this.prisma.journalEntry.deleteMany({
+      where: { id, state: 'DRAFT' },
+    });
+    if (count !== 1)
+      throw new ConflictException('Only a draft invoice can be discarded');
+  }
+
+  private async requireDraft(id: string) {
+    const entry = await this.prisma.journalEntry.findFirst({
+      where: { id, type: EntryType.INVOICE },
+      select: { id: true, state: true, orderId: true, invoiceKind: true },
+    });
+    if (!entry) throw new NotFoundException('Invoice not found');
+    if (entry.state !== 'DRAFT')
+      throw new ConflictException(
+        'This invoice is posted: it can only be reversed with a credit note',
+      );
+    return entry;
+  }
+
+  /**
+   * Posting asked for an order whose invoice of this kind is waiting as a draft: that draft is
+   * posted (with the dates given, if any) instead of a second one being made.
+   */
+  private async postWaitingDraft(
+    orderId: string,
+    kind: InvoiceKind,
+    actorId: string,
+    options: CreateInvoiceDto,
+  ): Promise<InvoiceListItem | null> {
+    if (options.draft) return null;
+    const draft = await this.prisma.journalEntry.findFirst({
+      where: {
+        orderId,
+        type: EntryType.INVOICE,
+        invoiceKind: kind,
+        state: 'DRAFT',
+      },
+      select: { id: true },
+    });
+    if (!draft) return null;
+    if (options.date || options.dueDate) {
+      const current = await this.invoice(draft.id);
+      await this.redate(draft.id, {
+        date: options.date ?? current.date,
+        dueDate:
+          options.dueDate ?? options.date ?? current.dueDate ?? current.date,
+      });
+    }
+    return this.post(draft.id, actorId);
+  }
+
+  /** Writes the invoice as a draft, or posts it. */
+  private async write(
+    draft: boolean,
+    entry: Parameters<Ledger['post']>[0],
+    actorId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string }> {
+    if (draft) return { id: await this.ledger.draft(entry, tx) };
+    return this.ledger.post(entry, actorId, tx);
   }
 
   private async invoice(id: string): Promise<InvoiceListItem> {
@@ -555,8 +737,11 @@ export class Invoicing {
       select: { number: true },
     });
     if (existing) {
+      const which = kind === InvoiceKind.DEPOSIT ? 'deposit' : 'final';
       throw new ConflictException(
-        `This order already has its ${kind === InvoiceKind.DEPOSIT ? 'deposit' : 'final'} invoice (${existing.number})`,
+        existing.number
+          ? `This order already has its ${which} invoice (${existing.number})`
+          : `This order already has a draft ${which} invoice: post or discard it`,
       );
     }
   }
@@ -610,7 +795,15 @@ function toInvoiceItem(e: EntryRow): InvoiceListItem {
     number: e.number ?? '',
     type: e.type,
     invoiceKind: e.invoiceKind,
-    date: e.date.toISOString().slice(0, 10),
+    state: e.state,
+    date: isoDay(e.date),
+    dueDate: (() => {
+      const due = receivable
+        .map((l) => l.dueDate)
+        .filter((d): d is Date => d !== null)
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      return due ? isoDay(due) : null;
+    })(),
     customer: e.customer,
     orderId: e.orderId,
     orderNumber: e.order?.orderNumber ?? null,
