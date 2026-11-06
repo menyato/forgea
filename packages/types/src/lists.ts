@@ -81,6 +81,13 @@ export interface PrintJobListItem {
   status: PrintJobStatus;
   createdAt: string;
   finishedAt: string | null;
+  /** Done: pieces that came out right, and good ones beyond what it was for. */
+  goodPieces: number | null;
+  sparePieces: number;
+  note: string | null;
+  /** The job this one reprints, and the reprints made of this one. */
+  replaces: string | null;
+  reprints: string[];
 }
 
 /** How many print jobs are in each status and on each printer (the production filters). */

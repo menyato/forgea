@@ -426,6 +426,38 @@ export class UpdatePrintJobDto {
   @IsOptional()
   @Matches(DECIMAL_PATTERN, { message: 'The hours it really took, e.g. 3.8' })
   actualHours?: string;
+
+  /** Done: pieces that came out right (default: all of them). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'How many came out right, e.g. 4' })
+  @Min(0)
+  @Max(10000)
+  goodPieces?: number;
+
+  /** Done: good pieces beyond what it was for (to the ready pieces). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Spare pieces, a whole number' })
+  @Min(0)
+  @Max(1000)
+  sparePieces?: number;
+
+  /** The energy the printer (or a plug meter) reported; instead of watts × hours. */
+  @IsOptional()
+  @Matches(DECIMAL_PATTERN, { message: 'kWh, e.g. 0.42' })
+  actualKwh?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+
+  /** Done with pieces missing, or failed: plan a reprint of them (default yes). */
+  @IsOptional()
+  @IsBoolean()
+  reprint?: boolean;
 }
 
 /** A printer: Production → Printers. */

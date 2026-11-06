@@ -42,6 +42,8 @@ enum StockMovementKind {
   /// A finished print job: what it took beyond (or short of) its order's estimate, either way;
   /// all of it for a job that isn't an order line.
   PRINTED
+  /// An order cancelled before printing all of it: the filament it took that wasn't used.
+  RETURNED
 }
 
 /// Append-only (a trigger refuses changes): every gram in or out, with why and who.
@@ -78,4 +80,67 @@ model StockMovement {
   @@index([createdAt])
   @@index([orderItemId])
   @@map("stock_movements")
+}
+
+enum ReadyPieceMovementKind {
+  /// Printed for the shelf (a studio print, a full plate's spare pieces).
+  PRINTED
+  /// Printed for an order that was then cancelled.
+  LEFT_OVER
+  /// Added by hand (printed outside the planner, a custom design kept).
+  ADDED
+  /// Sold (in an order, at a market, to a walk-in).
+  SOLD
+  /// Given away, kept as a sample or for display.
+  USED
+  /// Broken or not good enough to sell.
+  SCRAPPED
+  /// Counted on the shelf: the difference, either way.
+  COUNTED
+}
+
+/// Pieces printed and not sold yet, by what they are: a product with its colour and size, or a
+/// custom design. `onHand` and `unitCost` (average cost of the pieces in) follow the movements.
+model ReadyPiece {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// The catalog product, when it is one; null for a custom design.
+  productId String?  @db.Uuid
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name      String
+  /// Colour, size, the text of a personalised piece: what tells these pieces apart.
+  details   String   @default("")
+  onHand    Int      @default(0)
+  unitCost  Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  movements ReadyPieceMovement[]
+
+  @@unique([productId, name, details])
+  @@map("ready_pieces")
+}
+
+/// Append-only (a trigger refuses changes): every piece onto or off the shelf, why and who.
+model ReadyPieceMovement {
+  id           String                 @id @default(uuid(7)) @db.Uuid
+  readyPieceId String                 @db.Uuid
+  readyPiece   ReadyPiece             @relation(fields: [readyPieceId], references: [id], onDelete: Restrict)
+  kind         ReadyPieceMovementKind
+  /// Signed: + onto the shelf, − off it.
+  quantity     Int
+  /// Cost of one piece: what it cost to make (in), the shelf's average (out).
+  unitCost     Decimal                @db.Decimal(10, 2)
+  printJobId   String?                @db.Uuid
+  printJob     PrintJob?              @relation(fields: [printJobId], references: [id], onDelete: Restrict)
+  /// The order it was printed for (left over) or sold in.
+  orderId      String?                @db.Uuid
+  order        Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  note         String?
+  createdById  String?                @db.Uuid
+  createdBy    User?                  @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+
+  @@index([readyPieceId, createdAt])
+  @@index([createdAt])
+  @@map("ready_piece_movements")
 }

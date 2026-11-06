@@ -41,9 +41,19 @@ export class OrderStatusService {
     to: OrderStatus,
     actorUserId: string,
     note: string | undefined,
+    guard: {
+      /** The status the person saw: refused if it changed since (a stale page). */
+      expected?: OrderStatus | undefined;
+      /** A customer's cancel: refused once the deposit is paid, even a moment ago. */
+      unpaidOnly?: boolean;
+    } = {},
   ): Promise<StatusChange> {
     const order = await this.orders.findStatus(orderId);
     if (!order) throw new NotFoundException('Order not found');
+    if (guard.expected && guard.expected !== order.status)
+      throw new ConflictException(
+        'Someone else just changed this order. Reload and try again.',
+      );
     if (!canChangeOrderStatus(order.status, to)) {
       const allowed = ORDER_STATUS_FLOW[order.status];
       throw new BadRequestException(
@@ -72,14 +82,28 @@ export class OrderStatusService {
       note ?? null,
       extra,
       async (tx) => {
+        // The row is locked by now: a payment recorded meanwhile is seen here.
+        if (guard.unpaidOnly) {
+          const now = await tx.order.findUniqueOrThrow({
+            where: { id: orderId },
+            select: { depositPaid: true },
+          });
+          if (now.depositPaid)
+            throw new ConflictException(
+              'This order is already being prepared. Message us on WhatsApp to change it.',
+            );
+        }
         if (stock) await this.stock.apply(tx, stock);
         // A sales order from a quotation: cancelling it cancels the quotation (its history
         // records who and why, like the order's).
-        if (to === OrderStatus.CANCELLED)
+        if (to === OrderStatus.CANCELLED) {
           await tx.quotation.updateMany({
             where: { orderId, status: QuotationStatus.CONFIRMED },
             data: { status: QuotationStatus.CANCELLED },
           });
+          // Its print runs not started stop, and the filament nobody printed comes back.
+          await this.stock.cancel(tx, orderId, order.orderNumber, actorUserId);
+        }
       },
     );
     if (!changed)
@@ -90,6 +114,9 @@ export class OrderStatusService {
     // Going into production: a print job for each line (never blocks the change).
     if (to === OrderStatus.IN_PRODUCTION)
       await this.printJobs.createForOrder(orderId);
+    // Cancelled runs come off the studio's calendar (never blocks).
+    if (to === OrderStatus.CANCELLED)
+      await this.printJobs.unscheduleCancelled(orderId);
     await this.invoicing.onOrderStatus(orderId, order.status, to, actorUserId);
     const contact = await this.orders.contactOf(orderId);
     if (contact) {

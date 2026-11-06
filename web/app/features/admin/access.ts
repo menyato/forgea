@@ -92,6 +92,12 @@ export const PAGES: readonly {
     group: 'Orders',
   },
   {
+    path: '/admin/production/results',
+    access: 'production.manage',
+    label: 'Production results',
+    group: 'Orders',
+  },
+  {
     path: '/admin/printers',
     access: 'production.manage',
     label: 'Printers',
@@ -175,6 +181,12 @@ export const PAGES: readonly {
     group: 'Catalog',
   },
   // Recording a movement: every API call behind these pages needs stock.manage.
+  {
+    path: '/admin/stock/pieces',
+    access: 'materials.view',
+    label: 'Ready pieces',
+    group: 'Catalog',
+  },
   { path: '/admin/stock/receive', access: 'stock.manage' },
   { path: '/admin/stock/print', access: 'stock.manage' },
   { path: '/admin/stock/failed', access: 'stock.manage' },

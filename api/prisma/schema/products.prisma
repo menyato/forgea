@@ -73,6 +73,7 @@ model Product {
   quotationLines QuotationLine[]
   sizes          ProductSize[]
   stockMovements StockMovement[]
+  readyPieces    ReadyPiece[]
 
   @@index([active, id])
   @@index([categoryId])

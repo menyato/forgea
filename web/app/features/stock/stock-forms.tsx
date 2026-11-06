@@ -344,6 +344,16 @@ export function StudioPrintForm({
           placeholder={failed ? 'e.g. came off the bed' : 'e.g. for the fair'}
         />
       </div>
+      {!failed && (
+        <div className="sm:col-span-2 lg:col-span-3">
+          <CheckboxField
+            label="Keep them on the shelf to sell"
+            name="toShelf"
+            defaultChecked
+            hint="They go to the ready pieces at what they cost to make; untick for tests and samples"
+          />
+        </div>
+      )}
       <Summary>
         {q > 0 && product ? (
           <>

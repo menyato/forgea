@@ -649,7 +649,7 @@ const CARD = 'application/x-forgea-card';
 
 /**
  * A kanban view: a column per stage, a card per record. With `move`, cards drag to another
- * column: the page's action gets `intent=move`, `id` and `to`, makes the same call the
+ * column: the page's action gets `intent=move`, `id`, `from` and `to`, makes the same call the
  * record's own buttons do, and the API's refusal (a step not allowed) shows above.
  */
 export function KanbanView<T extends { id: string }>({
@@ -694,7 +694,11 @@ export function KanbanView<T extends { id: string }>({
     const id = e.dataTransfer.getData(CARD);
     const from = columns.find((c) => c.items.some((i) => i.id === id));
     if (!id || !from || from.key === column) return;
-    void fetcher.submit({ intent: 'move', id, to: column }, { method: 'post' });
+    // Where it was seen: the page's action can refuse a move from a stale board.
+    void fetcher.submit(
+      { intent: 'move', id, from: from.key, to: column },
+      { method: 'post' },
+    );
   };
 
   const cards = (items: readonly T[]) =>

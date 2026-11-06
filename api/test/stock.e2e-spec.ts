@@ -139,7 +139,7 @@ describe('Filament stock (e2e)', () => {
     });
   });
 
-  it('takes an order’s grams at production, never when cancelled before it, never twice', async () => {
+  it('takes an order’s grams at production, gives back what was never printed, never twice', async () => {
     await receive('Copper silk', 1000);
     const customer = await signedInCustomer(app);
     const red = (await line('Red')).stockGrams;
@@ -189,9 +189,14 @@ describe('Filament stock (e2e)', () => {
         stockItemId: (await line('Copper silk')).id,
       }),
     ]);
-    // Cancelled after production started: the filament is spent.
+    // Cancelled after production started, before anything printed: the filament comes back.
     await moveOrder(app, staff.cookie, order.id, ['CANCELLED']);
-    expect((await line('Copper silk')).stockGrams).toBe(400);
+    expect(await line('Copper silk')).toMatchObject({
+      stockGrams: 1000,
+      used30Grams: 0,
+    });
+    const back = await movements(`?q=${order.orderNumber}`);
+    expect(back.items[0]).toMatchObject({ kind: 'RETURNED', grams: 600 });
     // Running the same order line again is refused by the database (one per line).
     const item = await prisma.orderItem.findFirstOrThrow({
       where: { orderId: order.id },
@@ -310,8 +315,17 @@ describe('Filament stock (e2e)', () => {
       suggestSpools: 2,
       suggestGrams: 200,
     });
-    // Copper silk: 400 g left; 600 g used → 20 g a day; reorder at 500 (its material's
-    // limit) + 140 = 640.
+    // Copper silk: 600 g used for samples, 400 g left → 20 g a day; reorder at 500 (its
+    // material's limit) + 140 = 640.
+    await as(staff.cookie)
+      .post('/stock/movements', {
+        materialId: studio.material.id,
+        colour: 'Copper silk',
+        kind: 'USED',
+        grams: 600,
+        note: 'Samples',
+      })
+      .expect(204);
     expect(await line('Copper silk')).toMatchObject({
       lowStockGrams: 500,
       daysLeft: 20,

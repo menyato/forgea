@@ -10,6 +10,8 @@ import {
   PRINT_JOB_FLOW,
   type PrintJobCounts,
   type PrintJobListItem,
+  type DateRange,
+  type ProductionResults,
   type ProductRealCost,
 } from '@forgea/types';
 import type {
@@ -23,6 +25,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrintJobStatus } from '../generated/prisma/enums.js';
 import { GoogleCalendar } from '../google/google-calendar.js';
 import { ProductionEstimator } from '../stock/production-estimator.js';
+import { between } from '../stock/stock.repository.js';
 import {
   type NewPrintJob,
   type PrintJobChange,
@@ -119,7 +122,12 @@ export class PrintJobsService {
       dto.grams !== undefined ||
       dto.hours !== undefined;
     const actuals =
-      dto.actualGrams !== undefined || dto.actualHours !== undefined;
+      dto.actualGrams !== undefined ||
+      dto.actualHours !== undefined ||
+      dto.goodPieces !== undefined ||
+      dto.sparePieces !== undefined ||
+      dto.actualKwh !== undefined ||
+      dto.note !== undefined;
     if (finished && (planning || actuals || dto.scheduledDate !== undefined))
       throw new ConflictException('A finished job can no longer change');
     await this.checkChoices(dto.printerId, dto.stockItemId);
@@ -163,28 +171,69 @@ export class PrintJobsService {
       throw new BadRequestException(
         'What it really took is entered when it finishes or fails',
       );
+    if (
+      data.status !== PrintJobStatus.DONE &&
+      (dto.goodPieces !== undefined ||
+        dto.sparePieces !== undefined ||
+        dto.actualKwh !== undefined)
+    )
+      throw new BadRequestException(
+        'Pieces and energy are entered when it is done',
+      );
     if (data.status === PrintJobStatus.DONE) {
       if (dto.actualGrams === undefined || dto.actualHours === undefined)
         throw new BadRequestException(
           'Enter the grams and hours it really took to finish it',
         );
+      const quantity = data.quantity ?? job.quantity;
+      if (dto.goodPieces !== undefined && dto.goodPieces > quantity)
+        throw new BadRequestException(
+          `At most ${quantity} came out right; count extra ones as spare pieces`,
+        );
       Object.assign(
         data,
-        await this.costs(job, data, dto.actualGrams, dto.actualHours),
+        await this.costs(
+          job,
+          data,
+          dto.actualGrams,
+          dto.actualHours,
+          dto.actualKwh,
+        ),
       );
+      data.goodPieces = dto.goodPieces ?? quantity;
+      data.sparePieces = dto.sparePieces ?? 0;
     }
-    if (
-      data.status === PrintJobStatus.FAILED &&
-      dto.actualGrams !== undefined
-    ) {
-      // What it used before failing is a real cost too (the product's real cost counts it).
-      Object.assign(
-        data,
-        await this.costs(job, data, dto.actualGrams, dto.actualHours ?? '0'),
-      );
-      if (dto.actualHours === undefined) delete data.actualHours;
+    if (data.status === PrintJobStatus.FAILED) {
+      // What it used before failing is a real cost too: the grams entered, or the estimate.
+      const printer = data.printerId ?? job.printerId;
+      const reel = data.stockItemId ?? job.stockItemId;
+      if (printer && reel) {
+        Object.assign(
+          data,
+          await this.costs(
+            job,
+            data,
+            dto.actualGrams ?? job.grams.toString(),
+            dto.actualHours ?? '0',
+          ),
+        );
+        if (dto.actualHours === undefined) delete data.actualHours;
+      } else if (dto.actualGrams !== undefined) {
+        data.actualGrams = dto.actualGrams;
+        data.finishedAt = new Date();
+      }
     }
-    const updated = await this.jobs.update(id, job.status, data, actorId);
+    if (dto.note !== undefined) data.note = dto.note;
+    const updated = await this.jobs.update(
+      id,
+      job.status,
+      data,
+      actorId,
+      // Missing pieces are printed again unless the team says not to.
+      dto.reprint !== false &&
+        (data.status === PrintJobStatus.DONE ||
+          data.status === PrintJobStatus.FAILED),
+    );
     if (!updated)
       throw new ConflictException(
         'Someone else just changed this job. Reload and try again.',
@@ -199,6 +248,16 @@ export class PrintJobsService {
    * too, waiting for its reel and estimate. Never throws: a line that can't be planned is
    * logged and left for the team to add by hand.
    */
+  /** Cancelled runs of an order taken off the studio's calendar (never throws). */
+  async unscheduleCancelled(orderId: string): Promise<void> {
+    try {
+      for (const job of await this.jobs.cancelledOnCalendar(orderId))
+        await this.syncCalendar(job);
+    } catch (error) {
+      this.logger.warn(`Unscheduling order ${orderId}: ${String(error)}`);
+    }
+  }
+
   async createForOrder(orderId: string): Promise<void> {
     try {
       const items = await this.jobs.itemsWithoutJobs(orderId);
@@ -248,6 +307,52 @@ export class PrintJobsService {
       throw new BadRequestException('Choose a reel that is in stock');
   }
 
+  /** What production made and lost over a period, and what waits on the shelf now. */
+  async results(range: DateRange): Promise<ProductionResults> {
+    const { start, end } = between(range);
+    const r = await this.jobs.results(start, end);
+    const d = (v: Prisma.Decimal | number, places = 2) =>
+      new Prisma.Decimal(v).toFixed(places);
+    return {
+      range,
+      runs: {
+        done: r.totals.done,
+        failed: r.totals.failed,
+        cancelled: r.cancelled,
+      },
+      pieces: {
+        good: r.totals.good,
+        spare: r.totals.spare,
+        lost: r.totals.lostPieces,
+      },
+      grams: { used: d(r.totals.gramsUsed, 0), lost: d(r.totals.gramsLost, 0) },
+      hours: { printing: d(r.totals.hours, 1), lost: d(r.totals.hoursLost, 1) },
+      electricityKwh: d(r.totals.kwh, 1),
+      cost: {
+        good: d(r.totals.costGood),
+        lost: d(new Prisma.Decimal(r.totals.costLost).plus(r.studio.cost)),
+      },
+      studioFailures: { grams: r.studio.grams, cost: d(r.studio.cost) },
+      printers: r.printers.map((p) => ({
+        id: p.id,
+        name: p.name,
+        runs: p.runs,
+        failed: p.failed,
+        hours: d(p.hours, 1),
+        kwh: d(p.kwh, 1),
+        lostCost: d(p.lostCost),
+      })),
+      shelf: {
+        pieces: r.shelf.pieces,
+        value: d(r.shelf.value),
+        added: r.moved.added,
+        sold: r.moved.sold,
+        usedOrScrapped: r.moved.usedOrScrapped,
+        scrappedCost: d(r.moved.scrappedCost),
+      },
+    };
+  }
+
   /** What a product's pieces really cost to print, from its finished runs. */
   async productCost(productId: string): Promise<ProductRealCost> {
     const [totals, taxRate] = await Promise.all([
@@ -267,6 +372,8 @@ export class PrintJobsService {
     data: PrintJobChange,
     actualGrams: string,
     actualHours: string,
+    /** What the printer or a plug meter reported, instead of watts × hours. */
+    measuredKwh?: string,
   ): Promise<PrintJobChange> {
     const reelId = data.stockItemId ?? job.stockItemId!;
     const printerId = data.printerId ?? job.printerId!;
@@ -280,7 +387,10 @@ export class PrintJobsService {
     ]);
     const grams = new Prisma.Decimal(actualGrams);
     const hours = new Prisma.Decimal(actualHours);
-    const kwh = hours.times(printer.watts).div(1000);
+    const kwh =
+      measuredKwh !== undefined
+        ? new Prisma.Decimal(measuredKwh)
+        : hours.times(printer.watts).div(1000);
     const wearPerHour =
       printer.priceUsd && printer.lifeHours
         ? printer.priceUsd.div(printer.lifeHours)
@@ -390,7 +500,7 @@ function toItem(j: PrintJobRow): PrintJobListItem {
     id: j.id,
     orderId: j.orderId,
     orderNumber: j.order.orderNumber,
-    item: j.orderItem,
+    item: j.orderItem ? { id: j.orderItem.id, name: j.orderItem.name } : null,
     printer: j.printer ? { id: j.printer.id, name: j.printer.name } : null,
     reel: j.stockItem
       ? {
@@ -420,5 +530,10 @@ function toItem(j: PrintJobRow): PrintJobListItem {
     status: j.status,
     createdAt: j.createdAt.toISOString(),
     finishedAt: j.finishedAt?.toISOString() ?? null,
+    goodPieces: j.goodPieces,
+    sparePieces: j.sparePieces,
+    note: j.note,
+    replaces: j.replacesJobId,
+    reprints: j.reprints.map((r) => r.id),
   };
 }

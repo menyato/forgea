@@ -14,10 +14,12 @@ import type {
   PrinterView,
   PrintJobCounts,
   PrintJobListItem,
+  ProductionResults,
   ProductRealCost,
 } from '@forgea/types';
 import {
   CreatePrintJobDto,
+  PeriodQuery,
   PrintJobListQuery,
   SavePrinterDto,
   UpdatePrintJobDto,
@@ -42,6 +44,16 @@ export class PrintJobsController {
   @Get('counts')
   counts(): Promise<PrintJobCounts> {
     return this.jobs.counts();
+  }
+
+  /** What production made and lost over `from`–`to` (default: the last 30 days). */
+  @Get('results')
+  results(@Query() q: PeriodQuery): Promise<ProductionResults> {
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    return this.jobs.results({
+      from: q.from ?? day(Date.now() - 29 * 86_400_000),
+      to: q.to ?? day(Date.now()),
+    });
   }
 
   /** What a product's pieces really cost to print (dashboard only). */

@@ -96,6 +96,8 @@ const DASHBOARD = [
   '/admin/backups',
   '/admin/leads',
   '/admin/todo',
+  '/admin/stock/pieces',
+  '/admin/production/results',
   '/admin/leads?view=list&group=stage',
   '/admin/leads/new',
   '/admin/orders?group=status',

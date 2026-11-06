@@ -97,10 +97,13 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const id = text(form, 'id') ?? '';
-  return save(ChangeOrderStatusDto, { status: text(form, 'to') }, (dto) =>
-    context
-      .get(apiContext)
-      .patch(`/orders/${encodeURIComponent(id)}/status`, dto),
+  return save(
+    ChangeOrderStatusDto,
+    { status: text(form, 'to'), expectedStatus: text(form, 'from') },
+    (dto) =>
+      context
+        .get(apiContext)
+        .patch(`/orders/${encodeURIComponent(id)}/status`, dto),
   );
 }
 

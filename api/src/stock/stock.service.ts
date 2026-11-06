@@ -26,9 +26,16 @@ import type {
 import { toPage } from '../common/pagination/keyset.js';
 import { Purchases } from '../accounting/purchases.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { StockMovementKind } from '../generated/prisma/enums.js';
+import {
+  ReadyPieceMovementKind,
+  StockMovementKind,
+} from '../generated/prisma/enums.js';
 import { sizeLabel } from './production-estimate.js';
 import { ProductionEstimator } from './production-estimator.js';
+import {
+  pieceDetails,
+  ReadyPiecesRepository,
+} from './ready-pieces.repository.js';
 import { restockAdvice } from './restock.js';
 import { type MovementRow, StockRepository } from './stock.repository.js';
 
@@ -42,6 +49,7 @@ export class StockService {
     private readonly stock: StockRepository,
     private readonly estimator: ProductionEstimator,
     private readonly purchases: Purchases,
+    private readonly pieces: ReadyPiecesRepository,
   ) {}
 
   async overview(today: string, usage: DateRange): Promise<StockOverview> {
@@ -291,8 +299,8 @@ export class StockService {
       .times(share)
       .toFixed(2);
     const perGram = catalog.pricePerGram.get(e.materialId);
-    await this.stock.transaction((tx) =>
-      this.stock.record(tx, [
+    await this.stock.transaction(async (tx) => {
+      await this.stock.record(tx, [
         {
           materialId: e.materialId,
           colour: colour?.label ?? '',
@@ -311,8 +319,20 @@ export class StockService {
               : null),
           createdById: actorId,
         },
-      ]),
-    );
+      ]);
+      // Printed to sell: the pieces wait on the shelf, at what they cost to make.
+      if (!failed && dto.toShelf)
+        await this.pieces.add(tx, {
+          productId: product.id,
+          name: product.name,
+          details: pieceDetails(options, null),
+          kind: ReadyPieceMovementKind.PRINTED,
+          quantity: dto.quantity,
+          unitCost: e.unitCost,
+          note: dto.note || null,
+          createdById: actorId,
+        });
+    });
     return { grams, cost };
   }
 

@@ -65,6 +65,7 @@ export class CustomerOrdersService {
       OrderStatus.CANCELLED,
       userId,
       'Cancelled by the customer',
+      { expected: order.status, unpaidOnly: true },
     );
   }
 }

@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { StockMovementKind } from '../generated/prisma/enums.js';
+import {
+  PrintJobStatus,
+  StockMovementKind,
+} from '../generated/prisma/enums.js';
 import { ProductionEstimator } from './production-estimator.js';
 import { type NewMovement, StockRepository } from './stock.repository.js';
 
@@ -90,5 +93,68 @@ export class OrderStock {
 
   apply(tx: Prisma.TransactionClient, plan: OrderStockPlan): Promise<void> {
     return this.stock.record(tx, plan.movements);
+  }
+
+  /**
+   * An order cancelled after it went into production, in the cancel's transaction: its print
+   * runs not started are cancelled, and the filament it took for pieces nobody printed or is
+   * printing comes back to the shelf (a line's grams × the share of its pieces not covered by
+   * a done or running print). Runs already printing finish normally; their pieces then go to
+   * the ready pieces.
+   */
+  async cancel(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    orderNumber: string,
+    actorId: string,
+  ): Promise<void> {
+    await tx.printJob.updateMany({
+      where: {
+        orderId,
+        status: { in: [PrintJobStatus.QUEUED, PrintJobStatus.SCHEDULED] },
+      },
+      data: { status: PrintJobStatus.CANCELLED },
+    });
+    const items = await tx.orderItem.findMany({
+      where: { orderId },
+      select: {
+        quantity: true,
+        printJobs: {
+          // A reprint stands in for pieces its original job already counts.
+          where: {
+            status: { in: [PrintJobStatus.DONE, PrintJobStatus.PRINTING] },
+            replacesJobId: null,
+          },
+          select: { quantity: true },
+        },
+        stockMovements: {
+          where: { kind: StockMovementKind.ORDER },
+          select: { grams: true, stockItemId: true, costPerGram: true },
+        },
+      },
+    });
+    for (const item of items) {
+      if (item.quantity <= 0) continue;
+      const covered = Math.min(
+        item.quantity,
+        item.printJobs.reduce((n, j) => n + j.quantity, 0),
+      );
+      for (const m of item.stockMovements) {
+        const back = Math.floor(
+          (-m.grams * (item.quantity - covered)) / item.quantity,
+        );
+        if (back <= 0) continue;
+        await tx.stockMovement.create({
+          data: {
+            stockItemId: m.stockItemId,
+            kind: StockMovementKind.RETURNED,
+            grams: back,
+            costPerGram: m.costPerGram,
+            note: `Order ${orderNumber} cancelled: not printed`,
+            createdById: actorId,
+          },
+        });
+      }
+    }
   }
 }
