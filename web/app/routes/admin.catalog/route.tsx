@@ -61,13 +61,22 @@ export default function Catalog() {
             A JSON file with everything needed to rebuild this catalog
             elsewhere.
           </p>
-          <a
-            href="/admin/catalog-export"
-            className={buttonClass('primary', 'justify-self-start')}
-            download
-          >
-            Download the catalog
-          </a>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="/admin/catalog-export"
+              className={buttonClass('primary')}
+              download
+            >
+              Download the catalog
+            </a>
+            <a
+              href="/admin/catalog-export?only=text"
+              className={buttonClass('secondary')}
+              download
+            >
+              Personalised-text products only
+            </a>
+          </div>
         </Panel>
         <Panel title="Import">
           <fetcher.Form

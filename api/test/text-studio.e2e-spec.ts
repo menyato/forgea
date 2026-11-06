@@ -689,5 +689,33 @@ describe('Text studio (e2e)', () => {
       style: 'KEYCHAIN',
       colourGroup: `Text colours ${tag}`,
     });
+
+    // Only the personalised-text products, with what they use and nothing else.
+    const textOnly = (
+      await as(admin.cookie)
+        .get('/catalog-transfer/export?only=text')
+        .expect(200)
+    ).body as typeof exported & {
+      optionGroups: { name: string }[];
+      materials: { code: string }[];
+    };
+    expect(textOnly.products.length).toBeGreaterThan(0);
+    expect(textOnly.products.every((p) => p.text !== null)).toBe(true);
+    expect(textOnly.products.map((p) => p.slug)).toContain(slug);
+    expect(textOnly.optionGroups.map((g) => g.name)).toContain(
+      `Text colours ${tag}`,
+    );
+    const groupNames = new Set(textOnly.optionGroups.map((g) => g.name));
+    for (const p of textOnly.products as unknown as {
+      options: { group: string }[];
+      material: string;
+    }[]) {
+      for (const o of p.options) expect(groupNames.has(o.group)).toBe(true);
+      expect(textOnly.materials.map((m) => m.code)).toContain(p.material);
+    }
+    expect(textOnly.fonts.find((f) => f.name === cairo.name)).toBeTruthy();
+    await as(admin.cookie)
+      .get('/catalog-transfer/export?only=nonsense')
+      .expect(400);
   });
 });

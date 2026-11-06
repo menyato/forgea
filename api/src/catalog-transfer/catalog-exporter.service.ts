@@ -28,13 +28,47 @@ export class CatalogExporter {
     private readonly fonts: FontsService,
   ) {}
 
-  async export(): Promise<CatalogFile> {
-    const [materials, categories, groups, products] = await Promise.all([
-      this.materials.list(),
-      this.categories.list(false),
-      this.options.list(),
-      this.products.all(),
+  /**
+   * The whole catalog, or (`textOnly`) just the personalised-text products and what they use:
+   * their categories, option groups, materials and the fonts — to start a shop with them.
+   */
+  async export(textOnly = false): Promise<CatalogFile> {
+    const [allMaterials, allCategories, allGroups, allProducts] =
+      await Promise.all([
+        this.materials.list(),
+        this.categories.list(false),
+        this.options.list(),
+        this.products.all(),
+      ]);
+    const products = textOnly
+      ? allProducts.filter((p) => p.textStyle && p.textColourGroup)
+      : allProducts;
+    const usedGroups = new Set(
+      products.flatMap((p) => [
+        ...p.optionGroups.map((g) => g.group.name),
+        ...(p.textColourGroup ? [p.textColourGroup.name] : []),
+      ]),
+    );
+    const groups = textOnly
+      ? allGroups.filter((g) => usedGroups.has(g.name))
+      : allGroups;
+    const usedMaterials = new Set([
+      ...products.map((p) => p.material.code),
+      ...groups.flatMap((g) =>
+        g.values.flatMap((v) => (v.materialId ? [v.materialId] : [])),
+      ),
     ]);
+    const materials = textOnly
+      ? allMaterials.filter(
+          (m) => usedMaterials.has(m.code) || usedMaterials.has(m.id),
+        )
+      : allMaterials;
+    const usedCategories = new Set(
+      products.flatMap((p) => (p.category ? [p.category.slug] : [])),
+    );
+    const categories = textOnly
+      ? allCategories.filter((c) => usedCategories.has(c.slug))
+      : allCategories;
     const materialCode = new Map(materials.map((m) => [m.id, m.code]));
     return {
       format: 'forgea-catalog',
