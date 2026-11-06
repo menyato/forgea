@@ -104,11 +104,11 @@ test('the dashboard menu folds into groups; lists split into tabs and boards', a
   await expect(
     menu.getByRole('link', { name: 'Orders', exact: true }),
   ).toBeVisible();
-  // Folding a group away is remembered on the next page.
+  // The other groups start folded; opening one is remembered on the next page.
+  const products = menu.getByRole('link', { name: 'Products', exact: true });
+  await expect(products).toBeHidden();
   await menu.locator('summary').filter({ hasText: 'Catalog' }).click();
-  await expect(
-    menu.getByRole('link', { name: 'Products', exact: true }),
-  ).toBeHidden();
+  await expect(products).toBeVisible();
   await page.goto('/admin/leads');
   menu = await dashboardMenu(page);
   await expect(
@@ -116,11 +116,12 @@ test('the dashboard menu folds into groups; lists split into tabs and boards', a
   ).toBeVisible();
   await expect(
     menu.getByRole('link', { name: 'Products', exact: true }),
-  ).toBeHidden();
+  ).toBeVisible();
+  // And folding it again too.
   await menu.locator('summary').filter({ hasText: 'Catalog' }).click();
   await expect(
     menu.getByRole('link', { name: 'Products', exact: true }),
-  ).toBeVisible();
+  ).toBeHidden();
 
   // Leads open as the pipeline's kanban; filters add to the open ones.
   await closeDashboardMenu(page);

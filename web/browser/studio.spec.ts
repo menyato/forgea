@@ -51,21 +51,20 @@ test('a lead from first contact to a confirmed order, for someone without an acc
       .getByText('Called: wants them in sand.'),
   ).toBeVisible();
   const followUps = page.getByRole('region', { name: 'Follow-ups' });
-  await page.getByLabel('About').fill('Send the prices');
+  // Its own words, so earlier runs' follow-ups on the to-do page can't be mistaken for it.
+  const about = `Send the prices ${tag()}`;
+  await page.getByLabel('About').fill(about);
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 16);
   await page.getByLabel('When').fill(tomorrow);
   await page.getByRole('button', { name: 'Add the follow-up' }).click();
-  await expect(followUps.getByText(/Send the prices/)).toBeVisible();
+  await expect(followUps.getByText(about)).toBeVisible();
   // On my to-do page, and ticked off there.
   const leadPage = page.url();
   await page.goto('/admin/todo');
   await expect(page.getByRole('heading', { name: 'To-do' })).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Done: Send the prices' })
-    .first()
-    .click();
+  await page.getByRole('button', { name: `Done: ${about}` }).click();
   await expect(
-    page.getByRole('button', { name: 'Done: Send the prices' }),
+    page.getByRole('button', { name: `Done: ${about}` }),
   ).toHaveCount(0);
   await page.goto(leadPage);
   await expect(followUps.getByRole('button', { name: 'Done' })).toHaveCount(0);
