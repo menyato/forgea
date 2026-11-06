@@ -18,6 +18,7 @@ import { AdminHeader, ViewOnly } from '~/features/admin/admin-ui';
 import { checked, save, text } from '~/features/admin/staff.server';
 import { jsonField, validateForm } from '~/lib/forms.server';
 import type { ApiClient } from '~/lib/api-client.server';
+import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { ProductForm } from './product-form';
@@ -35,7 +36,8 @@ export async function loader({ params, context }: Route.LoaderArgs) {
       api.get<CategoryView[]>('/categories/manage'),
       api.get<MaterialView[]>('/materials'),
       api.get<OptionGroupView[]>('/option-groups'),
-      api.get<Page<AdminProductListItem>>(
+      allPages<AdminProductListItem>(
+        api,
         '/products/manage?limit=100&sort=name&order=asc',
       ),
       // The shop's profit rule: only for whoever manages pricing (others get 403).
@@ -61,11 +63,9 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     groups: groups.ok ? groups.data : [],
     shopProfit: pricing.ok ? pricing.data.cost.profit : null,
     realCost: realCost?.ok ? realCost.data : null,
-    others: list.ok
-      ? list.data.items
-          .filter((p) => p.id !== params.id)
-          .map((p) => ({ id: p.id, name: p.name }))
-      : [],
+    others: list
+      .filter((p) => p.id !== params.id)
+      .map((p) => ({ id: p.id, name: p.name })),
   };
 }
 

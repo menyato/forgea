@@ -8,6 +8,7 @@ import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save } from '~/features/admin/staff.server';
 import { BuildPlate } from '~/features/build-plate/build-plate';
 import type { PlateItem } from '~/features/build-plate/build-plate-scene.client';
+import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -15,17 +16,16 @@ export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const [plate, products] = await Promise.all([
     api.get<HomePlate>('/products/plate'),
-    api.get<Page<AdminProductListItem>>(
+    allPages<AdminProductListItem>(
+      api,
       '/products/manage?limit=100&sort=name&order=asc',
     ),
   ]);
   if (!plate.ok) throw new Response(plate.message, { status: plate.status });
-  if (!products.ok)
-    throw new Response(products.message, { status: products.status });
   return {
     plate: plate.data,
     // Only products with a 3D model can stand on the bed.
-    candidates: products.data.items.filter((p) => p.hasModel),
+    candidates: products.filter((p) => p.hasModel),
   };
 }
 
