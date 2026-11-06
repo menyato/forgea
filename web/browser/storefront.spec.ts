@@ -55,7 +55,7 @@ test('a visitor browses without an account, signs up at checkout and pays by tra
   await expect(page.getByText('Order placed')).toBeVisible();
   const orderNumber =
     (await page.locator('strong.font-mono').first().textContent()) ?? '';
-  expect(orderNumber).toMatch(/^FG-[0-9A-Z]{10}$/);
+  expect(orderNumber).toMatch(/^FG-\d{4}-\d{4,}$/);
   await expect(
     page.getByText(`Write ${orderNumber} in the transfer note`),
   ).toBeVisible();

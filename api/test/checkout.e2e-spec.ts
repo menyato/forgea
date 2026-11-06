@@ -73,7 +73,7 @@ describe('Checkout (e2e)', () => {
 
     const lbp = await app.get(CurrenciesService).converterFor('LBP');
     expect(res.body).toEqual({
-      orderNumber: expect.stringMatching(/^FG-[0-9A-HJKMNP-TV-Z]{10}$/),
+      orderNumber: expect.stringMatching(/^FG-\d{4}-\d{4,}$/),
       status: 'PENDING',
       paymentMethod: 'COD',
       total: '32.82',

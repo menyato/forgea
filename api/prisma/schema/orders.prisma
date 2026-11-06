@@ -119,3 +119,11 @@ model OrderStatusHistory {
   @@index([orderId, changedAt])
   @@map("order_status_history")
 }
+
+/// The last order number given each year: "FG-2026-0042" is the 42nd order of 2026.
+model OrderSequence {
+  year Int @id
+  last Int @default(0)
+
+  @@map("order_sequences")
+}

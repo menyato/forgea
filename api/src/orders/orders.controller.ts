@@ -47,10 +47,11 @@ import {
 import { OrdersService } from './orders.service.js';
 import { ReorderService } from './reorder.service.js';
 import { ParsePatternPipe } from '../custom-requests/parse-pattern.pipe.js';
+import { ORDER_NUMBER_PATTERN } from './order-number.js';
 
-/** An order number as customers see it: FG- and ten characters. */
+/** An order number as customers see it: "FG-2026-0001" (or an older random one). */
 const OrderNumber = new ParsePatternPipe(
-  /^FG-[0-9A-Z]{10}$/,
+  ORDER_NUMBER_PATTERN,
   'Order not found',
 );
 
