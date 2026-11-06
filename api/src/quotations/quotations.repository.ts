@@ -10,6 +10,7 @@ import {
   Role,
   type PaymentMethod,
 } from '../generated/prisma/enums.js';
+import { studioYear } from '../common/studio-day.js';
 
 const withDetail = {
   customer: { select: { id: true, email: true, name: true } },
@@ -85,14 +86,13 @@ export class QuotationsRepository {
   }
 
   private async nextNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const year = new Date().getUTCFullYear();
-    const last = await tx.quotation.findFirst({
-      where: { number: { startsWith: `Q-${year}-` } },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    const next = last ? Number(last.number.slice(7)) + 1 : 1;
-    return `Q-${year}-${String(next).padStart(4, '0')}`;
+    const year = studioYear();
+    // The highest number given this year, as a number (as text, Q-2026-9999 sorts after
+    // Q-2026-10000); two at once collide on the unique number and the caller tries again.
+    const [row] = await tx.$queryRaw<{ last: number }[]>`
+      SELECT coalesce(max(split_part("number", '-', 3)::int), 0)::int AS "last"
+      FROM "quotations" WHERE "number" LIKE ${`Q-${year}-%`}`;
+    return `Q-${year}-${String(row!.last + 1).padStart(4, '0')}`;
   }
 
   /** Replaces everything but the number while it is a draft or sent; false otherwise. */

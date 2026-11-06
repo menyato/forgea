@@ -22,6 +22,7 @@ export function RequestTimeline({
               month: 'short',
               hour: '2-digit',
               minute: '2-digit',
+              timeZone: 'Asia/Beirut',
             })}
           </time>
           {h.note && <span>{h.note}</span>}

@@ -92,7 +92,13 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
                 <span>
                   <span className="font-mono">{i.number}</span>{' '}
                   <span className="text-text-muted">
-                    · {i.kind} · {new Date(i.date).toLocaleDateString('en-GB')}
+                    · {i.kind} ·{' '}
+                    {new Date(`${i.date}T00:00:00Z`).toLocaleDateString(
+                      'en-GB',
+                      {
+                        timeZone: 'UTC',
+                      },
+                    )}
                   </span>
                 </span>
                 <span>

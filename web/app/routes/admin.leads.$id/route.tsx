@@ -219,7 +219,7 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
                 <li key={n.id}>
                   <p className="whitespace-pre-line">{n.body}</p>
                   <p className="text-xs text-text-muted">
-                    {new Date(n.createdAt).toLocaleString('en-GB')}
+                    {followUpTime.format(new Date(n.createdAt))}
                     {n.author ? ` · ${n.author}` : ''}
                   </p>
                 </li>

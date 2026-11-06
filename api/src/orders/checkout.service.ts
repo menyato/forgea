@@ -36,6 +36,8 @@ export interface AcceptedQuote {
 export interface QuotationToOrder {
   id: string;
   number: string;
+  /** When it was last changed: confirming refuses a quotation edited since it was read. */
+  updatedAt: Date;
   customerId: string;
   customerName: string;
   phone: string;
@@ -204,13 +206,13 @@ export class CheckoutService {
         })),
         rush: false,
         bulkDiscounts: false,
-        source: { quotationId: q.id, openStatuses },
+        source: { quotationId: q.id, openStatuses, updatedAt: q.updatedAt },
         actorId,
       });
     } catch (error) {
       if (error instanceof QuoteNoLongerOpenError) {
         throw new ConflictException(
-          'This quotation can no longer be confirmed (it expired, or was confirmed or cancelled)',
+          'This quotation can no longer be confirmed (it expired, changed, or was confirmed or cancelled): reload it',
         );
       }
       throw error;

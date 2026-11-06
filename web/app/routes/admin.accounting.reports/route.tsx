@@ -11,10 +11,11 @@ import { Field } from '~/components/ui/field';
 import { AdminHeader, Panel } from '~/features/admin/admin-ui';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { studioToday } from '~/lib/studio-time';
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studioToday();
   const from = url.searchParams.get('from') ?? `${today.slice(0, 4)}-01-01`;
   const to = url.searchParams.get('to') ?? today;
   const period = new URLSearchParams({ from, to });

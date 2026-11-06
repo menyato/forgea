@@ -14,10 +14,11 @@ import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { FigureTile } from './figure-tile';
 import { RevenueChart } from './revenue-chart';
+import { studioToday } from '~/lib/studio-time';
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studioToday();
   const query = new URLSearchParams();
   for (const key of ['from', 'to']) {
     const value = url.searchParams.get(key);

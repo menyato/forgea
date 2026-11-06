@@ -56,8 +56,10 @@ export async function action({
       : data({ result: null, error: r.message }, { status: r.status });
   }
   if (!api.hasSession) throw redirect(signInFor(url));
+  const seen = form.get('seen');
   const r = await api.post<CheckoutResult>(
     `/quotations/link/${encodeURIComponent(params.token)}/accept`,
+    typeof seen === 'string' && seen ? { seen } : {},
   );
   if (r.status === 401) throw redirect(signInFor(url));
   return r.ok

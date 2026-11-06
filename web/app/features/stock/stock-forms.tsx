@@ -30,7 +30,10 @@ export function ReceiveForm({
   colours,
   canBook,
   start,
+  requestKey,
 }: {
+  /** The page's one-time key: the same form sent twice is recorded once. */
+  requestKey: string;
   materials: readonly MaterialView[];
   colours: readonly Colour[];
   canBook: boolean;
@@ -59,6 +62,7 @@ export function ReceiveForm({
       key={fetcher.data?.ok ? 'reset' : 'form'}
       className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
+      <input type="hidden" name="requestKey" value={requestKey} />
       <SelectField
         label="Material"
         name="materialId"
@@ -213,7 +217,9 @@ export function StudioPrintForm({
   failed,
   printables,
   start,
+  requestKey,
 }: {
+  requestKey: string;
   failed: boolean;
   printables: readonly StockPrintable[];
   start: { productId: string; colour: string } | null;
@@ -248,6 +254,7 @@ export function StudioPrintForm({
       key={fetcher.data?.ok ? 'reset' : 'form'}
       className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
+      <input type="hidden" name="requestKey" value={requestKey} />
       <SelectField
         label="Product"
         name="productId"

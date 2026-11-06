@@ -3,8 +3,9 @@ import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { EntryType } from '../generated/prisma/enums.js';
 import { Ledger } from './ledger.service.js';
+import { studioToday } from '../common/studio-day.js';
 
-const today = () => new Date(new Date().toISOString().slice(0, 10));
+const today = () => studioToday();
 
 /**
  * Filament and materials bought and paid: an expense entry (the purchases account the owner

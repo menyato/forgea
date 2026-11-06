@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   MaterialView,
   StockItemView,
@@ -38,6 +39,8 @@ export async function shelfChoices(api: ApiClient, url: URL) {
     throw new Response(materials.message, { status: materials.status });
   const line = lineOf(stock.items, url);
   return {
+    // A fresh one-time key each time the page loads (after a save too).
+    requestKey: randomUUID(),
     materials: materials.data.filter((m) => m.active),
     colours: coloursFrom(printables.ok ? printables.data : [], stock.items),
     items: stock.items,
@@ -59,6 +62,7 @@ export async function receiveSpools(api: ApiClient, form: FormData) {
       paidFrom: text(form, 'paidFrom'),
       updateCost: checked(form, 'updateCost'),
       note: text(form, 'note'),
+      requestKey: text(form, 'requestKey'),
     },
     (dto) => api.post('/stock/receipts', dto),
   );
@@ -80,6 +84,7 @@ export async function studioPrint(
       progressPercent: failed ? text(form, 'progressPercent') : undefined,
       toShelf: failed ? undefined : form.get('toShelf') === 'on',
       note: text(form, 'note'),
+      requestKey: text(form, 'requestKey'),
     },
     (dto) =>
       api.post(failed ? '/stock/failed-prints' : '/stock/studio-prints', dto),
@@ -106,5 +111,9 @@ export async function printChoices(api: ApiClient, url: URL) {
   const line = url.searchParams.has('line')
     ? lineOf((await stockOverview(api)).items, url)
     : null;
-  return { printables: list, line };
+  return {
+    requestKey: randomUUID(),
+    printables: list,
+    line,
+  };
 }

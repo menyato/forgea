@@ -1,3 +1,4 @@
+import { studioYear } from '../common/studio-day.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { randomBytes } from 'node:crypto';
 
@@ -29,12 +30,7 @@ export async function nextOrderNumber(
   tx: Prisma.TransactionClient,
   now = new Date(),
 ): Promise<string> {
-  const year = Number(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Beirut',
-      year: 'numeric',
-    }).format(now),
-  );
+  const year = studioYear(now);
   const [row] = await tx.$queryRaw<{ last: number }[]>`
     INSERT INTO "order_sequences" ("year", "last") VALUES (${year}, 1)
     ON CONFLICT ("year") DO UPDATE SET "last" = "order_sequences"."last" + 1

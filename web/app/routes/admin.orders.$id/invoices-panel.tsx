@@ -7,6 +7,7 @@ import { InvoiceTable } from '~/features/accounting/invoice-table';
 import { useCan } from '~/features/admin/access';
 import { Panel, SaveStatus } from '~/features/admin/admin-ui';
 import type { SaveResult } from '~/features/admin/staff.server';
+import { studioToday } from '~/lib/studio-time';
 
 /**
  * The order's invoices. Usually made by the pipeline itself (deposit received, delivered);
@@ -26,7 +27,7 @@ export function InvoicesPanel({
   const invoices = all.filter((i) => i.type === 'INVOICE');
   const drafts = invoices.filter((i) => i.state === 'DRAFT');
   const posted = all.filter((i) => i.state === 'POSTED');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studioToday();
   const hasDeposit = invoices.some((i) => i.invoiceKind === 'DEPOSIT');
   const hasFinal = invoices.some((i) => i.invoiceKind === 'FINAL');
   // Invoices still owed, and credit notes whose money still goes back (a refund is their payment).
@@ -39,8 +40,48 @@ export function InvoicesPanel({
   const [chosenId, setChosenId] = useState<string | null>(null);
   // The one chosen while it is still open; otherwise the first one open.
   const chosen = open.find((i) => i.id === chosenId) ?? open[0]!;
+  // What the pipeline should have done by now and didn't (e.g. the books were locked):
+  // said here, so a missed invoice is never silent.
+  const postedKind = (kind: 'DEPOSIT' | 'FINAL') =>
+    posted.some((i) => i.type === 'INVOICE' && i.invoiceKind === kind);
+  const missing: string[] = [];
+  if (
+    o.depositPaid &&
+    Number(o.depositRequired) > 0 &&
+    o.status !== 'CANCELLED' &&
+    !postedKind('DEPOSIT')
+  )
+    missing.push('The deposit was received but has no posted invoice.');
+  if (o.status === 'DELIVERED' && !postedKind('FINAL'))
+    missing.push('The order was delivered but has no posted final invoice.');
+  // A cancelled order whose customer paid something: the money is theirs to get back.
+  const toRefund =
+    o.status === 'CANCELLED'
+      ? posted.filter(
+          (i) =>
+            i.type === 'INVOICE' &&
+            !i.creditedBy &&
+            Number(i.residual) < Number(i.total),
+        )
+      : [];
   return (
     <Panel title="Invoices">
+      {(missing.length > 0 || toRefund.length > 0) && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border-2 border-danger p-3 text-sm"
+        >
+          {missing.map((m) => (
+            <p key={m}>{m} Make it below.</p>
+          ))}
+          {toRefund.map((i) => (
+            <p key={i.id}>
+              The order is cancelled but {i.number} was paid: refund the
+              customer, and give it a credit note below.
+            </p>
+          ))}
+        </div>
+      )}
       <InvoiceTable invoices={all} showOrder={false} />
       {can('invoices.create') && drafts.length > 0 && (
         <fetcher.Form
@@ -142,7 +183,7 @@ export function InvoicesPanel({
             name="date"
             type="date"
             required
-            defaultValue={new Date().toISOString().slice(0, 10)}
+            defaultValue={studioToday()}
           />
           <Button type="submit" className="sm:col-span-4 sm:justify-self-start">
             Record the payment

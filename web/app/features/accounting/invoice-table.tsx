@@ -1,6 +1,7 @@
 import type { InvoiceListItem, PaymentState } from '@forgea/types';
 import { Link } from 'react-router';
 import { Money } from '~/components/money';
+import { studioToday } from '~/lib/studio-time';
 
 const STATE_LABELS: Record<PaymentState, { label: string; tone: string }> = {
   not_paid: { label: 'Not paid', tone: 'text-warning' },
@@ -76,7 +77,7 @@ export function InvoiceTable({
                   i.type === 'INVOICE' &&
                   Number(i.residual) > 0 &&
                   i.dueDate &&
-                  i.dueDate < new Date().toISOString().slice(0, 10)
+                  i.dueDate < studioToday()
                     ? 'text-danger'
                     : ''
                 }`}

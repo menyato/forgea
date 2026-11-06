@@ -37,9 +37,10 @@ import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import { Books } from './books.service.js';
 import { Invoicing } from './invoicing.service.js';
+import { studioToday, studioYear } from '../common/studio-day.js';
 
-const today = () => new Date(new Date().toISOString().slice(0, 10));
-const yearStart = () => new Date(`${new Date().getUTCFullYear()}-01-01`);
+const today = () => studioToday();
+const yearStart = () => new Date(`${studioYear()}-01-01`);
 
 /**
  * Accounting. Staff invoice orders and record payments (they collect the money); the books —

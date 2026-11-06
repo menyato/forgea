@@ -14,6 +14,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { studioFormat } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 /**
@@ -131,7 +132,7 @@ const COLUMNS: ListColumn<LeadListItem>[] = [
     sort: 'createdAt',
     cell: (l) => (
       <span className="text-text-muted">
-        {new Date(l.createdAt).toLocaleDateString('en-GB')}
+        {studioFormat({ dateStyle: 'short' }).format(new Date(l.createdAt))}
       </span>
     ),
   },
@@ -257,7 +258,10 @@ function NextActivity({ lead: l }: { lead: LeadListItem }) {
       className={`text-xs ${late ? 'font-semibold text-danger' : 'text-text-muted'}`}
     >
       {l.nextActivity.summary} (
-      {new Date(l.nextActivity.dueAt).toLocaleDateString('en-GB')})
+      {studioFormat({ dateStyle: 'short' }).format(
+        new Date(l.nextActivity.dueAt),
+      )}
+      )
     </span>
   );
 }

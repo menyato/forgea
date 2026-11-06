@@ -73,6 +73,7 @@ export {
   RestoreBackupDto,
   CustomerEmailQuery,
   CustomerListQuery,
+  AcceptQuotationDto,
   DeclineQuotationDto,
   EntryListQuery,
   InvoiceListQuery,

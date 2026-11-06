@@ -15,6 +15,7 @@ import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { studioToday } from '~/lib/studio-time';
 
 export async function loader({ context }: Route.LoaderArgs) {
   const r = await context
@@ -97,7 +98,7 @@ export default function NewEntry({ loaderData }: Route.ComponentProps) {
                 name="date"
                 type="date"
                 required
-                defaultValue={new Date().toISOString().slice(0, 10)}
+                defaultValue={studioToday()}
                 error={errors['date']}
               />
               <Field

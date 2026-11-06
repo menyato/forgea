@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type { OrderQuote } from '@forgea/pricing';
 import type { ChosenOption } from '@forgea/types';
 import type {
@@ -17,6 +17,7 @@ import {
   QuotationStatus,
 } from '../generated/prisma/enums.js';
 import { catchUpOrderSequences, nextOrderNumber } from './order-number.js';
+import { studioToday } from '../common/studio-day.js';
 
 const withCustomer = {
   user: { select: { email: true } },
@@ -87,7 +88,12 @@ export interface NewOrder {
    */
   source?:
     | { customRequestId: string; quotedPrice: string }
-    | { quotationId: string; openStatuses: QuotationStatus[] };
+    | {
+        quotationId: string;
+        openStatuses: QuotationStatus[];
+        /** As read: an edit meanwhile (new prices) refuses the confirmation. */
+        updatedAt: Date;
+      };
 }
 
 /** The quote being accepted expired or was answered meanwhile; nothing was created. */
@@ -163,7 +169,28 @@ export class OrdersRepository {
               },
             },
           });
-          if (o.cartId) await tx.cart.deleteMany({ where: { id: o.cartId } });
+          if (o.cartId) {
+            // The cart must still be the one priced: two tabs ordering it, or an item added or
+            // changed meanwhile, refuse this order instead of making a second or a wrong one.
+            const now = await tx.cartItem.findMany({
+              where: { cartId: o.cartId },
+              select: { id: true, quantity: true },
+            });
+            const priced = new Map(
+              o.quote.lines.map((l) => [l.id, l.quantity]),
+            );
+            const { count } = await tx.cart.deleteMany({
+              where: { id: o.cartId },
+            });
+            if (
+              count !== 1 ||
+              now.length !== priced.size ||
+              now.some((i) => priced.get(i.id) !== i.quantity)
+            )
+              throw new ConflictException(
+                'Your cart changed meanwhile (another tab?). Check it and order again.',
+              );
+          }
           if (o.source && 'customRequestId' in o.source) {
             // Only a quote still waiting for an answer can be accepted; otherwise roll back.
             const { count } = await tx.customRequest.updateMany({
@@ -187,6 +214,7 @@ export class OrdersRepository {
                 id: o.source.quotationId,
                 status: { in: o.source.openStatuses },
                 validUntil: { gte: startOfToday() },
+                updatedAt: o.source.updatedAt,
               },
               data: { status: QuotationStatus.CONFIRMED, orderId: order.id },
             });
@@ -361,13 +389,8 @@ export class OrdersRepository {
   }
 }
 
-/** Today at 00:00 UTC: a quotation is valid through its last day. */
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-}
+/** The studio's day (Beirut): a quotation valid until today can still be confirmed today. */
+const startOfToday = (): Date => studioToday();
 
 function lineOf(o: NewOrder, id: string): OrderLineSource {
   const line = o.lines.find((l) => l.id === id);

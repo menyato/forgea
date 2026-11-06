@@ -50,7 +50,11 @@ export async function action({
       ? { result: null, error: null }
       : data({ result: null, error: r.message }, { status: r.status });
   }
-  const r = await api.post<CheckoutResult>(`${base}/accept`);
+  const seen = form.get('seen');
+  const r = await api.post<CheckoutResult>(
+    `${base}/accept`,
+    typeof seen === 'string' && seen ? { seen } : {},
+  );
   if (r.status === 401) throw redirect(signInFor(url));
   return r.ok
     ? { result: r.data, error: null }

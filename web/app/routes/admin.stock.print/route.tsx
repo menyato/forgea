@@ -24,6 +24,7 @@ export default function StudioPrint({ loaderData }: Route.ComponentProps) {
       line={line}
     >
       <StudioPrintForm
+        requestKey={loaderData.requestKey}
         failed={false}
         printables={printables}
         start={startingPrintable(printables, line)}
