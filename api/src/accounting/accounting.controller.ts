@@ -1,5 +1,6 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
   HttpCode,
@@ -25,6 +26,8 @@ import {
   InvoiceListQuery,
   ManualEntryDto,
   RecordPaymentDto,
+  CreateInvoiceDto,
+  InvoiceDatesDto,
   ReportPeriodQuery,
   SaveAccountDto,
   UpdateAccountingSettingsDto,
@@ -84,9 +87,10 @@ export class AccountingController {
   @Post('orders/:orderId/deposit-invoice')
   depositInvoice(
     @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: CreateInvoiceDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<InvoiceListItem> {
-    return this.invoicing.depositInvoice(orderId, user.id);
+    return this.invoicing.depositInvoice(orderId, user.id, dto);
   }
 
   @RequirePermission('invoices.create')
@@ -98,9 +102,40 @@ export class AccountingController {
   @Post('orders/:orderId/final-invoice')
   finalInvoice(
     @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Body() dto: CreateInvoiceDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<InvoiceListItem> {
-    return this.invoicing.finalInvoice(orderId, user.id);
+    return this.invoicing.finalInvoice(orderId, user.id, dto);
+  }
+
+  /** A draft invoice gets its number and enters the books. */
+  @RequirePermission('invoices.create')
+  @Audit({ action: 'invoice.post', targetType: 'Invoice' })
+  @HttpCode(200)
+  @Post('invoices/:id/post')
+  postInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<InvoiceListItem> {
+    return this.invoicing.post(id, user.id);
+  }
+
+  @RequirePermission('invoices.create')
+  @Audit({ action: 'invoice.redate', targetType: 'Invoice' })
+  @Put('invoices/:id/dates')
+  redateInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InvoiceDatesDto,
+  ): Promise<InvoiceListItem> {
+    return this.invoicing.redate(id, dto);
+  }
+
+  @RequirePermission('invoices.create')
+  @Audit({ action: 'invoice.discard', targetType: 'Invoice' })
+  @HttpCode(204)
+  @Delete('invoices/:id')
+  discardInvoice(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.invoicing.discard(id);
   }
 
   @RequirePermission('payments.record')

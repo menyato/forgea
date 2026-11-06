@@ -18,6 +18,7 @@ import type { Route } from './+types/route';
 
 /** What is open, what is settled, what was given back; several together add up (the API filters). */
 const FILTERS = [
+  { key: 'draft', label: 'Drafts' },
   { key: 'unpaid', label: 'Unpaid' },
   { key: 'paid', label: 'Paid' },
   { key: 'credit', label: 'Credit notes' },
@@ -64,7 +65,12 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   return {
     state,
     page: r.data,
-    counts: { unpaid: c.unpaid, paid: c.paid, credit: c.credit },
+    counts: {
+      draft: c.draft,
+      unpaid: c.unpaid,
+      paid: c.paid,
+      credit: c.credit,
+    },
     owed: Number(c.owed),
     // Without a search, the filters' counts say how many there are in all.
     total: state.q

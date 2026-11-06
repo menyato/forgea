@@ -24,40 +24,83 @@ export function InvoicesPanel({
   const fetcher = useFetcher<SaveResult>();
   const can = useCan();
   const invoices = all.filter((i) => i.type === 'INVOICE');
+  const drafts = invoices.filter((i) => i.state === 'DRAFT');
+  const posted = all.filter((i) => i.state === 'POSTED');
+  const today = new Date().toISOString().slice(0, 10);
   const hasDeposit = invoices.some((i) => i.invoiceKind === 'DEPOSIT');
   const hasFinal = invoices.some((i) => i.invoiceKind === 'FINAL');
   // Invoices still owed, and credit notes whose money still goes back (a refund is their payment).
-  const open = all.filter((i) => Number(i.residual) > 0);
+  const open = posted.filter((i) => Number(i.residual) > 0);
   // An invoice is credited once, in full; what the customer paid is then theirs to refund.
-  const creditable = invoices.filter((i) => !i.creditedBy);
+  const creditable = posted.filter(
+    (i) => i.type === 'INVOICE' && !i.creditedBy,
+  );
+  const canDeposit = Number(o.depositRequired) > 0 && !hasDeposit;
   const [chosenId, setChosenId] = useState<string | null>(null);
   // The one chosen while it is still open; otherwise the first one open.
   const chosen = open.find((i) => i.id === chosenId) ?? open[0]!;
   return (
     <Panel title="Invoices">
       <InvoiceTable invoices={all} showOrder={false} />
-      {can('invoices.create') && (
-        <fetcher.Form method="post" className="flex flex-wrap gap-2">
-          {Number(o.depositRequired) > 0 && !hasDeposit && (
-            <Button
-              type="submit"
-              name="intent"
-              value="deposit-invoice"
-              variant="secondary"
-            >
-              Invoice the deposit
+      {can('invoices.create') && drafts.length > 0 && (
+        <fetcher.Form
+          method="post"
+          className="flex flex-wrap items-end gap-3 border-t border-border pt-4"
+        >
+          <input type="hidden" name="intent" value="post-invoice" />
+          <SelectField label="Draft to post" name="invoiceId">
+            {drafts.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.invoiceKind === 'DEPOSIT' ? 'Deposit' : 'Invoice'} of{' '}
+                {i.date} (${i.total}, due {i.dueDate ?? i.date})
+              </option>
+            ))}
+          </SelectField>
+          <Button type="submit" variant="secondary">
+            Post it
+          </Button>
+          <p className="w-full text-xs text-text-muted">
+            A draft has no number and stays out of the books. Change its dates
+            or discard it from its page.
+          </p>
+        </fetcher.Form>
+      )}
+      {can('invoices.create') && (canDeposit || !hasFinal) && (
+        <fetcher.Form
+          method="post"
+          className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3 sm:items-end"
+        >
+          <SelectField
+            label="Invoice"
+            name="intent"
+            defaultValue={canDeposit ? 'deposit-invoice' : 'final-invoice'}
+          >
+            {canDeposit && <option value="deposit-invoice">The deposit</option>}
+            {!hasFinal && <option value="final-invoice">The order</option>}
+          </SelectField>
+          <Field
+            label="Invoice date"
+            name="invoiceDate"
+            type="date"
+            max={today}
+            required
+            defaultValue={today}
+          />
+          <Field
+            label="Due date"
+            name="dueDate"
+            type="date"
+            required
+            defaultValue={today}
+          />
+          <div className="flex flex-wrap gap-2 sm:col-span-3">
+            <Button type="submit" name="as" value="post">
+              Post the invoice
             </Button>
-          )}
-          {!hasFinal && (
-            <Button
-              type="submit"
-              name="intent"
-              value="final-invoice"
-              variant="secondary"
-            >
-              Invoice the order
+            <Button type="submit" name="as" value="draft" variant="secondary">
+              Save as a draft
             </Button>
-          )}
+          </div>
         </fetcher.Form>
       )}
       {open.length > 0 && can('payments.record') && (

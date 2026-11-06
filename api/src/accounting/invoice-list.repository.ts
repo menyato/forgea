@@ -16,6 +16,7 @@ import { Prisma } from '../generated/prisma/client.js';
  */
 const OPEN = Prisma.sql`
   SELECT e.id, coalesce(e.number, '') AS number, e.date, e.type::text AS type,
+         e.state::text AS state,
          e."customerId", e."orderId",
          coalesce(sum(CASE WHEN e.type = 'INVOICE' THEN l.debit ELSE l.credit END), 0) AS total,
          coalesce(sum(CASE WHEN e.type = 'INVOICE' THEN l.debit ELSE l.credit END), 0)
@@ -33,8 +34,9 @@ const OPEN = Prisma.sql`
 
 /** The list's filters; several add up (OR). */
 const FILTERS = {
-  unpaid: Prisma.sql`(i.type = 'INVOICE' AND i.residual > 0)`,
-  paid: Prisma.sql`(i.type = 'INVOICE' AND i.residual <= 0)`,
+  draft: Prisma.sql`i.state = 'DRAFT'`,
+  unpaid: Prisma.sql`(i.state = 'POSTED' AND i.type = 'INVOICE' AND i.residual > 0)`,
+  paid: Prisma.sql`(i.state = 'POSTED' AND i.type = 'INVOICE' AND i.residual <= 0)`,
   credit: Prisma.sql`i.type = 'CREDIT_NOTE'`,
 } as const;
 
@@ -135,14 +137,22 @@ export class InvoiceListRepository {
   /** The filters' counts over every invoice, and what customers owe in all. */
   async counts(): Promise<InvoiceCounts> {
     const [row] = await this.prisma.$queryRaw<
-      { unpaid: number; paid: number; credit: number; owed: Prisma.Decimal }[]
+      {
+        draft: number;
+        unpaid: number;
+        paid: number;
+        credit: number;
+        owed: Prisma.Decimal;
+      }[]
     >`
-      SELECT count(*) FILTER (WHERE ${FILTERS.unpaid})::int AS unpaid,
+      SELECT count(*) FILTER (WHERE ${FILTERS.draft})::int AS draft,
+             count(*) FILTER (WHERE ${FILTERS.unpaid})::int AS unpaid,
              count(*) FILTER (WHERE ${FILTERS.paid})::int AS paid,
              count(*) FILTER (WHERE ${FILTERS.credit})::int AS credit,
-             coalesce(sum(i.residual) FILTER (WHERE i.type = 'INVOICE'), 0) AS owed
+             coalesce(sum(i.residual) FILTER (WHERE i.type = 'INVOICE' AND i.state = 'POSTED'), 0) AS owed
       FROM (${OPEN}) i`;
     return {
+      draft: row?.draft ?? 0,
       unpaid: row?.unpaid ?? 0,
       paid: row?.paid ?? 0,
       credit: row?.credit ?? 0,

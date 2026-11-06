@@ -37,14 +37,31 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   return { order: r.data, related, jobs: jobs.ok ? jobs.data.items : null };
 }
 
-/** status (the next step) | deposit-invoice | final-invoice | payment */
+/** status (the next step) | deposit-invoice | final-invoice | post-invoice | payment */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
   const intent = form.get('intent');
   const orderPath = `/accounting/orders/${encodeURIComponent(params.id)}`;
+  if (intent === 'post-invoice') {
+    const invoiceId = text(form, 'invoiceId') ?? '';
+    if (!/^[0-9a-f-]{36}$/.test(invoiceId))
+      return data<SaveResult>({ error: 'Choose an invoice' }, { status: 400 });
+    const r = await api.post(
+      `/accounting/invoices/${encodeURIComponent(invoiceId)}/post`,
+    );
+    return r.ok
+      ? data<SaveResult>({ ok: true })
+      : data<SaveResult>({ error: r.message }, { status: r.status });
+  }
   if (intent === 'deposit-invoice' || intent === 'final-invoice') {
-    const r = await api.post(`${orderPath}/${intent}`);
+    const date = text(form, 'invoiceDate');
+    const dueDate = text(form, 'dueDate');
+    const r = await api.post(`${orderPath}/${intent}`, {
+      draft: form.get('as') === 'draft',
+      ...(date ? { date } : {}),
+      ...(dueDate ? { dueDate } : {}),
+    });
     return r.ok
       ? data<SaveResult>({ ok: true })
       : data<SaveResult>({ error: r.message }, { status: r.status });

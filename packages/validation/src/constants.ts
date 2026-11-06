@@ -42,7 +42,7 @@ export const CUSTOM_REQUEST_SORTS = ['createdAt', 'title'] as const;
 export const AUDIT_LOG_SORTS = ['timestamp'] as const;
 export const INVOICE_SORTS = ['date', 'number', 'total', 'residual'] as const;
 /** The invoice list's filters: still owed, settled, credit notes (several add up). */
-export const INVOICE_FILTERS = ['unpaid', 'paid', 'credit'] as const;
+export const INVOICE_FILTERS = ['draft', 'unpaid', 'paid', 'credit'] as const;
 export const ENTRY_SORTS = ['date', 'number'] as const;
 export const STOCK_MOVEMENT_SORTS = ['createdAt', 'grams'] as const;
 

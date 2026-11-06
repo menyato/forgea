@@ -68,7 +68,34 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   // Staff invoice the order and record the transfer; the invoice is then paid.
   await page.goto(`/admin/orders?q=${orderNumber}`);
   await page.getByRole('link', { name: orderNumber }).first().click();
-  await page.getByRole('button', { name: 'Invoice the order' }).click();
+  // Drafted first, due in two weeks: no number until it is posted.
+  const invoices = page.getByRole('region', { name: 'Invoices' });
+  const due = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+  await invoices
+    .getByLabel('Invoice', { exact: true })
+    .selectOption('final-invoice');
+  await invoices.getByLabel('Due date').fill(due);
+  await invoices.getByRole('button', { name: 'Save as a draft' }).click();
+  await expect(
+    invoices.getByRole('row', { name: /Draft.*Draft/ }),
+  ).toBeVisible();
+  await expect(invoices.getByRole('cell', { name: due })).toBeVisible();
+  // Its own page still changes its dates.
+  const orderPage = page.url();
+  await invoices.getByRole('link', { name: 'Draft' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Draft invoice', level: 1 }),
+  ).toBeVisible();
+  const later = new Date(Date.now() + 21 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const draftPanel = page.getByRole('region', { name: 'Draft' });
+  await draftPanel.getByLabel('Due date').fill(later);
+  await draftPanel.getByRole('button', { name: 'Save the dates' }).click();
+  await expect(draftPanel.getByText('Saved')).toBeVisible();
+  await page.goto(orderPage);
+  await expect(invoices.getByRole('cell', { name: later })).toBeVisible();
+  await invoices.getByRole('button', { name: 'Post it' }).click();
   await expect(
     page.getByRole('cell', { name: /INV\/\d{4}\/\d{5}/ }),
   ).toBeVisible();

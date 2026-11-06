@@ -458,6 +458,143 @@ describe('Back office (e2e)', () => {
     expect(counts.owed).toMatch(/^\d+\.\d{2}$/);
   });
 
+  it('an invoice can wait as a draft with its dates, then be posted (or discarded)', async () => {
+    const staff = await signedInAs(app, Role.STAFF);
+    const customer = await signedInCustomer(app);
+    const product = await createProduct(app, { isCustom: true });
+    await as(customer.cookie)
+      .post('/cart/items', { productId: product.id, quantity: 1 })
+      .expect(201);
+    const placed = await as(customer.cookie)
+      .post('/orders/checkout', {
+        idempotencyKey: randomUUID(),
+        name: 'Rana Khoury',
+        phone: '70 123 456',
+        paymentMethod: 'TRANSFER',
+        delivery: false,
+      })
+      .expect(201);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: placed.body.orderNumber },
+    });
+    const s = as(staff.cookie);
+    const yesterday = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const in14 = new Date(Date.now() + 14 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    // Dates are checked: not in the future, due on or after the invoice date.
+    await s
+      .post(`/accounting/orders/${order.id}/deposit-invoice`, {
+        draft: true,
+        date: tomorrow,
+      })
+      .expect(400);
+    await s
+      .post(`/accounting/orders/${order.id}/deposit-invoice`, {
+        draft: true,
+        date: today(),
+        dueDate: yesterday,
+      })
+      .expect(400);
+
+    // A draft: no number, outside the books, can't be paid or credited.
+    const draft = (
+      await s
+        .post(`/accounting/orders/${order.id}/deposit-invoice`, {
+          draft: true,
+          date: yesterday,
+          dueDate: in14,
+        })
+        .expect(201)
+    ).body;
+    expect(draft).toMatchObject({
+      state: 'DRAFT',
+      number: '',
+      date: yesterday,
+      dueDate: in14,
+    });
+    await s
+      .post(`/accounting/orders/${order.id}/deposit-invoice`, { draft: true })
+      .expect(409);
+    await s
+      .post('/accounting/payments', {
+        invoiceId: draft.id,
+        amount: draft.total,
+        method: 'BANK',
+        date: today(),
+      })
+      .expect(409);
+    const admin = await signedInAs(app, Role.ADMIN);
+    await as(admin.cookie)
+      .post(`/accounting/invoices/${draft.id}/credit-note`)
+      .expect(409);
+    const drafts = (await s.get('/accounting/invoices?filters=draft')).body;
+    expect(drafts.items.map((i: { id: string }) => i.id)).toContain(draft.id);
+
+    // Its dates still change; then it is posted and gets its number.
+    const redated = (
+      await s
+        .put(`/accounting/invoices/${draft.id}/dates`, {
+          date: today(),
+          dueDate: in14,
+        })
+        .expect(200)
+    ).body;
+    expect(redated).toMatchObject({ date: today(), dueDate: in14 });
+    const posted = (
+      await s.post(`/accounting/invoices/${draft.id}/post`).expect(200)
+    ).body;
+    expect(posted).toMatchObject({
+      state: 'POSTED',
+      number: expect.stringMatching(/^INV\/\d{4}\/\d{5}$/),
+      dueDate: in14,
+    });
+    // Posted is final.
+    await s.post(`/accounting/invoices/${draft.id}/post`).expect(409);
+    await http()
+      .delete(`/accounting/invoices/${draft.id}`)
+      .set(CSRF)
+      .set('Cookie', staff.cookie)
+      .expect(409);
+    await s
+      .put(`/accounting/invoices/${draft.id}/dates`, {
+        date: yesterday,
+        dueDate: in14,
+      })
+      .expect(409);
+
+    // A final invoice drafted, then discarded; the deposit arriving confirms the order.
+    const finalDraft = (
+      await s
+        .post(`/accounting/orders/${order.id}/final-invoice`, { draft: true })
+        .expect(201)
+    ).body;
+    await http()
+      .delete(`/accounting/invoices/${finalDraft.id}`)
+      .set(CSRF)
+      .set('Cookie', staff.cookie)
+      .expect(204);
+    // Drafted again, then delivered: the pipeline posts the waiting draft, not a second one.
+    await s
+      .post(`/accounting/orders/${order.id}/final-invoice`, { draft: true })
+      .expect(201);
+    for (const status of ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'DELIVERED'])
+      await s.patch(`/orders/${order.id}/status`, { status }).expect(200);
+    const finals = (
+      await s.get(`/accounting/orders/${order.id}/invoices`)
+    ).body.filter(
+      (i: { invoiceKind: string; type: string }) =>
+        i.invoiceKind === 'FINAL' && i.type === 'INVOICE',
+    );
+    expect(finals).toEqual([expect.objectContaining({ state: 'POSTED' })]);
+  });
+
   it('a double click never invoices or collects twice; the database refuses over-matching', async () => {
     const staff = await signedInAs(app, Role.STAFF);
     const customer = await signedInCustomer(app);

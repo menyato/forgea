@@ -365,6 +365,33 @@ export class SaveAccountDto {
   active: boolean = true;
 }
 
+/** An order's invoice: its dates, and whether it is saved as a draft or posted. */
+export class CreateInvoiceDto {
+  /** A draft gets no number and stays out of the books until it is posted. */
+  @IsOptional()
+  @IsBoolean()
+  draft?: boolean;
+
+  /** The invoice date; today when left out. */
+  @IsOptional()
+  @Matches(DATE_ONLY, day)
+  date?: string;
+
+  /** When it should be paid; the invoice date when left out. */
+  @IsOptional()
+  @Matches(DATE_ONLY, day)
+  dueDate?: string;
+}
+
+/** A draft invoice's dates. */
+export class InvoiceDatesDto {
+  @Matches(DATE_ONLY, day)
+  date!: string;
+
+  @Matches(DATE_ONLY, day)
+  dueDate!: string;
+}
+
 export class RecordPaymentDto {
   /** The invoice it pays (its open amount is settled first). */
   @IsUUID()
