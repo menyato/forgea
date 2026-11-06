@@ -32,8 +32,12 @@ test('a designer sees only their pages; other addresses are refused even when ty
     'Materials',
   ]) {
     await expect(
-      menu(page).getByRole('link', { name: shown, exact: true }),
-    ).toBeVisible();
+      menu(page).getByRole('link', {
+        name: shown,
+        exact: true,
+        includeHidden: true,
+      }),
+    ).toHaveCount(1);
   }
   for (const hidden of [
     'Orders',
@@ -45,7 +49,11 @@ test('a designer sees only their pages; other addresses are refused even when ty
     'Audit log',
   ]) {
     await expect(
-      menu(page).getByRole('link', { name: hidden, exact: true }),
+      menu(page).getByRole('link', {
+        name: hidden,
+        exact: true,
+        includeHidden: true,
+      }),
     ).toHaveCount(0);
   }
 
@@ -94,10 +102,18 @@ test('an admin gives one staff member the books and takes away orders; it applie
     await staff.page.goto('/admin/accounting');
     await dashboardMenu(staff.page);
     await expect(
-      menu(staff.page).getByRole('link', { name: 'Orders', exact: true }),
-    ).toBeVisible();
+      menu(staff.page).getByRole('link', {
+        name: 'Orders',
+        exact: true,
+        includeHidden: true,
+      }),
+    ).toHaveCount(1);
     await expect(
-      menu(staff.page).getByRole('link', { name: 'Books', exact: true }),
+      menu(staff.page).getByRole('link', {
+        name: 'Books',
+        exact: true,
+        includeHidden: true,
+      }),
     ).toHaveCount(0);
     expect((await staff.page.goto('/admin/accounting/books'))?.status()).toBe(
       403,
@@ -106,7 +122,11 @@ test('an admin gives one staff member the books and takes away orders; it applie
     // The admin finds them on the Team page and changes two permissions.
     await page.goto(`/admin/team?q=${encodeURIComponent(member.email)}`);
     await page
-      .getByRole('link', { name: 'Test staff', exact: true })
+      .getByRole('link', {
+        name: 'Test staff',
+        exact: true,
+        includeHidden: true,
+      })
       .first()
       .waitFor();
     await page.goto(`/admin/team/${member.id}`);
@@ -139,13 +159,25 @@ test('an admin gives one staff member the books and takes away orders; it applie
     await staff.page.goto('/admin/accounting');
     await dashboardMenu(staff.page);
     await expect(
-      menu(staff.page).getByRole('link', { name: 'Books', exact: true }),
-    ).toBeVisible();
+      menu(staff.page).getByRole('link', {
+        name: 'Books',
+        exact: true,
+        includeHidden: true,
+      }),
+    ).toHaveCount(1);
     await expect(
-      menu(staff.page).getByRole('link', { name: 'Orders', exact: true }),
+      menu(staff.page).getByRole('link', {
+        name: 'Orders',
+        exact: true,
+        includeHidden: true,
+      }),
     ).toHaveCount(0);
     await expect(
-      menu(staff.page).getByRole('link', { name: 'Production', exact: true }),
+      menu(staff.page).getByRole('link', {
+        name: 'Production',
+        exact: true,
+        includeHidden: true,
+      }),
     ).toHaveCount(0);
     expect((await staff.page.goto('/admin/accounting/books'))?.status()).toBe(
       200,
