@@ -8,7 +8,7 @@ import { UpdatePrintJobDto } from '@forgea/validation';
 import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
-import { Field } from '~/components/ui/field';
+import { CheckboxField, Field } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
@@ -74,6 +74,11 @@ export async function action({ request, params, context }: Route.ActionArgs) {
           status: PrintJobStatus.DONE,
           actualGrams: text(form, 'actualGrams'),
           actualHours: text(form, 'actualHours'),
+          goodPieces: text(form, 'goodPieces'),
+          sparePieces: text(form, 'sparePieces'),
+          actualKwh: text(form, 'actualKwh'),
+          note: text(form, 'note'),
+          reprint: form.get('reprint') === 'on',
         },
         send,
       );
@@ -82,9 +87,10 @@ export async function action({ request, params, context }: Route.ActionArgs) {
         UpdatePrintJobDto,
         {
           status: PrintJobStatus.FAILED,
-          ...(text(form, 'actualGrams')
-            ? { actualGrams: text(form, 'actualGrams') }
-            : {}),
+          actualGrams: text(form, 'actualGrams'),
+          actualHours: text(form, 'actualHours'),
+          note: text(form, 'note'),
+          reprint: form.get('reprint') === 'on',
         },
         send,
       );
@@ -204,6 +210,51 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 <dd>
                   {job.actualGrams} g
                   {job.actualHours ? ` · ${job.actualHours} h` : ''}
+                </dd>
+              </>
+            )}
+            {job.goodPieces !== null && (
+              <>
+                <dt className="text-text-muted">Came out right</dt>
+                <dd>
+                  {job.goodPieces} of {job.quantity}
+                  {job.sparePieces > 0 &&
+                    `, and ${job.sparePieces} spare to the ready pieces`}
+                </dd>
+              </>
+            )}
+            {job.note && (
+              <>
+                <dt className="text-text-muted">Note</dt>
+                <dd>{job.note}</dd>
+              </>
+            )}
+            {job.replaces && (
+              <>
+                <dt className="text-text-muted">Reprint of</dt>
+                <dd>
+                  <Link
+                    to={`/admin/production/${job.replaces}`}
+                    className="underline"
+                  >
+                    an earlier run
+                  </Link>
+                </dd>
+              </>
+            )}
+            {job.reprints.length > 0 && (
+              <>
+                <dt className="text-text-muted">Reprinted in</dt>
+                <dd className="flex flex-wrap gap-x-3">
+                  {job.reprints.map((id, i) => (
+                    <Link
+                      key={id}
+                      to={`/admin/production/${id}`}
+                      className="underline"
+                    >
+                      run {i + 1}
+                    </Link>
+                  ))}
                 </dd>
               </>
             )}
@@ -339,6 +390,45 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 defaultValue={job.hours}
                 error={done.data?.errors?.['actualHours']}
               />
+              <Field
+                label="Pieces that came out right"
+                name="goodPieces"
+                type="number"
+                min={0}
+                max={job.quantity}
+                defaultValue={job.quantity}
+                hint={`Of ${job.quantity}; the others are lost`}
+                error={done.data?.errors?.['goodPieces']}
+              />
+              <Field
+                label="Spare good pieces (optional)"
+                name="sparePieces"
+                type="number"
+                min={0}
+                defaultValue={0}
+                hint="Beyond what it was for: they go to the ready pieces"
+                error={done.data?.errors?.['sparePieces']}
+              />
+              <Field
+                label="Energy used, kWh (optional)"
+                name="actualKwh"
+                inputMode="decimal"
+                hint={`From the printer or a plug meter; empty: ${job.printer?.name ?? 'the printer'}'s watts × the hours`}
+                error={done.data?.errors?.['actualKwh']}
+              />
+              <Field
+                label="Note (optional)"
+                name="note"
+                placeholder="e.g. one warped at the corner"
+                error={done.data?.errors?.['note']}
+              />
+              <div className="sm:col-span-2">
+                <CheckboxField
+                  label="Plan a reprint of the pieces that didn't come out right"
+                  name="reprint"
+                  defaultChecked
+                />
+              </div>
               <div className="flex items-center gap-3 sm:col-span-2">
                 <Button
                   type="submit"
@@ -350,7 +440,8 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
               </div>
               <p className="text-xs text-text-muted sm:col-span-2">
                 Stock moves by the difference from the estimate, and the real
-                cost (filament, electricity, printer wear) goes on the order.
+                cost (filament, electricity, printer wear) goes on the order and
+                the production results.
               </p>
             </done.Form>
           </Panel>
@@ -359,7 +450,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
           <Panel title="It failed">
             <failed.Form
               method="post"
-              className="flex flex-wrap items-end gap-3"
+              className="grid gap-3 sm:grid-cols-2"
               onSubmit={(e) => {
                 if (
                   !window.confirm(
@@ -376,14 +467,35 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 inputMode="decimal"
                 error={failed.data?.errors?.['actualGrams']}
               />
-              <Button
-                type="submit"
-                variant="quiet"
-                disabled={failed.state !== 'idle'}
-              >
-                Mark as failed
-              </Button>
-              <SaveStatus state={failed.state} result={failed.data} />
+              <Field
+                label="Hours it ran (optional)"
+                name="actualHours"
+                inputMode="decimal"
+                error={failed.data?.errors?.['actualHours']}
+              />
+              <Field
+                label="What went wrong (optional)"
+                name="note"
+                placeholder="e.g. came off the bed"
+                error={failed.data?.errors?.['note']}
+              />
+              <div className="sm:col-span-2">
+                <CheckboxField
+                  label="Plan a reprint"
+                  name="reprint"
+                  defaultChecked
+                />
+              </div>
+              <div className="flex items-center gap-3 sm:col-span-2">
+                <Button
+                  type="submit"
+                  variant="quiet"
+                  disabled={failed.state !== 'idle'}
+                >
+                  Mark as failed
+                </Button>
+                <SaveStatus state={failed.state} result={failed.data} />
+              </div>
             </failed.Form>
           </Panel>
         )}

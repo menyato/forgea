@@ -103,5 +103,15 @@ export type {
   StockMovementCounts,
   StockMovementView,
   StockOverview,
+  ProductionResults,
+  ReadyPieceDetail,
+  ReadyPieceMovementKind,
+  ReadyPieceMovementView,
+  ReadyPieceView,
 } from './stock.js';
-export { MANUAL_STOCK_MOVEMENTS, STOCK_MOVEMENT_LABELS } from './stock.js';
+export {
+  MANUAL_STOCK_MOVEMENTS,
+  READY_PIECE_MOVEMENT_LABELS,
+  READY_PIECE_TAKE_KINDS,
+  STOCK_MOVEMENT_LABELS,
+} from './stock.js';

@@ -254,10 +254,12 @@ export class OrdersRepository {
       : null;
   }
 
-  findStatus(id: string): Promise<Pick<Order, 'id' | 'status'> | null> {
+  findStatus(
+    id: string,
+  ): Promise<Pick<Order, 'id' | 'status' | 'orderNumber'> | null> {
     return this.prisma.order.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, orderNumber: true },
     });
   }
 

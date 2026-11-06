@@ -130,7 +130,9 @@ export class OrdersController {
     @Body() dto: ChangeOrderStatusDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StatusChange> {
-    return this.statuses.change(id, dto.status, user.id, dto.note);
+    return this.statuses.change(id, dto.status, user.id, dto.note, {
+      expected: dto.expectedStatus,
+    });
   }
 
   /** Places an order from the cart. Browsing needs no account; ordering does (owner decision). */

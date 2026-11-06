@@ -91,7 +91,11 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   }
   return save(
     ChangeOrderStatusDto,
-    { status: text(form, 'status'), note: text(form, 'note') },
+    {
+      status: text(form, 'status'),
+      note: text(form, 'note'),
+      expectedStatus: text(form, 'expectedStatus'),
+    },
     (dto) =>
       context
         .get(apiContext)
@@ -317,6 +321,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
             ) : (
               // Keyed by status: once a step is saved its note is cleared, never sent with the next.
               <fetcher.Form key={o.status} method="post" className="grid gap-3">
+                <input type="hidden" name="expectedStatus" value={o.status} />
                 <TextAreaField
                   label="Note for the customer (optional)"
                   name="note"

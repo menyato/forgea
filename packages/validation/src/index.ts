@@ -97,6 +97,8 @@ export {
 } from './back-office.dto.js';
 export { PeriodQuery } from './insights.dto.js';
 export {
+  AddReadyPiecesDto,
+  CountReadyPiecesDto,
   PURCHASE_PAID_FROM,
   type PurchasePaidFrom,
   ReceiveSpoolsDto,
@@ -105,6 +107,7 @@ export {
   StockCountDto,
   StockMovementListQuery,
   StudioPrintDto,
+  TakeReadyPiecesDto,
 } from './stock.dto.js';
 export {
   DesignLetterDto,

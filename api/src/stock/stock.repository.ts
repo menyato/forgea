@@ -170,10 +170,10 @@ export class StockRepository {
              m."pricePerGram"::text AS "pricePerGram",
              coalesce(sum(s.grams), 0)::int AS stock,
              coalesce(-sum(s.grams) FILTER (
-               WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED') AND s."createdAt" >= ${since30}
+               WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED', 'RETURNED') AND s."createdAt" >= ${since30}
              ), 0)::int AS used30,
              coalesce(-sum(s.grams) FILTER (
-               WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED') AND s."createdAt" >= ${since90}
+               WHERE s.kind IN ('ORDER', 'FAILED_PRINT', 'USED', 'RETURNED') AND s."createdAt" >= ${since90}
              ), 0)::int AS used90,
              max(s."createdAt") AS "lastMovedAt"
       FROM stock_items i
@@ -281,15 +281,15 @@ export class StockRepository {
     >`
       -- A finished print's difference counts with its order's filament (what it really used):
       -- more taken adds to it, any given back takes from it.
-      SELECT CASE WHEN s.kind = 'PRINTED' THEN 'ORDER' ELSE s.kind::text END AS kind,
+      SELECT CASE WHEN s.kind IN ('PRINTED', 'RETURNED') THEN 'ORDER' ELSE s.kind::text END AS kind,
              abs(sum(s.grams))::int AS grams,
              coalesce(sum(coalesce(s.cost, abs(s.grams) * coalesce(s."costPerGram", m."pricePerGram"))
-               * CASE WHEN s.kind = 'PRINTED' AND s.grams > 0 THEN -1 ELSE 1 END), 0)
+               * CASE WHEN s.kind IN ('PRINTED', 'RETURNED') AND s.grams > 0 THEN -1 ELSE 1 END), 0)
                ::decimal(12, 2) AS cost
       FROM stock_movements s
       JOIN stock_items i ON i.id = s."stockItemId"
       JOIN materials m ON m.id = i."materialId"
-      WHERE s.kind IN ('RECEIVED', 'ORDER', 'USED', 'FAILED_PRINT', 'PRINTED')
+      WHERE s.kind IN ('RECEIVED', 'ORDER', 'USED', 'FAILED_PRINT', 'PRINTED', 'RETURNED')
         AND s."createdAt" >= ${start} AND s."createdAt" < ${end}
       GROUP BY 1
     `;

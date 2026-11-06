@@ -19,6 +19,7 @@ export const STOCK_MOVEMENT_LABELS: Readonly<
   USED: 'Printed for the studio',
   CORRECTION: 'Count correction',
   PRINTED: 'Print finished (actual use)',
+  RETURNED: 'Back from a cancelled order',
 };
 
 /** One material in one colour (GET /stock): what is left, how fast it goes, what to buy. */
@@ -131,4 +132,85 @@ export interface StockOverview {
   costs: StockCosts;
   /** Purchases can be booked as paid (an expense account is set in the accounts). */
   canBookPurchases: boolean;
+}
+
+export type ReadyPieceMovementKind =
+  'PRINTED' | 'LEFT_OVER' | 'ADDED' | 'SOLD' | 'USED' | 'SCRAPPED' | 'COUNTED';
+
+export const READY_PIECE_MOVEMENT_LABELS: Readonly<
+  Record<ReadyPieceMovementKind, string>
+> = {
+  PRINTED: 'Printed for the shelf',
+  LEFT_OVER: 'Left over from a cancelled order',
+  ADDED: 'Added by hand',
+  SOLD: 'Sold',
+  USED: 'Given away, sample or display',
+  SCRAPPED: 'Scrapped',
+  COUNTED: 'Counted',
+};
+
+/** How pieces leave the shelf, chosen by the team. */
+export const READY_PIECE_TAKE_KINDS = ['SOLD', 'USED', 'SCRAPPED'] as const;
+
+/** Pieces printed and not sold yet, of one kind. */
+export interface ReadyPieceView {
+  id: string;
+  product: { id: string; name: string } | null;
+  name: string;
+  details: string;
+  onHand: number;
+  /** Average cost of one piece, USD. */
+  unitCost: string;
+  /** onHand × unitCost. */
+  value: string;
+  updatedAt: string;
+}
+
+export interface ReadyPieceMovementView {
+  id: string;
+  kind: ReadyPieceMovementKind;
+  quantity: number;
+  unitCost: string;
+  printJobId: string | null;
+  order: { id: string; number: string } | null;
+  note: string | null;
+  by: string | null;
+  createdAt: string;
+}
+
+export interface ReadyPieceDetail extends ReadyPieceView {
+  movements: ReadyPieceMovementView[];
+}
+
+/** What production made and lost over a period, and what waits on the shelf. */
+export interface ProductionResults {
+  range: { from: string; to: string };
+  runs: { done: number; failed: number; cancelled: number };
+  pieces: { good: number; spare: number; lost: number };
+  grams: { used: string; lost: string };
+  hours: { printing: string; lost: string };
+  electricityKwh: string;
+  /** USD: what the good pieces cost to print, and what failures and bad pieces wasted. */
+  cost: { good: string; lost: string };
+  /** Studio prints that failed (recorded from the stock page, not a print job). */
+  studioFailures: { grams: number; cost: string };
+  printers: {
+    id: string;
+    name: string;
+    runs: number;
+    failed: number;
+    hours: string;
+    kwh: string;
+    lostCost: string;
+  }[];
+  shelf: {
+    /** Now. */
+    pieces: number;
+    value: string;
+    /** Over the period. */
+    added: number;
+    sold: number;
+    usedOrScrapped: number;
+    scrappedCost: string;
+  };
 }

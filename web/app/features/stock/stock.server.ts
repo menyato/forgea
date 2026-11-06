@@ -78,6 +78,7 @@ export async function studioPrint(
       colour: text(form, 'colour'),
       quantity: text(form, 'quantity'),
       progressPercent: failed ? text(form, 'progressPercent') : undefined,
+      toShelf: failed ? undefined : form.get('toShelf') === 'on',
       note: text(form, 'note'),
     },
     (dto) =>

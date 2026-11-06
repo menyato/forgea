@@ -39,12 +39,23 @@ model PrintJob {
   electricityKwh  Decimal?       @db.Decimal(10, 3)
   electricityCost Decimal?       @db.Decimal(12, 2)
   wearCost        Decimal?       @db.Decimal(12, 2)
+  /// Done: the pieces that came out right (the rest are lost, and reprinted); null before.
+  goodPieces      Int?
+  /// Done: good pieces beyond what it was for (a full plate): they go to the ready pieces.
+  sparePieces     Int            @default(0)
+  /// What the printer or the team noted when it finished or failed (e.g. "nozzle clogged").
+  note            String?
+  /// A reprint of a failed job (or of a job's missing pieces).
+  replacesJobId   String?        @db.Uuid
+  replaces        PrintJob?      @relation("Reprints", fields: [replacesJobId], references: [id], onDelete: Restrict)
+  reprints        PrintJob[]     @relation("Reprints")
   /// The event on the studio's Google Calendar while the job is scheduled (Phase 9).
   calendarEventId String?
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
 
   stockMovements StockMovement[]
+  readyPieceMovements ReadyPieceMovement[]
 
   @@index([status, id])
   @@index([scheduledDate])

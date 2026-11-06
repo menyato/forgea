@@ -1,6 +1,7 @@
 import {
   type ManualStockMovement,
   MANUAL_STOCK_MOVEMENTS,
+  READY_PIECE_TAKE_KINDS,
   StockMovementKind,
 } from '@forgea/types';
 import { Type } from 'class-transformer';
@@ -25,6 +26,7 @@ import {
 } from 'class-validator';
 import {
   MONEY_PATTERN,
+  ORDER_NUMBER_PATTERN,
   STOCK_COLOUR_MAX_LENGTH,
   STOCK_GRAMS_MAX,
   STOCK_MOVEMENT_SORTS,
@@ -193,6 +195,11 @@ export class StudioPrintDto {
   @Max(500)
   quantity!: number;
 
+  /** Printed to sell: the pieces go to the ready pieces. */
+  @IsOptional()
+  @IsBoolean()
+  toShelf?: boolean;
+
   /** A failure: how far it printed before it failed. */
   @IsOptional()
   @Type(() => Number)
@@ -256,4 +263,80 @@ export class StockMovementListQuery extends CursorPageQuery {
   @IsString()
   @MaxLength(100)
   q?: string;
+}
+
+/** Pieces put on the shelf by hand (printed outside the planner, a custom design kept). */
+export class AddReadyPiecesDto {
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose a product' })
+  productId?: string;
+
+  /** Required without a product (a custom design's name). */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(200)
+  name?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(300)
+  details?: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many' })
+  @Min(1, { message: 'Enter how many' })
+  @Max(10000)
+  quantity!: number;
+
+  @Matches(MONEY_PATTERN, { message: 'What one cost to make, e.g. 3.20' })
+  unitCost!: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+/** Pieces off the shelf: sold, given away or scrapped. */
+export class TakeReadyPiecesDto {
+  @IsIn(READY_PIECE_TAKE_KINDS)
+  kind!: (typeof READY_PIECE_TAKE_KINDS)[number];
+
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many' })
+  @Min(1, { message: 'Enter how many' })
+  @Max(10000)
+  quantity!: number;
+
+  /** Sold in an order: its number. */
+  @IsOptional()
+  @Trim()
+  @Matches(ORDER_NUMBER_PATTERN, {
+    message: 'An order number, e.g. FG-2026-0012',
+  })
+  orderNumber?: string;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+/** The shelf counted: how many there really are. */
+export class CountReadyPiecesDto {
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many there are' })
+  @Min(0)
+  @Max(100000)
+  counted!: number;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }

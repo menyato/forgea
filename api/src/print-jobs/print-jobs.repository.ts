@@ -6,14 +6,29 @@ import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
+  OrderStatus,
   PrintJobStatus,
+  ReadyPieceMovementKind,
   StockMovementKind,
 } from '../generated/prisma/enums.js';
+import {
+  pieceDetails,
+  ReadyPiecesRepository,
+} from '../stock/ready-pieces.repository.js';
 import { StockRepository } from '../stock/stock.repository.js';
 
 const withRefs = {
-  order: { select: { orderNumber: true } },
-  orderItem: { select: { id: true, name: true } },
+  order: { select: { orderNumber: true, status: true } },
+  orderItem: {
+    select: {
+      id: true,
+      name: true,
+      productId: true,
+      options: true,
+      design: true,
+    },
+  },
+  reprints: { select: { id: true } },
   printer: {
     select: {
       id: true,
@@ -46,6 +61,8 @@ export interface NewPrintJob {
   hours: string;
   scheduledDate: Date | null;
   status: PrintJobStatus;
+  /** A reprint of a failed job, or of a job's missing pieces. */
+  replacesJobId?: string | null;
 }
 
 /** A job's plan or step; finishing it also writes what it took and cost. */
@@ -64,6 +81,9 @@ export interface PrintJobChange {
   electricityKwh?: string;
   electricityCost?: string;
   wearCost?: string;
+  goodPieces?: number;
+  sparePieces?: number;
+  note?: string;
 }
 
 @Injectable()
@@ -71,6 +91,7 @@ export class PrintJobsRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stock: StockRepository,
+    private readonly pieces: ReadyPiecesRepository,
   ) {}
 
   list(query: PrintJobListQuery) {
@@ -154,15 +175,18 @@ export class PrintJobsRepository {
 
   /**
    * Applies a change if the job is still in `from` (two people moving the same card can't
-   * both win), with its stock in the same transaction: a finished job takes what it used
-   * beyond its order's estimate (or gives back what it didn't), a failed one takes the grams
-   * it lost. Null when the job changed meanwhile.
+   * both win), with everything that follows in the same transaction: a finished job takes
+   * the filament it used beyond its order's estimate (or gives back what it didn't), a failed
+   * one takes the grams it lost; pieces nobody ordered (a full plate's spares, a cancelled
+   * order's) go to the ready pieces; missing pieces get a reprint (`reprint`). Null when the
+   * job changed meanwhile.
    */
   update(
     id: string,
     from: PrintJobStatus,
     data: PrintJobChange,
     actorId: string,
+    reprint = false,
   ): Promise<PrintJobRow | null> {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.printJob.updateMany({
@@ -213,6 +237,9 @@ export class PrintJobsRepository {
           ]);
         }
       }
+      if (data.status === PrintJobStatus.DONE)
+        await this.toShelf(tx, job, actorId);
+      if (reprint) await this.reprintMissing(tx, job);
       if (reel && data.status === PrintJobStatus.FAILED) {
         // Rounded up (a started gram is a used gram).
         await this.stock.record(tx, [
@@ -231,19 +258,105 @@ export class PrintJobsRepository {
           },
         ]);
       }
-      return job;
+      // As it is now (with the reprint just planned).
+      return tx.printJob.findUniqueOrThrow({
+        where: { id },
+        include: withRefs,
+      });
+    });
+  }
+
+  /**
+   * A done job's pieces nobody ordered go to the ready pieces at what they cost: a full
+   * plate's spares, and all its good pieces when its order was cancelled meanwhile.
+   */
+  private async toShelf(
+    tx: Prisma.TransactionClient,
+    job: PrintJobRow,
+    actorId: string,
+  ): Promise<void> {
+    const good = job.goodPieces ?? job.quantity;
+    const cancelled = job.order.status === OrderStatus.CANCELLED;
+    const pieces = (cancelled ? good : 0) + job.sparePieces;
+    if (pieces <= 0) return;
+    const made = good + job.sparePieces;
+    const total = [
+      job.materialCost,
+      job.electricityCost,
+      job.wearCost,
+    ].reduce<Prisma.Decimal>(
+      (sum, c) => sum.plus(c ?? 0),
+      new Prisma.Decimal(0),
+    );
+    await this.pieces.add(tx, {
+      productId: job.orderItem?.productId ?? null,
+      name: job.orderItem?.name ?? `Print run for ${job.order.orderNumber}`,
+      details: pieceDetails(job.orderItem?.options, job.orderItem?.design),
+      kind: cancelled
+        ? ReadyPieceMovementKind.LEFT_OVER
+        : ReadyPieceMovementKind.PRINTED,
+      quantity: pieces,
+      unitCost: made > 0 ? total.div(made) : '0',
+      printJobId: job.id,
+      orderId: job.orderId,
+      note: cancelled
+        ? `Order ${job.order.orderNumber} was cancelled`
+        : `Spare pieces from order ${job.order.orderNumber}`,
+      createdById: actorId,
+    });
+  }
+
+  /** The pieces a failed or partly good job didn't make, planned again (order still on). */
+  private async reprintMissing(
+    tx: Prisma.TransactionClient,
+    job: PrintJobRow,
+  ): Promise<void> {
+    if (job.order.status === OrderStatus.CANCELLED) return;
+    const missing =
+      job.status === PrintJobStatus.FAILED
+        ? job.quantity
+        : job.status === PrintJobStatus.DONE
+          ? job.quantity - (job.goodPieces ?? job.quantity)
+          : 0;
+    if (missing <= 0) return;
+    const share = (v: Prisma.Decimal) =>
+      Prisma.Decimal.max(
+        v.times(missing).div(job.quantity).toDecimalPlaces(2),
+        new Prisma.Decimal('0.01'),
+      ).toString();
+    await tx.printJob.create({
+      data: {
+        orderId: job.orderId,
+        orderItemId: job.orderItemId,
+        printerId: job.printerId,
+        stockItemId: job.stockItemId,
+        quantity: missing,
+        grams: share(job.grams),
+        hours: share(job.hours),
+        status: PrintJobStatus.QUEUED,
+        replacesJobId: job.id,
+      },
     });
   }
 
   /**
    * The part of its line's estimate this job stands for: the line's grams taken at production
-   * × its pieces over the line's pieces (whole grams).
+   * × its pieces over the line's pieces (whole grams). A reprint stands for its share only
+   * when the job it reprints failed (a failure used none of it); a reprint of a job's missing
+   * pieces uses filament beyond the estimate, which that job already counted.
    */
   private async shareOf(
     tx: Prisma.TransactionClient,
     job: PrintJobRow,
     taken: number,
   ): Promise<number> {
+    if (job.replacesJobId) {
+      const original = await tx.printJob.findUnique({
+        where: { id: job.replacesJobId },
+        select: { status: true },
+      });
+      if (original?.status !== PrintJobStatus.FAILED) return 0;
+    }
     const line = await tx.orderItem.findUnique({
       where: { id: job.orderItemId! },
       select: { quantity: true },
@@ -252,6 +365,17 @@ export class PrintJobsRepository {
     return Math.round(
       (taken * Math.min(job.quantity, line.quantity)) / line.quantity,
     );
+  }
+
+  cancelledOnCalendar(orderId: string): Promise<PrintJobRow[]> {
+    return this.prisma.printJob.findMany({
+      where: {
+        orderId,
+        status: PrintJobStatus.CANCELLED,
+        calendarEventId: { not: null },
+      },
+      include: withRefs,
+    });
   }
 
   setCalendarEvent(id: string, calendarEventId: string | null) {
@@ -278,6 +402,114 @@ export class PrintJobsRepository {
   }
 
   /** The electricity rate (USD per kWh), from the pricing settings; null when not set. */
+  /**
+   * What production made and lost between `start` and `end` (by when each run finished). A
+   * done run's bad pieces are lost in proportion: of the pieces it printed (its pieces and its
+   * spares), the ones that didn't come out right.
+   */
+  async results(start: Date, end: Date) {
+    const lostShare = Prisma.sql`CASE WHEN j."status" = 'FAILED' THEN 1
+      ELSE (j."quantity" - coalesce(j."goodPieces", j."quantity"))::numeric
+           / nullif(j."quantity" + j."sparePieces", 0) END`;
+    const cost = Prisma.sql`(coalesce(j."materialCost", 0) + coalesce(j."electricityCost", 0) + coalesce(j."wearCost", 0))`;
+    const finished = Prisma.sql`j."status" IN ('DONE', 'FAILED')
+      AND j."finishedAt" >= ${start} AND j."finishedAt" < ${end}`;
+    const [totals] = await this.prisma.$queryRaw<
+      {
+        done: number;
+        failed: number;
+        good: number;
+        spare: number;
+        lostPieces: number;
+        gramsUsed: Prisma.Decimal;
+        gramsLost: Prisma.Decimal;
+        hours: Prisma.Decimal;
+        hoursLost: Prisma.Decimal;
+        kwh: Prisma.Decimal;
+        costGood: Prisma.Decimal;
+        costLost: Prisma.Decimal;
+      }[]
+    >`
+      SELECT
+        count(*) FILTER (WHERE j."status" = 'DONE')::int AS "done",
+        count(*) FILTER (WHERE j."status" = 'FAILED')::int AS "failed",
+        coalesce(sum(coalesce(j."goodPieces", j."quantity")) FILTER (WHERE j."status" = 'DONE'), 0)::int AS "good",
+        coalesce(sum(j."sparePieces"), 0)::int AS "spare",
+        coalesce(sum(CASE WHEN j."status" = 'FAILED' THEN j."quantity"
+                     ELSE j."quantity" - coalesce(j."goodPieces", j."quantity") END), 0)::int AS "lostPieces",
+        coalesce(sum(j."actualGrams"), 0) AS "gramsUsed",
+        coalesce(sum(coalesce(j."actualGrams", 0) * ${lostShare}), 0) AS "gramsLost",
+        coalesce(sum(j."actualHours"), 0) AS "hours",
+        coalesce(sum(coalesce(j."actualHours", 0) * ${lostShare}), 0) AS "hoursLost",
+        coalesce(sum(j."electricityKwh"), 0) AS "kwh",
+        coalesce(sum(${cost} * (1 - ${lostShare})), 0) AS "costGood",
+        coalesce(sum(${cost} * ${lostShare}), 0) AS "costLost"
+      FROM "print_jobs" j
+      WHERE ${finished}`;
+    const printers = await this.prisma.$queryRaw<
+      {
+        id: string;
+        name: string;
+        runs: number;
+        failed: number;
+        hours: Prisma.Decimal;
+        kwh: Prisma.Decimal;
+        lostCost: Prisma.Decimal;
+      }[]
+    >`
+      SELECT p."id", p."name",
+        count(*)::int AS "runs",
+        count(*) FILTER (WHERE j."status" = 'FAILED')::int AS "failed",
+        coalesce(sum(j."actualHours"), 0) AS "hours",
+        coalesce(sum(j."electricityKwh"), 0) AS "kwh",
+        coalesce(sum(${cost} * ${lostShare}), 0) AS "lostCost"
+      FROM "print_jobs" j
+      JOIN "printers" p ON p."id" = j."printerId"
+      WHERE ${finished}
+      GROUP BY p."id", p."name"
+      ORDER BY p."name"`;
+    const [cancelled] = await this.prisma.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS "n" FROM "print_jobs"
+      WHERE "status" = 'CANCELLED' AND "updatedAt" >= ${start} AND "updatedAt" < ${end}`;
+    // Studio prints that failed, recorded from the stock page (no print job).
+    const [studio] = await this.prisma.$queryRaw<
+      { grams: number; cost: Prisma.Decimal }[]
+    >`
+      SELECT coalesce(-sum(s."grams"), 0)::int AS "grams",
+             coalesce(sum(coalesce(s."cost", -s."grams" * s."costPerGram")), 0) AS "cost"
+      FROM "stock_movements" s
+      WHERE s."kind" = 'FAILED_PRINT' AND s."printJobId" IS NULL
+        AND s."createdAt" >= ${start} AND s."createdAt" < ${end}`;
+    const [shelf] = await this.prisma.$queryRaw<
+      { pieces: number; value: Prisma.Decimal }[]
+    >`SELECT coalesce(sum("onHand"), 0)::int AS "pieces",
+             coalesce(sum("onHand" * "unitCost"), 0) AS "value"
+      FROM "ready_pieces"`;
+    const [moved] = await this.prisma.$queryRaw<
+      {
+        added: number;
+        sold: number;
+        usedOrScrapped: number;
+        scrappedCost: Prisma.Decimal;
+      }[]
+    >`
+      SELECT
+        coalesce(sum("quantity") FILTER (WHERE "kind" IN ('PRINTED', 'LEFT_OVER', 'ADDED')), 0)::int AS "added",
+        coalesce(-sum("quantity") FILTER (WHERE "kind" = 'SOLD'), 0)::int AS "sold",
+        coalesce(-sum("quantity") FILTER (WHERE "kind" IN ('USED', 'SCRAPPED')), 0)::int AS "usedOrScrapped",
+        coalesce(sum(-"quantity" * "unitCost") FILTER (WHERE "kind" = 'SCRAPPED'), 0) AS "scrappedCost"
+      FROM "ready_piece_movements"
+      WHERE "createdAt" >= ${start} AND "createdAt" < ${end}`;
+    return {
+      totals: totals!,
+      printers,
+      cancelled: cancelled!.n,
+      studio: studio!,
+      shelf: shelf!,
+      moved: moved!,
+    };
+  }
+
   /** Totals over a product's finished print runs (see PrintJobsService.productCost). */
   async productTotals(productId: string) {
     const [row] = await this.prisma.$queryRaw<

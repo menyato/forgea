@@ -14,6 +14,11 @@ export class ChangeOrderStatusDto {
   @IsString()
   @MaxLength(STATUS_NOTE_MAX_LENGTH)
   note?: string;
+
+  /** The status the page showed: the change is refused if someone changed it since. */
+  @IsOptional()
+  @IsIn(Object.values(OrderStatus))
+  expectedStatus?: OrderStatus;
 }
 
 /** "My Orders": newest first, paged. */

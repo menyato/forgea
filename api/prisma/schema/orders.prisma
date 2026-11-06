@@ -64,6 +64,7 @@ model Order {
   items          OrderItem[]
   statusHistory  OrderStatusHistory[]
   printJobs      PrintJob[]
+  readyPieceMovements ReadyPieceMovement[]
   /// Set when the order was made by accepting a custom request's quote.
   customRequest  CustomRequest?
   /// Set when the order was made by confirming a quotation.
