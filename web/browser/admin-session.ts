@@ -54,6 +54,8 @@ async function useSession(
       value: value!,
       url: baseURL,
       httpOnly: true,
+      // "__Host-" cookies must be Secure (localhost counts as secure).
+      secure: true,
       sameSite: 'Lax' as const,
     })),
   );

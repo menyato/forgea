@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import {
   Body,
   Controller,
@@ -41,6 +42,7 @@ import { requestContext } from './request-context.js';
 @Controller('auth')
 export class AuthController {
   private readonly webUrl: string;
+  private readonly proxySecret: string | null;
 
   constructor(
     private readonly auth: AuthService,
@@ -48,6 +50,8 @@ export class AuthController {
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.webUrl = config.get('PUBLIC_WEB_URL', { infer: true });
+    this.proxySecret =
+      config.get('INTERNAL_PROXY_SECRET', { infer: true }) ?? null;
   }
 
   /** 202: not signed in yet; the code emailed to the address finishes it (email-code). */
@@ -225,6 +229,15 @@ export class AuthController {
           : 'Google sign-in failed';
       const target = new URL('/sign-in', this.webUrl);
       target.searchParams.set('error', reason);
+      // Signed with the secret the storefront shares: it shows only our own words, never
+      // text someone put in a link to the sign-in page.
+      if (this.proxySecret)
+        target.searchParams.set(
+          'sig',
+          createHmac('sha256', this.proxySecret)
+            .update(`sign-in-error:${reason}`)
+            .digest('base64url'),
+        );
       res.redirect(303, target.href);
     }
   }

@@ -17,7 +17,6 @@ export class CartCookie {
   private readonly options: CookieOptions;
 
   constructor(config: ConfigService<EnvironmentVariables, true>) {
-    const domain = config.get('COOKIE_DOMAIN', { infer: true });
     this.options = {
       httpOnly: true,
       secure: true,
@@ -25,7 +24,6 @@ export class CartCookie {
       path: '/',
       signed: true,
       maxAge: 30 * 86_400_000,
-      ...(domain ? { domain } : {}),
     };
   }
 

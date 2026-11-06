@@ -20,6 +20,7 @@ import { type FieldErrors, textFields, validateForm } from '~/lib/forms.server';
 import { toCodePage } from '~/features/auth/pending-confirmation.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { signInError } from '~/features/auth/sign-in-error.server';
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: 'Sign in — Forgea' }];
@@ -28,8 +29,9 @@ export function meta(_: Route.MetaArgs) {
 export async function loader({ url, context }: Route.LoaderArgs) {
   // Already signed in (back from Google, or an old tab): straight on, never the form again.
   await leaveIfSignedIn(context.get(apiContext), url);
-  // Google sends errors back here as ?error=… (e.g. an unverified email).
-  const error = url.searchParams.get('error');
+  // Google sign-in sends its reason back here as ?error=…&sig=…: shown only when the API
+  // signed it, so a link can't put its own words on the sign-in page.
+  const error = signInError(url);
   return {
     googleUrl: googleSignInUrl(url),
     error,

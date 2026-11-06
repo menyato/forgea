@@ -27,6 +27,7 @@ await context.addCookies(
     value: value!,
     url: web,
     httpOnly: true,
+    secure: true,
     sameSite: 'Lax' as const,
   })),
 );

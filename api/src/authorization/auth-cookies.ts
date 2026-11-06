@@ -21,13 +21,11 @@ export class AuthCookies {
   private readonly refreshMaxAgeMs: number;
 
   constructor(config: ConfigService<EnvironmentVariables, true>) {
-    const domain = config.get('COOKIE_DOMAIN', { infer: true });
     this.base = {
       httpOnly: true,
       secure: true,
       sameSite: 'lax',
       path: '/',
-      ...(domain ? { domain } : {}),
     };
     this.refreshMaxAgeMs =
       config.get('REFRESH_TOKEN_TTL_DAYS', { infer: true }) * 86_400_000;

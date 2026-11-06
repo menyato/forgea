@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Permission } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Upload } from '../generated/prisma/client.js';
 import { modelVariantKey, parseModelVariantKey } from '@forgea/validation';
@@ -23,6 +24,15 @@ export interface IncomingFile {
  * Every upload goes: quarantine → inspect → clean (or rejected). Nothing is ever served
  * from quarantine, and rejected bytes are deleted; the row stays for the audit trail.
  */
+/** What a team member needs to open a file, by what it was uploaded for. */
+const STAFF_SEES: Record<UploadPurpose, Permission> = {
+  LEAD_REFERENCE: 'leads.view',
+  CUSTOM_REQUEST_FILE: 'requests.view',
+  PRODUCT_IMAGE: 'catalog.view',
+  PRODUCT_MODEL: 'catalog.view',
+  FONT: 'catalog.view',
+};
+
 @Injectable()
 export class UploadsService {
   constructor(
@@ -186,7 +196,11 @@ export class UploadsService {
    */
   async media(
     requestedKey: string,
-    viewer: { staff: boolean; userId: string | null },
+    viewer: {
+      /** A team member's permissions now; null for customers and visitors. */
+      staff: readonly Permission[] | null;
+      userId: string | null;
+    },
   ): Promise<{
     stream: Readable;
     size: number;
@@ -209,12 +223,14 @@ export class UploadsService {
         mimeType: true,
         uploadedById: true,
         originalName: true,
+        purpose: true,
       },
     });
     const key = upload?.storageKey ?? requestedKey;
     const visible =
       upload &&
-      (viewer.staff ||
+      ((viewer.staff !== null &&
+        viewer.staff.includes(STAFF_SEES[upload.purpose])) ||
         (viewer.userId !== null &&
           (upload.uploadedById === viewer.userId ||
             // The studio's design for one of their own requests.

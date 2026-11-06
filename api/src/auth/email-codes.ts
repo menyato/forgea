@@ -6,6 +6,12 @@ import { PrismaService } from '../database/prisma.service.js';
 
 const VALID_MS = 10 * 60 * 1000;
 const TRIES = 5;
+/**
+ * Wrong codes an account may ever get: a code a minute with five tries each would otherwise
+ * let someone guess a 6-digit code over a few weeks. Past it, the owner of the address
+ * confirms it by resetting the password from the emailed link.
+ */
+const LIFETIME_WRONG = 20;
 /** A new code is sent at most this often for one account. */
 const RESEND_AFTER_MS = 60 * 1000;
 
@@ -37,10 +43,11 @@ export class EmailCodes {
   async issue(userId: string, now = new Date()): Promise<string | null> {
     const last = await this.prisma.emailCode.findUnique({
       where: { userId },
-      select: { sentAt: true },
+      select: { sentAt: true, wrongTotal: true },
     });
     if (last && now.getTime() - last.sentAt.getTime() < RESEND_AFTER_MS)
       return null;
+    if (last && last.wrongTotal >= LIFETIME_WRONG) return null;
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     const row = {
       codeHash: this.hash(userId, code),
@@ -65,9 +72,19 @@ export class EmailCodes {
     return this.prisma.$transaction(async (tx) => {
       // Locked, so two guesses at once can't both spend the same try.
       const [row] = await tx.$queryRaw<
-        { codeHash: string; expiresAt: Date; attemptsLeft: number }[]
-      >`SELECT "codeHash", "expiresAt", "attemptsLeft" FROM email_codes WHERE "userId" = ${userId}::uuid FOR UPDATE`;
-      if (!row || row.expiresAt <= now || row.attemptsLeft <= 0)
+        {
+          codeHash: string;
+          expiresAt: Date;
+          attemptsLeft: number;
+          wrongTotal: number;
+        }[]
+      >`SELECT "codeHash", "expiresAt", "attemptsLeft", "wrongTotal" FROM email_codes WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+      if (
+        !row ||
+        row.expiresAt <= now ||
+        row.attemptsLeft <= 0 ||
+        row.wrongTotal >= LIFETIME_WRONG
+      )
         return 'expired';
       const given = Buffer.from(this.hash(userId, code), 'hex');
       const stored = Buffer.from(row.codeHash, 'hex');
@@ -77,9 +94,14 @@ export class EmailCodes {
       }
       await tx.emailCode.update({
         where: { userId },
-        data: { attemptsLeft: { decrement: 1 } },
+        data: {
+          attemptsLeft: { decrement: 1 },
+          wrongTotal: { increment: 1 },
+        },
       });
-      return row.attemptsLeft - 1 > 0 ? 'wrong' : 'expired';
+      return row.attemptsLeft - 1 > 0 && row.wrongTotal + 1 < LIFETIME_WRONG
+        ? 'wrong'
+        : 'expired';
     });
   }
 

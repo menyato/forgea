@@ -50,9 +50,9 @@ describe('pageCacheMiddleware', () => {
 
   it('never reuses a page for someone signed in, with a cart or mid-sign-up', async () => {
     for (const cookie of [
-      'forgea_at=x',
-      'forgea_rt=x',
-      'forgea_cart=x',
+      '__Host-forgea_at=x',
+      '__Host-forgea_rt=x',
+      '__Host-forgea_cart=x',
       'forgea_pending=x',
     ]) {
       const { calls, next } = render();
@@ -80,7 +80,9 @@ describe('pageCacheMiddleware', () => {
     await visit('/products/broken', failing.next);
     await visit('/products/broken', failing.next);
     expect(failing.calls.count).toBe(2);
-    const cookie = render({ headers: { 'set-cookie': 'forgea_cart=new' } });
+    const cookie = render({
+      headers: { 'set-cookie': '__Host-forgea_cart=new' },
+    });
     await visit('/products/vase-c', cookie.next);
     await visit('/products/vase-c', cookie.next);
     expect(cookie.calls.count).toBe(2);
@@ -104,5 +106,20 @@ describe('pageCacheMiddleware', () => {
     );
     await visit('/products/vase-e', next);
     expect(calls.count).toBe(2);
+  });
+
+  it('a visitor turned away from the dashboard leaves the pages cached', async () => {
+    const { calls, next } = render();
+    await visit('/products/vase-f', next);
+    await pageCacheMiddleware(
+      { request: new Request(`${site}/admin`, { method: 'POST' }) },
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { Location: '/sign-in?next=%2Fadmin' },
+        }),
+    );
+    await visit('/products/vase-f', next);
+    expect(calls.count).toBe(1);
   });
 });

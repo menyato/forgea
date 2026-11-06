@@ -1,6 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PasswordResetTokens } from '../src/authorization/password-reset-tokens.js';
+import { EmailCodes } from '../src/auth/email-codes.js';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { CSRF } from './commerce-helpers.js';
 import { createApp, uniqueEmail } from './create-app.js';
@@ -114,5 +115,27 @@ describe('Account (e2e)', () => {
       .set(CSRF)
       .send({ email, password: NEW })
       .expect(200);
+  });
+
+  it('stops confirming by code after 20 wrong guesses, whatever new codes were sent', async () => {
+    const email = uniqueEmail('guess');
+    const user = await prisma.user.create({
+      data: { email, name: 'Guess', role: 'CUSTOMER' },
+    });
+    const codes = app.get(EmailCodes);
+    const code = (await codes.issue(user.id))!;
+    // Each new code brings five tries, but wrong guesses add up over the account's life.
+    await prisma.emailCode.update({
+      where: { userId: user.id },
+      data: { wrongTotal: 19 },
+    });
+    expect(
+      await codes.check(user.id, code === '000000' ? '111111' : '000000'),
+    ).toBe('expired');
+    expect(await codes.check(user.id, code)).toBe('expired');
+    // No new code either, even a minute later.
+    expect(
+      await codes.issue(user.id, new Date(Date.now() + 120_000)),
+    ).toBeNull();
   });
 });

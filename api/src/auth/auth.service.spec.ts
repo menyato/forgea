@@ -149,6 +149,7 @@ describe('AuthService', () => {
         template: string,
         data: { to: string; code?: string },
       ) => (sent.push({ template, ...data }), true),
+      mayStillSend: () => true,
     } as unknown as Notifications;
     service = new AuthService(
       users as unknown as UsersRepository,
