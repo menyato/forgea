@@ -18,3 +18,24 @@ export async function claimRequestKey(
     RETURNING "key"`;
   return claimed.length === 1;
 }
+
+/**
+ * For forms that make something and open it: runs `make` once per key, in the transaction,
+ * and returns its id; the same form sent again returns that same id without making another.
+ */
+export async function onceForKey(
+  tx: Prisma.TransactionClient,
+  key: string | undefined,
+  scope: string,
+  make: () => Promise<string>,
+): Promise<string> {
+  if (!(await claimRequestKey(tx, key, scope))) {
+    const [row] = await tx.$queryRaw<{ result: string | null }[]>`
+      SELECT "result" FROM "request_keys" WHERE "key" = ${key}::uuid`;
+    if (row?.result) return row.result;
+  }
+  const id = await make();
+  if (key)
+    await tx.$executeRaw`UPDATE "request_keys" SET "result" = ${id} WHERE "key" = ${key}::uuid`;
+  return id;
+}

@@ -112,26 +112,23 @@ export class QuotationsService {
    * a draft becomes "sent" (a sent one is sent again, e.g. after a change).
    */
   async send(id: string, actorId: string): Promise<QuotationDetail> {
-    const q = await this.require(id);
-    if (
-      q.status !== QuotationStatus.DRAFT &&
-      q.status !== QuotationStatus.SENT &&
-      q.status !== QuotationStatus.DECLINED
-    ) {
+    await this.require(id);
+    // Sent only if it still can be (cancelled or confirmed a moment ago: refused, nothing
+    // goes to the customer). A declined one goes out again (changed, usually): it is open to
+    // them once more; a sent one is sent again.
+    const open = await this.quotations.setStatus(
+      id,
+      [QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.DECLINED],
+      QuotationStatus.SENT,
+      actorId,
+      null,
+    );
+    if (!open)
       throw new ConflictException(
         'Only a draft, sent or declined quotation can be sent',
       );
-    }
-    // A declined one goes out again (changed, usually): it is open to them once more.
-    if (q.status !== QuotationStatus.SENT) {
-      await this.quotations.setStatus(
-        id,
-        [QuotationStatus.DRAFT, QuotationStatus.DECLINED],
-        QuotationStatus.SENT,
-        actorId,
-        null,
-      );
-    }
+    // As it is now: an edit saved a moment ago is what the customer reads.
+    const q = await this.require(id);
     const [token, wording, store] = await Promise.all([
       this.links.issue(q.id, q.customerEmail, q.validUntil),
       this.store.quotationEmail(),

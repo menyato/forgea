@@ -13,8 +13,20 @@ class FakeSessions {
       ...s,
       id: `s${++this.seq}`,
       revokedAt: null,
+      rotatedAt: null,
       createdAt: new Date(),
     });
+  }
+  sibling = async (familyId: string, next: NewSession) => {
+    if (!this.rows.some((s) => s.familyId === familyId && !s.revokedAt))
+      return false;
+    this.insert(next);
+    return true;
+  };
+  /** As if the rotation of `token` happened `ms` ago. */
+  rotatedAgo(token: string, ms: number) {
+    const row = this.rows.find((s) => s.tokenHash === hashToken(token))!;
+    row.rotatedAt = new Date(Date.now() - ms);
   }
   findByTokenHash = async (h: string) =>
     this.rows.find((s) => s.tokenHash === h) ?? null;
@@ -23,6 +35,7 @@ class FakeSessions {
     const old = this.rows.find((s) => s.id === oldId);
     if (!old || old.revokedAt) return false;
     old.revokedAt = new Date();
+    old.rotatedAt = old.revokedAt;
     this.insert(next);
     return true;
   };
@@ -68,6 +81,7 @@ describe('SessionService', () => {
   it('on reuse of a revoked token, revokes every token of that login', async () => {
     const first = await service.start('u1', ctx);
     const { token: second } = await service.rotate(first, ctx);
+    repo.rotatedAgo(first, 60_000);
     await expect(service.rotate(first, ctx)).rejects.toThrow(
       UnauthorizedException,
     );
@@ -80,9 +94,26 @@ describe('SessionService', () => {
     const phone = await service.start('u1', ctx);
     const laptop = await service.start('u1', ctx);
     const { token: phone2 } = await service.rotate(phone, ctx);
+    repo.rotatedAgo(phone, 60_000);
     await expect(service.rotate(phone, ctx)).rejects.toThrow(); // phone family revoked
     await expect(service.rotate(laptop, ctx)).resolves.toBeDefined();
     await expect(service.rotate(phone2, ctx)).rejects.toThrow();
+  });
+
+  it('two tabs refreshing together both stay signed in; another browser does not', async () => {
+    const browser = { ip: null, userAgent: 'Chrome' };
+    const first = await service.start('u1', browser);
+    const a = await service.rotate(first, browser);
+    // The second tab, a moment later, with the token the first just rotated.
+    const b = await service.rotate(first, browser);
+    expect(b.token).not.toBe(a.token);
+    await expect(service.rotate(a.token, browser)).resolves.toBeDefined();
+    await expect(service.rotate(b.token, browser)).resolves.toBeDefined();
+    // The same old token from somewhere else: theft, the whole login ends.
+    await expect(
+      service.rotate(first, { ip: null, userAgent: 'curl' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repo.rows.every((s) => s.revokedAt !== null)).toBe(true);
   });
 
   it('refuses an expired token', async () => {

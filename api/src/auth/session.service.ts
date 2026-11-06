@@ -7,6 +7,11 @@ import { type NewSession, SessionsRepository } from './sessions.repository.js';
 
 /** 256 bits of randomness; the token is opaque and never stored, only its hash. */
 const TOKEN_BYTES = 32;
+/**
+ * A token rotated less than this long ago, sent again by the same browser, is two tabs (or
+ * a page and its data request) refreshing together, not a thief: it gets a session too.
+ */
+const ROTATION_GRACE_MS = 20_000;
 
 export const hashToken = (token: string) =>
   createHash('sha256').update(token).digest('hex');
@@ -14,7 +19,8 @@ export const hashToken = (token: string) =>
 /**
  * Refresh-token sessions with rotation and reuse detection (OAuth 2.0 Security BCP §4.14):
  * each refresh issues a new token and revokes the old one; presenting a revoked token
- * revokes every token from that login, because only a thief would hold an old one.
+ * revokes every token from that login, because only a thief would hold an old one, except
+ * the same browser within a few seconds of the rotation (two tabs refreshing together).
  */
 @Injectable()
 export class SessionService {
@@ -44,6 +50,8 @@ export class SessionService {
     if (!current) throw new UnauthorizedException('Please sign in again');
 
     if (current.revokedAt !== null) {
+      const sibling = await this.graceSibling(current, ctx);
+      if (sibling) return sibling;
       await this.sessions.revokeFamily(current.familyId);
       throw new UnauthorizedException('Please sign in again');
     }
@@ -53,10 +61,34 @@ export class SessionService {
 
     const next = this.newSession(current.userId, current.familyId, ctx);
     if (!(await this.sessions.rotate(current.id, next.session))) {
-      // Another request rotated this token first: treat as reuse.
+      // Another request rotated this token a moment ago: the same browser's other tab.
+      const again = await this.sessions.findByTokenHash(hashToken(token));
+      const sibling = again ? await this.graceSibling(again, ctx) : null;
+      if (sibling) return sibling;
       await this.sessions.revokeFamily(current.familyId);
       throw new UnauthorizedException('Please sign in again');
     }
+    return { userId: current.userId, token: next.token };
+  }
+
+  /** A sibling session for a token just rotated by the same browser; null otherwise. */
+  private async graceSibling(
+    current: {
+      userId: string;
+      familyId: string;
+      rotatedAt: Date | null;
+      userAgent: string | null;
+    },
+    ctx: RequestContext,
+  ): Promise<{ userId: string; token: string } | null> {
+    const recent =
+      current.rotatedAt !== null &&
+      Date.now() - current.rotatedAt.getTime() < ROTATION_GRACE_MS &&
+      current.userAgent === ctx.userAgent;
+    if (!recent) return null;
+    const next = this.newSession(current.userId, current.familyId, ctx);
+    if (!(await this.sessions.sibling(current.familyId, next.session)))
+      return null;
     return { userId: current.userId, token: next.token };
   }
 

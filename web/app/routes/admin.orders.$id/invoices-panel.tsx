@@ -18,7 +18,10 @@ import { studioToday } from '~/lib/studio-time';
 export function InvoicesPanel({
   order: o,
   invoices: all,
+  requestKey,
 }: {
+  /** The page's one-time key for the payment form. */
+  requestKey: string;
   order: StaffOrder;
   invoices: NonNullable<StaffOrder['invoices']>;
 }) {
@@ -150,6 +153,7 @@ export function InvoicesPanel({
           className="grid gap-3 border-t border-border pt-4 sm:grid-cols-4 sm:items-end"
         >
           <input type="hidden" name="intent" value="payment" />
+          <input type="hidden" name="requestKey" value={requestKey} />
           <SelectField
             label="Payment or refund for"
             name="invoiceId"

@@ -408,6 +408,11 @@ export class InvoiceDatesDto {
 }
 
 export class RecordPaymentDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   /** The invoice it pays (its open amount is settled first). */
   @IsUUID()
   invoiceId!: string;
@@ -442,6 +447,11 @@ export class ManualLineDto {
 
 /** A manual journal entry: opening balances, an expense paid, a correction. */
 export class ManualEntryDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   @Matches(DATE_ONLY, day)
   date!: string;
 

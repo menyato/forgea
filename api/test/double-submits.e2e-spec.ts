@@ -86,4 +86,117 @@ describe('Double submits (e2e)', () => {
     expect(item.movements).toHaveLength(1);
     expect(item.movements[0]!.grams).toBe(2000);
   });
+
+  it('two adds to the cart at once both count', async () => {
+    const product = await createProduct(app);
+    const { cookie } = await signedInCustomer(app);
+    const add = () =>
+      http()
+        .post('/cart/items')
+        .set(CSRF)
+        .set('Cookie', cookie)
+        .send({ productId: product.id, quantity: 1 });
+    // The cart exists first, as it does after the first visit.
+    await add().expect(201);
+    await Promise.all([add(), add(), add()]);
+    const cart = await http().get('/cart').set('Cookie', cookie).expect(200);
+    expect(cart.body.lines[0].quantity).toBe(4);
+  });
+
+  it('a payment sent twice by the same form is recorded once', async () => {
+    const staff = await signedInAs(app, Role.ADMIN);
+    const customer = await signedInCustomer(app);
+    const product = await createProduct(app, { isCustom: true });
+    await http()
+      .post('/cart/items')
+      .set(CSRF)
+      .set('Cookie', customer.cookie)
+      .send({ productId: product.id, quantity: 1 })
+      .expect(201);
+    const placed = await http()
+      .post('/orders/checkout')
+      .set(CSRF)
+      .set('Cookie', customer.cookie)
+      .send({
+        idempotencyKey: randomUUID(),
+        name: 'Rana Khoury',
+        phone: '70 123 456',
+        paymentMethod: 'TRANSFER',
+        delivery: false,
+      })
+      .expect(201);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: placed.body.orderNumber },
+    });
+    const invoice = (
+      await http()
+        .post(`/accounting/orders/${order.id}/deposit-invoice`)
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send({})
+        .expect(201)
+    ).body as { id: string; total: string };
+    const requestKey = randomUUID();
+    const half = (Number(invoice.total) / 2).toFixed(2);
+    const pay = () =>
+      http()
+        .post('/accounting/payments')
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send({
+          invoiceId: invoice.id,
+          amount: half,
+          method: 'BANK',
+          date: new Date().toISOString().slice(0, 10),
+          requestKey,
+        });
+    const results = await Promise.all([pay(), pay()]);
+    expect(results.every((r) => r.status < 300)).toBe(true);
+    const listed = (
+      await http()
+        .get(`/accounting/orders/${order.id}/invoices`)
+        .set('Cookie', staff.cookie)
+        .expect(200)
+    ).body as { id: string; residual: string }[];
+    expect(listed.find((i) => i.id === invoice.id)!.residual).toBe(
+      (Number(invoice.total) - Number(half)).toFixed(2),
+    );
+  });
+
+  it('two admins taking away each other’s admin role at once keep one admin', async () => {
+    // A fresh pair, with every other admin switched off for the moment.
+    const others = await prisma.user.findMany({
+      where: { role: 'ADMIN', disabledAt: null },
+      select: { id: true },
+    });
+    await prisma.user.updateMany({
+      where: { id: { in: others.map((o) => o.id) } },
+      data: { disabledAt: new Date() },
+    });
+    try {
+      const a = await signedInAs(app, Role.ADMIN);
+      const b = await signedInAs(app, Role.ADMIN);
+      const demote = (by: string, id: string) =>
+        http()
+          .put(`/users/${id}/team`)
+          .set(CSRF)
+          .set('Cookie', by)
+          .send({ role: 'STAFF', active: true });
+      const results = await Promise.all([
+        demote(a.cookie, b.user.id),
+        demote(b.cookie, a.user.id),
+      ]);
+      expect(
+        await prisma.user.count({
+          where: { id: { in: [a.user.id, b.user.id] }, role: 'ADMIN' },
+        }),
+      ).toBe(1);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+    } finally {
+      await prisma.user.updateMany({
+        where: { id: { in: others.map((o) => o.id) } },
+        data: { disabledAt: null },
+      });
+    }
+  });
 });

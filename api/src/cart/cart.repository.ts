@@ -139,6 +139,9 @@ async function addTo(
       configKey: line.configKey,
     },
   };
+  // The cart locked first: two adds at once (a double click, two tabs) wait for each other
+  // instead of both reading the same quantity and one of them being lost.
+  await tx.$queryRaw`SELECT "id" FROM "carts" WHERE "id" = ${cartId}::uuid FOR UPDATE`;
   const existing = await tx.cartItem.findUnique({ where });
   const total = Math.min(
     (existing?.quantity ?? 0) + quantity,

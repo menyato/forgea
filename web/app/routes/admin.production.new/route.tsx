@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   OrderListItem,
   Page,
@@ -37,6 +38,8 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   ]);
   if (!orders.ok) throw new Response(orders.message, { status: orders.status });
   return {
+    // Sent twice, the run is planned once (the second opens it).
+    requestKey: randomUUID(),
     orders: orders.data.items,
     ...choices,
     order: order?.ok ? order.data : null,
@@ -65,6 +68,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       grams: text(form, 'grams'),
       hours: text(form, 'hours'),
       ...(when ? { scheduledDate: fromStudioInput(when) } : {}),
+      requestKey: text(form, 'requestKey'),
     },
     async (dto) => {
       const r = await context
@@ -120,6 +124,11 @@ export default function NewPrintJob({ loaderData }: Route.ComponentProps) {
             </Form>
             {order && (
               <fetcher.Form method="post" className="grid gap-4 sm:grid-cols-2">
+                <input
+                  type="hidden"
+                  name="requestKey"
+                  value={loaderData.requestKey}
+                />
                 <input type="hidden" name="orderId" value={order.id} />
                 <SelectField
                   label="Line it prints"

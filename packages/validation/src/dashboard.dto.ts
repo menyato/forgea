@@ -347,6 +347,11 @@ export class CustomRequestListQuery extends CursorPageQuery {
 
 /** A print run for an order on one machine (the production planner). */
 export class CreatePrintJobDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   @IsUUID()
   orderId!: string;
 

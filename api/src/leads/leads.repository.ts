@@ -181,16 +181,27 @@ export class LeadsRepository {
   }
 
   /** A change and the line it adds to the lead's log, together. */
+  /**
+   * Changes the lead and logs it, only if it is still as `still` says (e.g. open): two
+   * people (or a person and the customer) can't both close it, one won and one lost. False,
+   * and nothing written, when it changed meanwhile.
+   */
   async change(
     id: string,
-    data: Prisma.LeadUncheckedUpdateInput,
+    data: Prisma.LeadUncheckedUpdateManyInput,
     /** authorId null: something the customer did (e.g. declined a quotation). */
     note: { body: string; authorId: string | null },
-  ): Promise<void> {
-    await this.prisma.$transaction([
-      this.prisma.lead.update({ where: { id }, data }),
-      this.prisma.leadNote.create({ data: { leadId: id, ...note } }),
-    ]);
+    still: Prisma.LeadWhereInput = {},
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.lead.updateMany({
+        where: { id, ...still },
+        data,
+      });
+      if (count !== 1) return false;
+      await tx.leadNote.create({ data: { leadId: id, ...note } });
+      return true;
+    });
   }
 
   updateDetails(id: string, dto: SaveLeadDto) {
@@ -260,13 +271,14 @@ export class LeadsRepository {
     authorId: string,
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
-      const activity = await tx.leadActivity.findFirst({
+      // Marked done only if it still isn't: a double click logs it once.
+      const { count } = await tx.leadActivity.updateMany({
         where: { id, leadId, doneAt: null },
-      });
-      if (!activity) return false;
-      await tx.leadActivity.update({
-        where: { id },
         data: { doneAt: new Date() },
+      });
+      if (count !== 1) return false;
+      const activity = await tx.leadActivity.findUniqueOrThrow({
+        where: { id },
       });
       await tx.leadNote.create({
         data: {

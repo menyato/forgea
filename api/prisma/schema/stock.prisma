@@ -150,6 +150,8 @@ model ReadyPieceMovement {
 model RequestKey {
   key       String   @id @db.Uuid
   scope     String
+  /// What the first submission made (its id), for the second to return.
+  result    String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("request_keys")

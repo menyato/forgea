@@ -25,6 +25,7 @@ import { InvoiceListRepository } from './invoice-list.repository.js';
 import { paymentState, splitTaxIncluded, type Amount } from './ledger-math.js';
 import { Ledger, type NewLine } from './ledger.service.js';
 import { studioToday } from '../common/studio-day.js';
+import { claimRequestKey } from '../common/request-key.js';
 
 const withLines = {
   customer: { select: { id: true, email: true, name: true } },
@@ -336,62 +337,68 @@ export class Invoicing {
       });
     }
 
-    // The deposit already invoiced comes off what the customer still owes.
-    const deposit = await this.prisma.journalEntry.findFirst({
-      where: {
-        orderId,
-        type: EntryType.INVOICE,
-        invoiceKind: InvoiceKind.DEPOSIT,
-        reversal: { is: null },
-      },
-      include: { lines: true },
-    });
-    if (deposit?.state === 'DRAFT')
-      throw new ConflictException(
-        'Post or discard the draft deposit invoice first',
-      );
-    const debits: NewLine[] = [];
-    let owed = D(order.total);
-    if (deposit) {
-      for (const l of deposit.lines) {
-        if (l.accountId === settings.receivableAccountId) continue;
-        // Undo the deposit's liability (and its tax, which the full invoice now carries).
-        debits.push({
-          accountId: l.accountId,
-          label: `Deposit ${deposit.number}`,
-          debit: l.credit,
-          taxId: l.taxId,
+    // Read with the order locked: a credit note on the deposit at this moment either comes
+    // first (then no deposit comes off) or waits for this invoice (then it is refused).
+    const { id } = await this.underOrderLock(
+      orderId,
+      InvoiceKind.FINAL,
+      async (tx) => {
+        // The deposit already invoiced comes off what the customer still owes.
+        const deposit = await tx.journalEntry.findFirst({
+          where: {
+            orderId,
+            type: EntryType.INVOICE,
+            invoiceKind: InvoiceKind.DEPOSIT,
+            reversal: { is: null },
+          },
+          include: { lines: true },
         });
-        owed = owed.minus(l.credit);
-      }
-    }
-    if (owed.gt(0)) {
-      debits.unshift({
-        accountId: settings.receivableAccountId,
-        label: `Order ${order.orderNumber}`,
-        debit: owed,
-        customerId: order.userId,
-        dueDate,
-      });
-    }
-    const { id } = await this.underOrderLock(orderId, InvoiceKind.FINAL, (tx) =>
-      this.write(
-        options.draft === true,
-        {
-          type: EntryType.INVOICE,
-          invoiceKind: InvoiceKind.FINAL,
-          journalId: settings.saleJournalId,
-          date,
-          label: `Invoice for ${order.orderNumber}`,
-          customerId: order.userId,
-          orderId,
-          currencyCode: order.currencyCode,
-          exchangeRate: order.exchangeRate,
-          lines: [...debits, ...credits],
-        },
-        actorId,
-        tx,
-      ),
+        if (deposit?.state === 'DRAFT')
+          throw new ConflictException(
+            'Post or discard the draft deposit invoice first',
+          );
+        const debits: NewLine[] = [];
+        let owed = D(order.total);
+        if (deposit) {
+          for (const l of deposit.lines) {
+            if (l.accountId === settings.receivableAccountId) continue;
+            // Undo the deposit's liability (and its tax, which the full invoice now carries).
+            debits.push({
+              accountId: l.accountId,
+              label: `Deposit ${deposit.number}`,
+              debit: l.credit,
+              taxId: l.taxId,
+            });
+            owed = owed.minus(l.credit);
+          }
+        }
+        if (owed.gt(0)) {
+          debits.unshift({
+            accountId: settings.receivableAccountId,
+            label: `Order ${order.orderNumber}`,
+            debit: owed,
+            customerId: order.userId,
+            dueDate,
+          });
+        }
+        return this.write(
+          options.draft === true,
+          {
+            type: EntryType.INVOICE,
+            invoiceKind: InvoiceKind.FINAL,
+            journalId: settings.saleJournalId,
+            date,
+            label: `Invoice for ${order.orderNumber}`,
+            customerId: order.userId,
+            orderId,
+            currencyCode: order.currencyCode,
+            exchangeRate: order.exchangeRate,
+            lines: [...debits, ...credits],
+          },
+          actorId,
+          tx,
+        );
+      },
     );
     return this.invoice(id);
   }
@@ -416,6 +423,8 @@ export class Invoicing {
       // One payment per invoice at a time: two clicks (or the automatic cash payment and a
       // manual one) can never both match the same amount.
       await lock(tx, `invoice:${dto.invoiceId}`);
+      // The same form sent twice (a double click, a retry) is one payment.
+      if (!(await claimRequestKey(tx, dto.requestKey, 'payment'))) return;
       const invoice = await tx.journalEntry.findUnique({
         where: { id: dto.invoiceId },
         include: withLines,
@@ -501,6 +510,8 @@ export class Invoicing {
       where: { id: 1 },
     });
     const id = await this.prisma.$transaction(async (tx) => {
+      // The order's invoices one at a time: a final invoice being made now waits (or this).
+      if (invoice.orderId) await lock(tx, `order:${invoice.orderId}`);
       // The final invoice already took the deposit off what is owed: crediting the deposit
       // as well would take it off twice. Credit the final invoice first.
       if (invoice.invoiceKind === InvoiceKind.DEPOSIT && invoice.orderId) {

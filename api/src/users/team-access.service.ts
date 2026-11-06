@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -72,7 +73,17 @@ export class TeamAccessService {
         `A permission cannot be both given and taken away: ${both.join(', ')}`,
       );
     }
-    return this.view(await this.users.setAccess(id, dto.granted, dto.denied));
+    const saved = await this.users.setAccess(
+      id,
+      user.role,
+      dto.granted,
+      dto.denied,
+    );
+    if (!saved)
+      throw new ConflictException(
+        'Their role changed meanwhile: reload to see what it gives, then try again',
+      );
+    return this.view(saved);
   }
 
   async roles(): Promise<RolePermissionsView[]> {

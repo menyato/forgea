@@ -3,8 +3,13 @@ import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
   PrintJobStatus,
+  ReadyPieceMovementKind,
   StockMovementKind,
 } from '../generated/prisma/enums.js';
+import {
+  pieceDetails,
+  ReadyPiecesRepository,
+} from './ready-pieces.repository.js';
 import { ProductionEstimator } from './production-estimator.js';
 import { type NewMovement, StockRepository } from './stock.repository.js';
 
@@ -31,6 +36,7 @@ export class OrderStock {
     private readonly prisma: PrismaService,
     private readonly estimator: ProductionEstimator,
     private readonly stock: StockRepository,
+    private readonly pieces: ReadyPiecesRepository,
   ) {}
 
   /** Never throws: a line that can't be estimated is skipped (and logged), never blocking. */
@@ -115,6 +121,41 @@ export class OrderStock {
       },
       data: { status: PrintJobStatus.CANCELLED },
     });
+    // Pieces already printed for it wait on the shelf, at what they cost.
+    const printed = await tx.printJob.findMany({
+      where: { orderId, status: PrintJobStatus.DONE },
+      select: {
+        id: true,
+        quantity: true,
+        goodPieces: true,
+        sparePieces: true,
+        materialCost: true,
+        electricityCost: true,
+        wearCost: true,
+        orderItem: {
+          select: { name: true, productId: true, options: true, design: true },
+        },
+      },
+    });
+    for (const job of printed) {
+      const good = job.goodPieces ?? job.quantity;
+      if (good <= 0) continue;
+      const total = new Prisma.Decimal(job.materialCost ?? 0)
+        .plus(job.electricityCost ?? 0)
+        .plus(job.wearCost ?? 0);
+      await this.pieces.add(tx, {
+        productId: job.orderItem?.productId ?? null,
+        name: job.orderItem?.name ?? `Print run for ${orderNumber}`,
+        details: pieceDetails(job.orderItem?.options, job.orderItem?.design),
+        kind: ReadyPieceMovementKind.LEFT_OVER,
+        quantity: good,
+        unitCost: total.div(good + job.sparePieces),
+        printJobId: job.id,
+        orderId,
+        note: `Order ${orderNumber} was cancelled`,
+        createdById: actorId,
+      });
+    }
     const items = await tx.orderItem.findMany({
       where: { orderId },
       select: {

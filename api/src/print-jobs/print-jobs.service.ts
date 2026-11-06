@@ -90,7 +90,7 @@ export class PrintJobsService {
       throw new BadRequestException(
         'Choose the printer and the reel before scheduling it',
       );
-    const job = await this.jobs.create({
+    const job = await this.jobs.create(dto.requestKey, {
       orderId: dto.orderId,
       orderItemId: dto.orderItemId ?? null,
       printerId: dto.printerId ?? null,
@@ -290,7 +290,7 @@ export class PrintJobsService {
           status: PrintJobStatus.QUEUED,
         });
       }
-      await this.jobs.createMany(jobs);
+      await this.jobs.createForOrder(orderId, jobs);
     } catch (error) {
       this.logger.warn(`Print jobs for order ${orderId}: ${String(error)}`);
     }
@@ -407,7 +407,30 @@ export class PrintJobsService {
   }
 
   /** On the calendar while scheduled or printing with a date; off once finished or cancelled. */
-  private async syncCalendar(job: PrintJobRow): Promise<PrintJobRow> {
+  /** Calendar syncs in progress, one queue per job (this API runs as one process). */
+  private readonly syncing = new Map<string, Promise<unknown>>();
+
+  /**
+   * Mirrors a job on the calendar, one sync at a time per job, each from the job as it is
+   * then: two quick changes can't both create an event, nor leave a finished job on it.
+   */
+  private syncCalendar(job: PrintJobRow): Promise<PrintJobRow> {
+    const before = this.syncing.get(job.id) ?? Promise.resolve();
+    const run = before
+      .catch(() => undefined)
+      .then(async () =>
+        this.syncNow((await this.jobs.findById(job.id)) ?? job),
+      );
+    this.syncing.set(job.id, run);
+    void run
+      .finally(() => {
+        if (this.syncing.get(job.id) === run) this.syncing.delete(job.id);
+      })
+      .catch(() => undefined);
+    return run;
+  }
+
+  private async syncNow(job: PrintJobRow): Promise<PrintJobRow> {
     const onCalendar =
       job.scheduledDate !== null &&
       (job.status === PrintJobStatus.SCHEDULED ||
