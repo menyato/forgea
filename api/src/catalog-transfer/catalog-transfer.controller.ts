@@ -42,13 +42,16 @@ export class CatalogTransferController {
   @Get('export')
   async export(
     @Res({ passthrough: true }) res: Response,
+    @Query('only') only: string | undefined,
   ): Promise<CatalogFile> {
+    if (only !== undefined && only !== 'text')
+      throw new BadRequestException('only is "text"');
     const day = new Date().toISOString().slice(0, 10);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="forgea-catalog-${day}.json"`,
+      `attachment; filename="forgea-catalog-${only === 'text' ? 'text-' : ''}${day}.json"`,
     );
-    return this.exporter.export();
+    return this.exporter.export(only === 'text');
   }
 
   /** The file as an upload; `?mode=update` also overwrites entries that already exist. */
