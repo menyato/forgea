@@ -38,6 +38,12 @@ export const PAGES: readonly {
 }[] = [
   { path: '/admin', access: 'team', label: 'Overview' },
   {
+    path: '/admin/todo',
+    access: 'leads.view',
+    label: 'To-do',
+    group: 'Sales',
+  },
+  {
     path: '/admin/leads',
     access: 'leads.view',
     label: 'Leads',

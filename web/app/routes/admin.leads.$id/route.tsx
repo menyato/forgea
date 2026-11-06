@@ -10,11 +10,13 @@ import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { Field, SelectField, TextAreaField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
+import { FOLLOW_UP_KINDS, followUpTime } from '~/features/admin/follow-ups';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
+import { fromStudioInput, studioInput } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -66,7 +68,8 @@ export async function action({ request, params, context }: Route.ActionArgs) {
         {
           kind: text(form, 'kind'),
           summary: text(form, 'summary'),
-          dueAt: due ? new Date(due).toISOString() : undefined,
+          // Typed in studio time, whatever the server's clock zone.
+          dueAt: due ? fromStudioInput(due) : undefined,
         },
         (dto) => api.post(`${base}/activities`, dto),
       );
@@ -86,12 +89,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   }
 }
 
-const KIND_LABELS = {
-  CALL: 'Call',
-  EMAIL: 'Email',
-  MEETING: 'Meeting',
-  TODO: 'To-do',
-} as const;
+const KIND_LABELS = FOLLOW_UP_KINDS;
 
 export default function LeadPage({ loaderData }: Route.ComponentProps) {
   const { lead: l, stages, reasons } = loaderData;
@@ -267,7 +265,7 @@ function ActivityRow({
       >
         {KIND_LABELS[a.kind]}: {a.summary}
         <span className="block text-xs text-text-muted">
-          {new Date(a.dueAt).toLocaleString('en-GB')}
+          {followUpTime.format(new Date(a.dueAt))}
           {a.assignedTo ? ` · ${a.assignedTo}` : ''}
         </span>
       </span>
@@ -311,6 +309,7 @@ function ActivityForm() {
         name="dueAt"
         type="datetime-local"
         required
+        min={studioInput(new Date().toISOString())}
         error={errors['dueAt']}
       />
       <Button

@@ -255,3 +255,13 @@ export interface QuotationContact {
   city: string | null;
   addressLine: string | null;
 }
+
+/** A follow-up not done yet, on the to-do page. */
+export interface TodoItem {
+  id: string;
+  kind: ActivityKind;
+  summary: string;
+  dueAt: string;
+  assignedTo: string | null;
+  lead: { id: string; name: string; stage: string };
+}

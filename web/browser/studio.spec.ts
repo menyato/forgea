@@ -56,7 +56,18 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await page.getByLabel('When').fill(tomorrow);
   await page.getByRole('button', { name: 'Add the follow-up' }).click();
   await expect(followUps.getByText(/Send the prices/)).toBeVisible();
-  await followUps.getByRole('button', { name: 'Done' }).click();
+  // On my to-do page, and ticked off there.
+  const leadPage = page.url();
+  await page.goto('/admin/todo');
+  await expect(page.getByRole('heading', { name: 'To-do' })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Done: Send the prices' })
+    .first()
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Done: Send the prices' }),
+  ).toHaveCount(0);
+  await page.goto(leadPage);
   await expect(followUps.getByRole('button', { name: 'Done' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Contacted' }).click();
   await expect(page.getByRole('button', { name: 'Contacted' })).toHaveAttribute(

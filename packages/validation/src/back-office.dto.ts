@@ -165,6 +165,13 @@ export class AddActivityDto {
   assignedToId?: string;
 }
 
+/** The to-do list: my follow-ups (default) or the whole team's. */
+export class TodoQuery {
+  @IsOptional()
+  @IsIn(['mine', 'all'])
+  who: 'mine' | 'all' = 'mine';
+}
+
 export class AddNoteDto {
   @Trim()
   @IsString()

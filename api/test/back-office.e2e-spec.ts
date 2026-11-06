@@ -85,18 +85,37 @@ describe('Back office (e2e)', () => {
       stage: { name: 'Quoted' },
     });
 
+    // A follow-up can't be planned in the past.
     await s
       .post(`/leads/${id}/activities`, {
         kind: 'CALL',
         summary: 'Call about the logo files',
-        dueAt: '2026-11-03T09:00:00.000Z',
+        dueAt: new Date(Date.now() - 3_600_000).toISOString(),
+      })
+      .expect(400);
+    await s
+      .post(`/leads/${id}/activities`, {
+        kind: 'CALL',
+        summary: 'Call about the logo files',
+        dueAt: new Date(Date.now() + 3_600_000).toISOString(),
       })
       .expect(201);
     const withActivity = (await s.get(`/leads/${id}`)).body;
     expect(withActivity.nextActivity).toMatchObject({ kind: 'CALL' });
-    await s
-      .post(`/leads/${id}/activities/${withActivity.activities[0].id}/done`)
-      .expect(200);
+    // On the to-do list: mine (it was assigned to whoever planned it) and everyone's.
+    const activityId = withActivity.activities[0].id as string;
+    for (const who of ['mine', 'all']) {
+      const todo = (await s.get(`/leads/activities?who=${who}`).expect(200))
+        .body as { id: string; lead: { id: string; name: string } }[];
+      expect(todo.find((t) => t.id === activityId)).toMatchObject({
+        lead: { id, name: 'Hotel Phoenicia' },
+      });
+    }
+    await s.post(`/leads/${id}/activities/${activityId}/done`).expect(200);
+    const after = (await s.get('/leads/activities?who=all')).body as {
+      id: string;
+    }[];
+    expect(after.map((t) => t.id)).not.toContain(activityId);
 
     const reasons = (await s.get('/lost-reasons')).body as {
       id: string;

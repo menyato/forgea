@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import type { LeadDetail, LeadListItem, Page } from '@forgea/types';
+import type { LeadDetail, LeadListItem, Page, TodoItem } from '@forgea/types';
 import {
   AddActivityDto,
   AddNoteDto,
@@ -22,6 +22,7 @@ import {
   LoseLeadDto,
   MoveLeadDto,
   SaveLeadDto,
+  TodoQuery,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
@@ -93,6 +94,16 @@ export class LeadsController {
 
   /** Opening it in the dashboard marks it as seen (no longer "New"). */
   @RequirePermission('leads.view')
+  /** Follow-ups not done yet: mine, or the whole team's. */
+  @RequirePermission('leads.view')
+  @Get('activities')
+  todo(
+    @Query() query: TodoQuery,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<TodoItem[]> {
+    return this.leads.todo(query.who === 'all' ? null : user.id);
+  }
+
   @Get(':id')
   detail(@Param('id', ParseUUIDPipe) id: string): Promise<LeadDetail> {
     return this.leads.open(id);
