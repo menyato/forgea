@@ -7,12 +7,14 @@ import {
   type ProductOptionConfig,
   type ProductSizeView,
   type ProductTextSettings,
+  type ProductRealCost,
   type ProfitKind,
   type SizeCm,
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { PricePanel } from './price-panel';
+import { RealCostPanel } from './real-cost-panel';
 import { TextSettingsPanel } from './text-settings';
 import type { loader as productLoader } from './route';
 import { Money } from '~/components/money';
@@ -45,10 +47,13 @@ export function ProductForm({
   groups,
   others,
   shopProfit,
+  realCost,
 }: {
   product: AdminProduct | null;
   /** The shop's profit rule; null when the editor may not manage pricing. */
   shopProfit: { kind: ProfitKind; value: string } | null;
+  /** What its pieces really cost to print; null for a new product or without production. */
+  realCost: ProductRealCost | null;
   /** Other products, to copy their options from. */
   others: readonly { id: string; name: string }[];
   categories: readonly CategoryView[];
@@ -259,6 +264,15 @@ export function ProductForm({
             errors={errors}
           />
         </Panel>
+        {realCost && product && (
+          <Panel title="Real cost">
+            <RealCostPanel
+              cost={realCost}
+              grams={product.grams}
+              hours={product.printHours}
+            />
+          </Panel>
+        )}
 
         <Panel title="Personalised text">
           <TextSettingsPanel

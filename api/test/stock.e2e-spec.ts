@@ -253,6 +253,18 @@ describe('Filament stock (e2e)', () => {
     ])
       await as(staff.cookie).patch(`/print-jobs/${auto.id}`, body).expect(200);
     expect((await line('Red')).stockGrams).toBe(red);
+    // The product's real cost per piece now counts that run; customers never see it.
+    const real = (
+      await as(staff.cookie)
+        .get(`/print-jobs/products/${studio.product.id}/cost`)
+        .expect(200)
+    ).body;
+    expect(real.pieces).toBeGreaterThanOrEqual(1);
+    expect(Number(real.perPiece.grams)).toBeGreaterThan(0);
+    expect(Number(real.perPiece.soldAt)).toBeGreaterThan(0);
+    await as(customer.cookie)
+      .get(`/print-jobs/products/${studio.product.id}/cost`)
+      .expect(403);
     // A reprint that failed: what it used is lost.
     const failed = await as(staff.cookie)
       .post('/print-jobs', {

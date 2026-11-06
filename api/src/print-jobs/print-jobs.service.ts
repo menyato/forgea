@@ -10,6 +10,7 @@ import {
   PRINT_JOB_FLOW,
   type PrintJobCounts,
   type PrintJobListItem,
+  type ProductRealCost,
 } from '@forgea/types';
 import type {
   CreatePrintJobDto,
@@ -243,6 +244,11 @@ export class PrintJobsService {
       throw new BadRequestException('Choose a reel that is in stock');
   }
 
+  /** What a product's pieces really cost to print, from its finished runs. */
+  async productCost(productId: string): Promise<ProductRealCost> {
+    return realCostPerPiece(await this.jobs.productTotals(productId));
+  }
+
   /**
    * What a finished job cost, with today's prices: its filament (grams × the material's price
    * per gram), its electricity (hours × the printer's watts, at the shop's rate per kWh) and
@@ -318,6 +324,46 @@ export class PrintJobsService {
     }
     return job;
   }
+}
+
+type Amount = string | number | Prisma.Decimal;
+
+/** Totals over a product's finished runs, per piece printed. */
+export function realCostPerPiece(t: {
+  done: number;
+  failed: number;
+  pieces: number;
+  grams: Amount;
+  hours: Amount;
+  material: Amount;
+  electricity: Amount;
+  wear: Amount;
+  sold: Amount;
+}): ProductRealCost {
+  const per = (v: Amount, places = 2) =>
+    new Prisma.Decimal(v).div(t.pieces).toFixed(places);
+  if (t.pieces === 0)
+    return { done: t.done, failed: t.failed, pieces: 0, perPiece: null };
+  const total = new Prisma.Decimal(t.material)
+    .plus(t.electricity)
+    .plus(t.wear)
+    .div(t.pieces);
+  const soldAt = new Prisma.Decimal(t.sold).div(t.pieces);
+  return {
+    done: t.done,
+    failed: t.failed,
+    pieces: t.pieces,
+    perPiece: {
+      grams: per(t.grams, 1),
+      hours: per(t.hours),
+      material: per(t.material),
+      electricity: per(t.electricity),
+      wear: per(t.wear),
+      total: total.toFixed(2),
+      soldAt: soldAt.toFixed(2),
+      margin: soldAt.minus(total).toFixed(2),
+    },
+  };
 }
 
 function toItem(j: PrintJobRow): PrintJobListItem {
