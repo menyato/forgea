@@ -5,6 +5,7 @@ import { AdminHeader, Panel } from '~/features/admin/admin-ui';
 import { formatRange, PeriodPicker } from '~/features/admin/period-picker';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { studioToday } from '~/lib/studio-time';
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -26,7 +27,7 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   return {
     results: r.data,
     error,
-    today: new Date().toISOString().slice(0, 10),
+    today: studioToday(),
   };
 }
 

@@ -9,6 +9,7 @@ import type {
   CountReadyPiecesDto,
   TakeReadyPiecesDto,
 } from '@forgea/validation';
+import { claimRequestKey } from '../common/request-key.js';
 import { ReadyPieceMovementKind } from '../generated/prisma/enums.js';
 import {
   type ReadyPieceRow,
@@ -56,8 +57,10 @@ export class ReadyPiecesService {
     const name = product?.name ?? dto.name;
     if (!name)
       throw new BadRequestException('Name the pieces, or choose a product');
-    await this.pieces.transaction((tx) =>
-      this.pieces.add(tx, {
+    await this.pieces.transaction(async (tx) => {
+      if (!(await claimRequestKey(tx, dto.requestKey, 'ready-pieces.add')))
+        return;
+      await this.pieces.add(tx, {
         productId: product?.id ?? null,
         name,
         details: dto.details ?? '',
@@ -66,8 +69,8 @@ export class ReadyPiecesService {
         unitCost: dto.unitCost,
         note: dto.note ?? null,
         createdById: actorId,
-      }),
-    );
+      });
+    });
   }
 
   async take(

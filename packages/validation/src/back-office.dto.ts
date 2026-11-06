@@ -180,6 +180,14 @@ export class AddNoteDto {
   body!: string;
 }
 
+/** The customer accepts a quotation: the version they were looking at. */
+export class AcceptQuotationDto {
+  /** The quotation's `version` on the page; a change since then refuses the acceptance. */
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  seen?: string;
+}
+
 /** The customer declines a quotation: why, if they want to say. */
 export class DeclineQuotationDto {
   @IsOptional()

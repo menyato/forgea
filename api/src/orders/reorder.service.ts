@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   ChosenOption,
   ReorderResult,
@@ -18,6 +23,8 @@ import { OrdersRepository } from './orders.repository.js';
  */
 @Injectable()
 export class ReorderService {
+  private readonly logger = new Logger(ReorderService.name);
+
   constructor(
     private readonly orders: OrdersRepository,
     private readonly cart: CartService,
@@ -47,7 +54,13 @@ export class ReorderService {
         );
         result.added += 1;
       } catch (error) {
-        result.skipped.push(`${item.name}: ${(error as Error).message}`);
+        // Only our own explanations reach the customer; anything else is logged.
+        if (error instanceof HttpException)
+          result.skipped.push(`${item.name}: ${error.message}`);
+        else {
+          this.logger.error(`Reorder of ${item.name}: ${String(error)}`);
+          result.skipped.push(`${item.name}: no longer available`);
+        }
       }
     }
     return { cart, result };

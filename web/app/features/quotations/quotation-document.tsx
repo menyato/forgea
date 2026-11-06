@@ -149,6 +149,7 @@ export function QuotationDocument({
       <div className="flex flex-wrap items-center gap-4">
         {open && (
           <Form method="post">
+            <input type="hidden" name="seen" value={q.version} />
             <Button
               type="submit"
               disabled={accepting}

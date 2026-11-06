@@ -10,6 +10,7 @@ import {
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { studioToday } from '~/lib/studio-time';
 
 const DEFAULTS = { sorts: ['timestamp'] } as const;
 const DAY_MS = 86_400_000;
@@ -55,7 +56,7 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   if (state.cursor) query.set('cursor', state.cursor);
   const period = PERIODS.find((p) => state.filters.includes(p.key));
   if (period) {
-    const today = new Date(new Date().toISOString().slice(0, 10));
+    const today = new Date(studioToday());
     query.set(
       'from',
       new Date(today.getTime() - period.days * DAY_MS).toISOString(),

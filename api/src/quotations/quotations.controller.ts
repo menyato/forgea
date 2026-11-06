@@ -20,6 +20,7 @@ import type {
 import {
   AddNoteDto,
   CustomerEmailQuery,
+  AcceptQuotationDto,
   DeclineQuotationDto,
   QuotationListQuery,
   SaveQuotationDto,
@@ -66,9 +67,10 @@ export class QuotationsController {
   @Post('mine/:number/accept')
   accept(
     @QuotationNumber() number: string,
+    @Body() dto: AcceptQuotationDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<CheckoutResult> {
-    return this.quotations.accept(user.id, number);
+    return this.quotations.accept(user.id, number, dto.seen);
   }
 
   /** The customer says no, from their account (a reason is optional). */
@@ -97,9 +99,10 @@ export class QuotationsController {
   @Post('link/:token/accept')
   acceptByLink(
     @Param('token', LinkToken) token: string,
+    @Body() dto: AcceptQuotationDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<CheckoutResult> {
-    return this.quotations.acceptByLink(token, user.id);
+    return this.quotations.acceptByLink(token, user.id, dto.seen);
   }
 
   /** Public, like the link itself: saying no commits the customer to nothing. */

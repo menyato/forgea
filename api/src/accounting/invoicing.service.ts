@@ -24,6 +24,7 @@ import {
 import { InvoiceListRepository } from './invoice-list.repository.js';
 import { paymentState, splitTaxIncluded, type Amount } from './ledger-math.js';
 import { Ledger, type NewLine } from './ledger.service.js';
+import { studioToday } from '../common/studio-day.js';
 
 const withLines = {
   customer: { select: { id: true, email: true, name: true } },
@@ -50,7 +51,7 @@ const D = (v: Amount) => new Prisma.Decimal(v);
 async function lock(tx: Prisma.TransactionClient, name: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`;
 }
-const today = () => new Date(new Date().toISOString().slice(0, 10));
+const today = () => studioToday();
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 /** An invoice's dates, checked: dated today or earlier, due on or after its date. */
@@ -500,6 +501,23 @@ export class Invoicing {
       where: { id: 1 },
     });
     const id = await this.prisma.$transaction(async (tx) => {
+      // The final invoice already took the deposit off what is owed: crediting the deposit
+      // as well would take it off twice. Credit the final invoice first.
+      if (invoice.invoiceKind === InvoiceKind.DEPOSIT && invoice.orderId) {
+        const final = await tx.journalEntry.count({
+          where: {
+            orderId: invoice.orderId,
+            type: EntryType.INVOICE,
+            invoiceKind: InvoiceKind.FINAL,
+            state: 'POSTED',
+            reversal: null,
+          },
+        });
+        if (final > 0)
+          throw new ConflictException(
+            'The final invoice already counts this deposit: give the final invoice a credit note first',
+          );
+      }
       const note = await this.ledger.post(
         {
           type: EntryType.CREDIT_NOTE,

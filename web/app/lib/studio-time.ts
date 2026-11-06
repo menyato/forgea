@@ -41,6 +41,9 @@ export const studioInput = (iso: string) =>
 export const studioDay = (iso: string) =>
   wall(new Date(iso)).toISOString().slice(0, 10);
 
+/** Today in the studio ("2026-11-02"): date fields' default and limit, overdue marks. */
+export const studioToday = () => studioDay(new Date().toISOString());
+
 /**
  * A studio wall time ("2026-11-02T08:00", or a day "2026-11-02" for its midnight) as the
  * API's ISO timestamp. Something unreadable passes through unchanged so the DTO refuses it.

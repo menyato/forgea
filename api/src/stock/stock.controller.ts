@@ -29,9 +29,10 @@ import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
 import { StockService } from './stock.service.js';
+import { studioDay } from '../common/studio-day.js';
 
 const DAY_MS = 86_400_000;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => studioDay();
 const daysAgo = (days: number) =>
   new Date(Date.now() - days * DAY_MS).toISOString().slice(0, 10);
 

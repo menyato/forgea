@@ -233,8 +233,21 @@ describe('Back office (e2e)', () => {
       .expect(200);
     expect(seen.body.lines[1]).toMatchObject({ lineTotal: '72.00' });
 
+    // The studio changes it after the customer opened it: accepting what they saw is refused.
+    await s.put(`/quotations/${id}`, form).expect(200);
+    await as(customer.cookie)
+      .post(`/quotations/mine/${created.body.number}/accept`, {
+        seen: seen.body.version,
+      })
+      .expect(409);
+    const fresh = await as(customer.cookie)
+      .get(`/quotations/mine/${created.body.number}`)
+      .expect(200);
+
     const order = await as(customer.cookie)
-      .post(`/quotations/mine/${created.body.number}/accept`)
+      .post(`/quotations/mine/${created.body.number}/accept`, {
+        seen: fresh.body.version,
+      })
       .expect(200);
     // 45 + 20 × 3.60 = 117, no bulk discount on top; the design line needs the deposit.
     expect(order.body).toMatchObject({
@@ -388,6 +401,14 @@ describe('Back office (e2e)', () => {
       })
       .expect(201);
     expect(partial.body.paymentState).toBe('partial');
+
+    // The deposit can't be credited while the final invoice counts it (twice off the books).
+    const deposit = invoices.find(
+      (i: { invoiceKind: string }) => i.invoiceKind === 'DEPOSIT',
+    );
+    await as(admin.cookie)
+      .post(`/accounting/invoices/${deposit.id}/credit-note`)
+      .expect(409);
 
     // The rest is credited instead: the invoice is settled by the credit note.
     await as(staff.cookie)

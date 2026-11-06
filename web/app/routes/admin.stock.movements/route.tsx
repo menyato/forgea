@@ -28,6 +28,7 @@ import {
 } from '~/features/stock/stock-ui';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { studioToday } from '~/lib/studio-time';
 
 const DEFAULTS = { sorts: ['createdAt', 'grams'], order: 'desc' } as const;
 
@@ -43,7 +44,7 @@ type Row = StockMovementView;
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const state = listState(url.searchParams, DEFAULTS);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = studioToday();
   const query = new URLSearchParams();
   for (const key of ['from', 'to']) {
     const value = url.searchParams.get(key);

@@ -126,6 +126,11 @@ export type PurchasePaidFrom = (typeof PURCHASE_PAID_FROM)[number];
  * or a transfer, it is booked as an expense.
  */
 export class ReceiveSpoolsDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   @IsUUID('all', { message: 'Choose a material' })
   materialId!: string;
 
@@ -173,6 +178,11 @@ export class ReceiveSpoolsDto {
  * cost come from the product's own figures; a failure counts only how far it got.
  */
 export class StudioPrintDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   @IsUUID('all', { message: 'Choose a product' })
   productId!: string;
 
@@ -267,6 +277,11 @@ export class StockMovementListQuery extends CursorPageQuery {
 
 /** Pieces put on the shelf by hand (printed outside the planner, a custom design kept). */
 export class AddReadyPiecesDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
   @IsOptional()
   @IsUUID('all', { message: 'Choose a product' })
   productId?: string;

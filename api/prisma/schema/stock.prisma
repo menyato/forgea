@@ -144,3 +144,13 @@ model ReadyPieceMovement {
   @@index([createdAt])
   @@map("ready_piece_movements")
 }
+
+/// A form's one-time key, claimed in the same transaction as what the form records: the
+/// same form sent twice (a double click, a retried request) records it once.
+model RequestKey {
+  key       String   @id @db.Uuid
+  scope     String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("request_keys")
+}

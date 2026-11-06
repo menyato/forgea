@@ -30,6 +30,7 @@ import {
   type QuotationRow,
   QuotationsRepository,
 } from './quotations.repository.js';
+import { studioToday } from '../common/studio-day.js';
 
 /** The discounted unit price, to the cent: what the order line gets once confirmed. */
 const discountedUnit = (l: { unitPrice: string; discountPercent: string }) =>
@@ -49,7 +50,7 @@ const lineTotal = (l: {
   discountPercent: string;
 }) => new Prisma.Decimal(discountedUnit(l)).times(l.quantity);
 
-const todayUtc = () => new Date(new Date().toISOString().slice(0, 10));
+const todayUtc = () => studioToday();
 
 const NOT_FOUND = 'Quotation not found';
 
@@ -185,11 +186,16 @@ export class QuotationsService {
    * The customer accepts it online. Only once it was sent to them: a draft (prices still being
    * worked out) is as invisible here as it is on their quotation page.
    */
-  async accept(customerId: string, number: string): Promise<CheckoutResult> {
+  async accept(
+    customerId: string,
+    number: string,
+    seen?: string,
+  ): Promise<CheckoutResult> {
     const q = await this.quotations.findMine(customerId, number);
     if (!q || q.status === QuotationStatus.DRAFT) {
       throw new NotFoundException(NOT_FOUND);
     }
+    refuseIfChanged(q, seen);
     return this.place({ ...q, customerId }, customerId, [QuotationStatus.SENT]);
   }
 
@@ -232,8 +238,13 @@ export class QuotationsService {
    * Accepting from the emailed link. The signed-in account must have the address it was sent
    * to (the link alone proves nothing about who holds it); the quotation is then theirs.
    */
-  async acceptByLink(token: string, userId: string): Promise<CheckoutResult> {
+  async acceptByLink(
+    token: string,
+    userId: string,
+    seen?: string,
+  ): Promise<CheckoutResult> {
     const q = await this.fromLink(token);
+    refuseIfChanged(q, seen);
     const user = await this.quotations.account(userId);
     if (
       !user ||
@@ -406,7 +417,8 @@ export class QuotationsService {
         )
       ).id;
     await this.quotations.linkCustomer(q.id, customerId);
-    return { ...q, customerId };
+    // Read again: linking it changed it (its version), not its prices.
+    return { ...(await this.require(q.id)), customerId };
   }
 
   private async place(
@@ -441,6 +453,7 @@ export class QuotationsService {
       {
         id: q.id,
         number: q.number,
+        updatedAt: q.updatedAt,
         customerId: q.customerId,
         customerName: q.customerName,
         phone: q.phone,
@@ -576,9 +589,18 @@ function toListItem(q: QuotationRow): QuotationListItem {
   };
 }
 
+/** The studio changed the quotation after the customer opened it: they must see it first. */
+function refuseIfChanged(q: { updatedAt: Date }, seen: string | undefined) {
+  if (seen && new Date(seen).getTime() !== q.updatedAt.getTime())
+    throw new ConflictException(
+      'The studio changed this quotation since you opened it. Check the new version, then accept it.',
+    );
+}
+
 function toDetail(q: QuotationRow): QuotationDetail {
   return {
     ...toListItem(q),
+    version: q.updatedAt.toISOString(),
     leadId: q.leadId,
     note: q.note,
     customerName: q.customerName,

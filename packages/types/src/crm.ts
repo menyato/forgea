@@ -121,6 +121,8 @@ export interface QuotationListItem {
 }
 
 export interface QuotationDetail extends QuotationListItem {
+  /** When it last changed: accepting sends it back, so an edit since then is noticed. */
+  version: string;
   leadId: string | null;
   note: string | null;
   customerName: string;

@@ -24,6 +24,7 @@ import type {
   StudioPrintDto,
 } from '@forgea/validation';
 import { toPage } from '../common/pagination/keyset.js';
+import { claimRequestKey } from '../common/request-key.js';
 import { Purchases } from '../accounting/purchases.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -192,6 +193,7 @@ export class StockService {
     const costPerGram = pricePerGramFromReel(dto.pricePerSpool, dto.spoolGrams);
     const what = `${dto.spools} × ${material.code}${dto.colour ? ` ${dto.colour}` : ''} (${dto.spoolGrams} g)`;
     await this.stock.transaction(async (tx) => {
+      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.receive'))) return;
       const entry =
         dto.paidFrom && cost.gt(0)
           ? await this.purchases.book(tx, {
@@ -300,6 +302,8 @@ export class StockService {
       .toFixed(2);
     const perGram = catalog.pricePerGram.get(e.materialId);
     await this.stock.transaction(async (tx) => {
+      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print')))
+        return;
       await this.stock.record(tx, [
         {
           materialId: e.materialId,

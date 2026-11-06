@@ -24,6 +24,7 @@ export default function FailedPrint({ loaderData }: Route.ComponentProps) {
       line={line}
     >
       <StudioPrintForm
+        requestKey={loaderData.requestKey}
         failed={true}
         printables={printables}
         start={startingPrintable(printables, line)}

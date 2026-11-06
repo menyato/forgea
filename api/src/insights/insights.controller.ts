@@ -3,8 +3,9 @@ import { type BusinessInsights, presetRange } from '@forgea/types';
 import { PeriodQuery } from '@forgea/validation';
 import { RequirePermission } from '../authorization/decorators.js';
 import { InsightsService } from './insights.service.js';
+import { studioDay } from '../common/studio-day.js';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => studioDay();
 
 /**
  * The business page. Profit and production cost reveal the studio's margins, so it needs the

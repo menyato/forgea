@@ -1,5 +1,6 @@
 import type { ReadyPieceView, StockPrintable } from '@forgea/types';
 import { AddReadyPiecesDto } from '@forgea/validation';
+import { randomUUID } from 'node:crypto';
 import { useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -21,6 +22,8 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   if (!pieces.ok) throw new Response(pieces.message, { status: pieces.status });
   return {
     all,
+    // A fresh one-time key each load (after a save too): sent twice, added once.
+    requestKey: randomUUID(),
     pieces: pieces.data,
     products: products.ok
       ? products.data.map((p) => ({ id: p.id, name: p.name }))
@@ -40,13 +43,14 @@ export async function action({ request, context }: Route.ActionArgs) {
       quantity: text(form, 'quantity'),
       unitCost: text(form, 'unitCost'),
       note: text(form, 'note'),
+      requestKey: text(form, 'requestKey'),
     },
     (dto) => context.get(apiContext).post('/ready-pieces', dto),
   );
 }
 
 export default function ReadyPieces({ loaderData }: Route.ComponentProps) {
-  const { all, pieces, products } = loaderData;
+  const { all, pieces, products, requestKey } = loaderData;
   const mayManage = useCan()('stock.manage');
   const total = pieces.reduce((n, p) => n + p.onHand, 0);
   const value = pieces.reduce((n, p) => n + Number(p.value), 0).toFixed(2);
@@ -123,15 +127,17 @@ export default function ReadyPieces({ loaderData }: Route.ComponentProps) {
           </table>
         </div>
       )}
-      {mayManage && <AddForm products={products} />}
+      {mayManage && <AddForm products={products} requestKey={requestKey} />}
     </>
   );
 }
 
 function AddForm({
   products,
+  requestKey,
 }: {
   products: readonly { id: string; name: string }[];
+  requestKey: string;
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
@@ -143,6 +149,7 @@ function AddForm({
         key={fetcher.data?.ok ? 'reset' : 'form'}
         className="grid gap-3 sm:grid-cols-2"
       >
+        <input type="hidden" name="requestKey" value={requestKey} />
         <div className="sm:col-span-2">
           <CheckboxField
             label="A custom design (not a product of the shop)"
