@@ -14,6 +14,7 @@ import type {
   PrinterView,
   PrintJobCounts,
   PrintJobListItem,
+  ProductRealCost,
 } from '@forgea/types';
 import {
   CreatePrintJobDto,
@@ -41,6 +42,14 @@ export class PrintJobsController {
   @Get('counts')
   counts(): Promise<PrintJobCounts> {
     return this.jobs.counts();
+  }
+
+  /** What a product's pieces really cost to print (dashboard only). */
+  @Get('products/:productId/cost')
+  productCost(
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ): Promise<ProductRealCost> {
+    return this.jobs.productCost(productId);
   }
 
   @Get(':id')

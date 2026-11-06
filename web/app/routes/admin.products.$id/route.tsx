@@ -6,6 +6,7 @@ import type {
   OptionGroupView,
   Page,
   PricePreview,
+  ProductRealCost,
   ProfitKind,
   UploadedFile,
 } from '@forgea/types';
@@ -24,7 +25,7 @@ import { ProductForm } from './product-form';
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const isNew = params.id === 'new';
-  const [product, categories, materials, groups, list, pricing] =
+  const [product, categories, materials, groups, list, pricing, realCost] =
     await Promise.all([
       isNew
         ? Promise.resolve(null)
@@ -41,6 +42,12 @@ export async function loader({ params, context }: Route.LoaderArgs) {
       api.get<{ cost: { profit: { kind: ProfitKind; value: string } } }>(
         '/pricing/settings',
       ),
+      // What its pieces really cost: only for whoever runs production (others get 403).
+      isNew
+        ? Promise.resolve(null)
+        : api.get<ProductRealCost>(
+            `/print-jobs/products/${encodeURIComponent(params.id)}/cost`,
+          ),
     ]);
   if (product && !product.ok)
     throw new Response(product.message, { status: product.status });
@@ -53,6 +60,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     materials: materials.ok ? materials.data : [],
     groups: groups.ok ? groups.data : [],
     shopProfit: pricing.ok ? pricing.data.cost.profit : null,
+    realCost: realCost?.ok ? realCost.data : null,
     others: list.ok
       ? list.data.items
           .filter((p) => p.id !== params.id)

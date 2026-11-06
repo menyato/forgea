@@ -278,6 +278,39 @@ export class PrintJobsRepository {
   }
 
   /** The electricity rate (USD per kWh), from the pricing settings; null when not set. */
+  /** Totals over a product's finished print runs (see PrintJobsService.productCost). */
+  async productTotals(productId: string) {
+    const [row] = await this.prisma.$queryRaw<
+      {
+        done: number;
+        failed: number;
+        pieces: number;
+        grams: Prisma.Decimal;
+        hours: Prisma.Decimal;
+        material: Prisma.Decimal;
+        electricity: Prisma.Decimal;
+        wear: Prisma.Decimal;
+        sold: Prisma.Decimal;
+      }[]
+    >`
+      SELECT
+        COUNT(*) FILTER (WHERE j."status" = 'DONE')::int AS "done",
+        COUNT(*) FILTER (WHERE j."status" = 'FAILED')::int AS "failed",
+        COALESCE(SUM(j."quantity") FILTER (WHERE j."status" = 'DONE'), 0)::int AS "pieces",
+        COALESCE(SUM(j."actualGrams"), 0) AS "grams",
+        COALESCE(SUM(j."actualHours"), 0) AS "hours",
+        COALESCE(SUM(j."materialCost"), 0) AS "material",
+        COALESCE(SUM(j."electricityCost"), 0) AS "electricity",
+        COALESCE(SUM(j."wearCost"), 0) AS "wear",
+        COALESCE(SUM(i."unitPrice" * j."quantity") FILTER (WHERE j."status" = 'DONE'), 0) AS "sold"
+      FROM "print_jobs" j
+      JOIN "order_items" i ON i."id" = j."orderItemId"
+      WHERE i."productId" = ${productId}::uuid
+        AND j."status" IN ('DONE', 'FAILED')
+        AND j."materialCost" IS NOT NULL`;
+    return row!;
+  }
+
   async electricityPerKwh(): Promise<Prisma.Decimal | null> {
     const s = await this.prisma.pricingSettings.findUnique({
       where: { id: 1 },

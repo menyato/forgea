@@ -122,3 +122,28 @@ export interface AuditLogListItem {
 export interface AuditLogEntry extends AuditLogListItem {
   metadata: JsonValue | null;
 }
+
+/**
+ * What one piece of a product really took and cost, from its finished print runs (failed
+ * reprints count in the cost, not in the pieces). Never shown to customers.
+ */
+export interface ProductRealCost {
+  /** Print runs done and failed. */
+  done: number;
+  failed: number;
+  /** Pieces printed. */
+  pieces: number;
+  /** Per piece; null before the first finished run. */
+  perPiece: {
+    grams: string;
+    hours: string;
+    material: string;
+    electricity: string;
+    wear: string;
+    total: string;
+    /** What customers paid for one, on average. */
+    soldAt: string;
+    /** soldAt − total. */
+    margin: string;
+  } | null;
+}
