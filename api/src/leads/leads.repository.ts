@@ -223,6 +223,25 @@ export class LeadsRepository {
     return this.prisma.leadActivity.create({ data: a });
   }
 
+  /** Follow-ups not done yet on open leads, soonest first (the to-do page). */
+  openActivities(assignedToId: string | null) {
+    return this.prisma.leadActivity.findMany({
+      where: {
+        doneAt: null,
+        lead: { closedAt: null },
+        ...(assignedToId ? { assignedToId } : {}),
+      },
+      orderBy: { dueAt: 'asc' },
+      take: 300,
+      include: {
+        assignedTo: { select: { email: true } },
+        lead: {
+          select: { id: true, name: true, stage: { select: { name: true } } },
+        },
+      },
+    });
+  }
+
   /** Marks it done and logs it; false when it was already done or isn't this lead's. */
   async completeActivity(
     leadId: string,

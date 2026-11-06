@@ -68,6 +68,7 @@ export {
 export {
   AddActivityDto,
   AddNoteDto,
+  TodoQuery,
   BackupKeepDto,
   RestoreBackupDto,
   CustomerEmailQuery,

@@ -9,6 +9,7 @@ import type {
   LeadStageView,
   LostReasonView,
   Page,
+  TodoItem,
 } from '@forgea/types';
 import type {
   AddActivityDto,
@@ -335,15 +336,30 @@ export class LeadsService {
     actorId: string,
   ): Promise<LeadDetail> {
     await this.require(id);
+    const dueAt = new Date(dto.dueAt);
+    // A minute's grace for the time the form took to arrive.
+    if (dueAt.getTime() < Date.now() - 60_000)
+      throw new BadRequestException("A follow-up can't be in the past");
     await this.leads.addActivity({
       leadId: id,
       kind: dto.kind,
       summary: dto.summary,
-      dueAt: new Date(dto.dueAt),
+      dueAt,
       assignedToId: dto.assignedToId ?? actorId,
       createdById: actorId,
     });
     return this.detail(id);
+  }
+
+  async todo(assignedToId: string | null): Promise<TodoItem[]> {
+    return (await this.leads.openActivities(assignedToId)).map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      summary: a.summary,
+      dueAt: a.dueAt.toISOString(),
+      assignedTo: a.assignedTo?.email ?? null,
+      lead: { id: a.lead.id, name: a.lead.name, stage: a.lead.stage.name },
+    }));
   }
 
   async completeActivity(
