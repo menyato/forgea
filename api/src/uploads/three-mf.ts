@@ -118,7 +118,7 @@ export function readThreeMf(data: Uint8Array): ThreeMfModel {
     return slot;
   };
 
-  const soups = new Map<number, number[]>();
+  const soups = new Map<number, Growing<Float32Array>>();
   const volume = new Map<number, number>();
   const painted = new Map<number, number>();
   let triangles = 0;
@@ -205,8 +205,9 @@ export function readThreeMf(data: Uint8Array): ThreeMfModel {
         painted.set(own, (painted.get(own) ?? 0) - area * share * walls);
       }
       let soup = soups.get(drawn);
-      if (!soup) soups.set(drawn, (soup = []));
-      soup.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+      if (!soup) soups.set(drawn, (soup = new Growing(Float32Array)));
+      soup.add(ax).add(ay).add(az).add(bx).add(by).add(bz);
+      soup.add(cx).add(cy).add(cz);
     }
     volume.set(slot, (volume.get(slot) ?? 0) + Math.abs(partVolume));
   };
@@ -271,7 +272,7 @@ export function readThreeMf(data: Uint8Array): ThreeMfModel {
     parts: [...soups].map(([slot, soup]) => ({
       slot,
       hex: slotHex[slot - 1] ?? GREY,
-      positions: Float32Array.from(soup),
+      positions: soup.done(),
     })),
     info: {
       sizeMm: [0, 1, 2].map((a) => round(max[a]! - min[a]!, 2)) as [
@@ -400,19 +401,19 @@ function parseMesh(
     index: string | undefined,
   ) => number | null,
 ): MeshObject {
-  const vertices: number[] = [];
+  const vertices = new Growing(Float64Array);
   const vEnd = Math.min(to, endOf(xml, '</vertices>', from, to));
   for (let at = findTag(xml, 'vertex', from); at >= 0 && at < vEnd;) {
     const close = xml.indexOf('>', at);
     const tag = xml.slice(at, close + 1);
-    vertices.push(num(tag, 'x'), num(tag, 'y'), num(tag, 'z'));
+    vertices.add(num(tag, 'x')).add(num(tag, 'y')).add(num(tag, 'z'));
     at = findTag(xml, 'vertex', close);
   }
   const count = vertices.length / 3;
-  const tris: number[] = [];
-  const paints: number[] = [];
-  const shares: number[] = [];
-  const colours: number[] = [];
+  const tris = new Growing(Uint32Array);
+  const paints = new Growing(Uint8Array);
+  const shares = new Growing(Float32Array);
+  const colours = new Growing(Int32Array);
   let anyPaint = false;
   let anyColour = false;
   for (let at = findTag(xml, 'triangle', vEnd); at >= 0 && at < to;) {
@@ -432,21 +433,21 @@ function parseMesh(
     )) {
       throw new Error('A triangle names a missing vertex');
     }
-    tris.push(v1, v2, v3);
+    tris.add(v1).add(v2).add(v3);
     const code =
       attr(tag, 'paint_color') ?? attr(tag, 'slic3rpe:mmu_segmentation');
     if (code) {
       const [state, share] = paintState(code);
-      paints.push(state);
-      shares.push(share);
+      paints.add(state);
+      shares.add(share);
       anyPaint ||= state > 0;
     } else {
-      paints.push(0);
-      shares.push(0);
+      paints.add(0);
+      shares.add(0);
     }
     const pid = attr(tag, 'pid');
     const c = pid === undefined ? null : colourIndex(pid, attr(tag, 'p1'));
-    colours.push(c ?? -1);
+    colours.add(c ?? -1);
     anyColour ||= c !== null;
     if (tris.length / 3 > MAX_TRIANGLES) {
       throw new Error(`More than ${MAX_TRIANGLES} triangles`);
@@ -454,11 +455,11 @@ function parseMesh(
   }
   return {
     kind: 'mesh',
-    vertices: Float64Array.from(vertices),
-    triangles: Uint32Array.from(tris),
-    paint: anyPaint ? Uint8Array.from(paints) : null,
-    paintShare: anyPaint ? Float32Array.from(shares) : null,
-    triangleColour: anyColour ? Int32Array.from(colours) : null,
+    vertices: vertices.done(),
+    triangles: tris.done(),
+    paint: anyPaint ? paints.done() : null,
+    paintShare: anyPaint ? shares.done() : null,
+    triangleColour: anyColour ? colours.done() : null,
   };
 }
 
@@ -754,3 +755,35 @@ const round = (n: number, places: number) => {
   const f = 10 ** places;
   return Math.round(n * f) / f;
 };
+
+type NumberArray =
+  Float32Array | Float64Array | Uint32Array | Uint8Array | Int32Array;
+
+/**
+ * A typed array that grows as numbers are added (doubling): a model's millions of numbers
+ * take 4 or 8 bytes each instead of a plain array's boxed values, which keeps big files well
+ * inside the worker's memory.
+ */
+class Growing<A extends NumberArray> {
+  length = 0;
+  private data: A;
+
+  constructor(private readonly Type: { new (length: number): A }) {
+    this.data = new Type(1024);
+  }
+
+  add(value: number): this {
+    if (this.length === this.data.length) {
+      const bigger = new this.Type(this.data.length * 2);
+      bigger.set(this.data);
+      this.data = bigger;
+    }
+    this.data[this.length++] = value;
+    return this;
+  }
+
+  /** The numbers added, in an array of exactly that length (the spare room is let go). */
+  done(): A {
+    return this.data.slice(0, this.length) as A;
+  }
+}
