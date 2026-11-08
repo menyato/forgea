@@ -16,6 +16,8 @@ const rasterImages = new Map([
 const models = new Map([
   ['model/gltf-binary', 'glb'],
   ['model/stl', 'stl'],
+  // Read only in the 3D worker (three-mf.ts), never on the API's main thread.
+  ['model/3mf', '3mf'],
 ]);
 
 /**

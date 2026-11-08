@@ -48,6 +48,15 @@ admin-editable (Phase 8); the migration only replaces values that still hold ear
 | Phone stand, PLA | 60 g, 3 h | **$13.91** | 1,245,000 |
 | Electronics enclosure, PETG | 150 g, 8 h | **$31.26** | 2,800,000 |
 
+## The owner's own price
+
+Whoever manages pricing may give a product its own price (`priceOverride`, the product's
+price panel: "Use my own price"). The calculation stays beside it for reference, and unticking
+goes back to it. A customer's choices still move the price by what they change in the
+calculated price: own price + (calculated price of the choice − calculated price of the
+product as it is), never below zero (`overriddenUnitPrice` in `@forgea/pricing`). So a bigger
+size, a heavier option, an add-on or a longer personalised text still costs more.
+
 ## Not verified / to decide
 
 - No Lebanese studio publishes per-gram prices, so there is no direct local benchmark.

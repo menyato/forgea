@@ -36,6 +36,8 @@ export interface StaffOrder {
     /** A personalised piece: what to print, with its print files (one STL per colour). */
     design:
       (DesignSummary & { itemId: string; files: { colour: string }[] }) | null;
+    /** The product's 3MF print project can be downloaded (a catalog product with one). */
+    printProject: boolean;
   }[];
   /** The labelled lines the customer saw (subtotal, rush fee, discounts, delivery…). */
   priceBreakdown: { label: string; amount: Money }[];

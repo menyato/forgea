@@ -231,8 +231,8 @@ cookie domain), so staging and production never see each other's sessions.
 1. **Size caps** are enforced while the upload streams in (10 MB images, 100 MB models; customers'
    request files up to the owner's limit, 50 MB to start, never over 100 MB).
 2. **The real type is read from the file's bytes**, never from its name or the browser's
-   Content-Type. Only PNG, JPEG and WebP images, and GLB and STL models, are accepted. **SVG is
-   refused**: it can contain scripts.
+   Content-Type. Only PNG, JPEG and WebP images, and GLB, STL and 3MF models, are accepted.
+   **SVG is refused**: it can contain scripts.
 3. **Quarantine first:** bytes land under `quarantine/` and are never served from there. Files
    that pass inspection move to `clean/` under a generated name; rejected files are deleted
    and the record is kept for the audit trail.
@@ -244,6 +244,9 @@ cookie domain), so staging and production never see each other's sessions.
    The API streams the file through the storefront (`/media/<key>`); the files sit on a
    private Docker volume that only the API mounts, and nothing serves them directly.
    Compressed copies of 3D models (`<id>.view.glb`, `<id>.lite.glb`) follow their original's rules.
+   A **3MF** is the studio's print project (the design, its colours and slicer settings): shoppers
+   only ever get its compressed copies, never the file itself; staff download it from the
+   product (`catalog.view`) or from an order line (`orders.view`).
 6. Only admins and designers upload product files (`POST /uploads/product-model`,
    `/uploads/product-image`), and a product only accepts keys of clean uploads made for that
    purpose.
@@ -263,6 +266,11 @@ cookie domain), so staging and production never see each other's sessions.
     refused. The compressed copies are made in a separate worker thread, one model at a time,
     with a 90-second limit and its own memory: ending it frees everything, and the API keeps
     answering meanwhile. A model that fails is not retried for a day.
+    A **3MF** (a zip) is opened only in that same worker (`three-mf.ts`, `zip-reader.ts`): only
+    the entries it needs are unpacked, each stopped at 400 MB whatever its header claims, at
+    most 10,000 entries, components nested at most 8 deep (a loop stops there), every triangle
+    checked against its vertices; XML entities are never resolved and the G-code inside a sliced
+    file is never read.
 11. **Customers can't fill the disk or the memory:** Caddy allows large bodies only on the pages
     that upload (custom order, dashboard; 11 MB on the idea form, 1 MB elsewhere); the website
     reads a large body only from a really signed-in customer, at most 3 at once; the API also

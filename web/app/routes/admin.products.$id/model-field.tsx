@@ -1,6 +1,11 @@
 import { estimatePrint } from '@forgea/pricing';
 import { Busy } from '~/components/brand/busy';
-import type { MaterialView, SizeCm } from '@forgea/types';
+import type {
+  MaterialView,
+  ModelFileInfo,
+  ProductColourView,
+  SizeCm,
+} from '@forgea/types';
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
@@ -8,17 +13,22 @@ import {
   type ModelMeasurement,
   ModelViewer,
 } from '~/features/model-viewer/model-viewer';
-import type { UploadResult } from './route';
+import { isThreeMf } from '~/features/model-viewer/model-source';
+import { Swatch } from '~/features/stock/stock-ui';
+import type { ModelInfoResult, UploadResult } from './route';
 
 /**
- * Upload an STL or GLB, see it in 3D, and get grams and print hours suggested from its
- * volume with the chosen material's density and print speed. The admin decides what to use.
+ * Upload an STL, GLB or 3MF and see it in 3D. An STL or GLB gets grams and print hours
+ * suggested from its volume with the chosen material's density and print speed; a 3MF (Bambu
+ * Studio and other slicers) is read by the API: its colours, and the slicer's own grams and
+ * time when it was sliced. The admin decides what to use.
  */
 export function ModelField({
   modelKey,
   onModelKey,
   material,
   onSuggest,
+  onColours,
   name,
 }: {
   modelKey: string | null;
@@ -30,6 +40,8 @@ export function ModelField({
     printHours: string;
     size: SizeCm;
   }) => void;
+  /** A 3MF's grams per colour (an empty list for a one-colour file). */
+  onColours: (colours: ProductColourView[]) => void;
   name: string;
 }) {
   const upload = useFetcher<UploadResult>();
@@ -64,7 +76,8 @@ export function ModelField({
         <ModelViewer
           modelKey={modelKey}
           label={name || 'the product'}
-          onMeasured={setMeasured}
+          // A 3MF is measured by the API (colours, slicer data), not from its shape here.
+          onMeasured={isThreeMf(modelKey) ? undefined : setMeasured}
           className="max-h-[28rem] rounded-lg border border-border"
         />
       ) : (
@@ -82,11 +95,11 @@ export function ModelField({
         <label className="grid gap-1.5 text-sm font-medium">
           {modelKey
             ? 'Replace the model'
-            : '3D model (STL or GLB, up to 100 MB)'}
+            : '3D model (STL, GLB or 3MF, up to 100 MB)'}
           <input
             type="file"
             name="file"
-            accept=".stl,.glb,model/stl,model/gltf-binary"
+            accept=".stl,.glb,.3mf,model/stl,model/gltf-binary,model/3mf"
             required
             className="text-sm"
           />
@@ -108,6 +121,29 @@ export function ModelField({
         <p role="alert" className="text-sm text-danger">
           {upload.data.error}
         </p>
+      )}
+
+      {modelKey && isThreeMf(modelKey) && (
+        <ThreeMfInfo
+          modelKey={modelKey}
+          material={material}
+          onUse={(info) => {
+            onSuggest({
+              grams: info.grams,
+              printHours: info.printHours,
+              size: info.size,
+            });
+            onColours(
+              info.colours.length > 1
+                ? info.colours.map((c) => ({
+                    colour: c.suggested ?? '',
+                    hex: c.hex,
+                    grams: c.grams,
+                  }))
+                : [],
+            );
+          }}
+        />
       )}
 
       {measured && (
@@ -155,6 +191,110 @@ export function ModelField({
             </p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What a 3MF says, read by the API on request: its size, print time and the grams of each
+ * colour (the slicer's own numbers for a sliced file, else estimated from its volume).
+ */
+function ThreeMfInfo({
+  modelKey,
+  material,
+  onUse,
+}: {
+  modelKey: string;
+  material: MaterialView | undefined;
+  onUse: (info: ModelFileInfo) => void;
+}) {
+  const reader = useFetcher<ModelInfoResult>();
+  const [solidity, setSolidity] = useState('40');
+  const info = reader.data?.info;
+  const read = () =>
+    void reader.submit(
+      {
+        intent: 'model-info',
+        key: modelKey,
+        materialId: material?.id ?? '',
+        solidityPercent: solidity || '40',
+      },
+      { method: 'post' },
+    );
+  return (
+    <div className="grid gap-3 rounded-md bg-background p-4 text-sm">
+      <p className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          disabled={!material || reader.state !== 'idle'}
+          onClick={read}
+        >
+          {reader.state !== 'idle' ? (
+            <Busy label="Reading the file…" />
+          ) : (
+            'Read colours, grams and time from the file'
+          )}
+        </Button>
+        {!material && (
+          <span className="text-text-muted">Choose a material first.</span>
+        )}
+      </p>
+      {reader.data?.error && (
+        <p role="alert" className="text-danger">
+          {reader.data.error}
+        </p>
+      )}
+      {info && (
+        <>
+          <p>
+            Size {info.size.x} × {info.size.y} × {info.size.z} cm ·{' '}
+            <strong>{info.grams} g</strong>,{' '}
+            <strong>{info.printHours} h</strong>{' '}
+            <span className="text-text-muted">
+              {info.sliced
+                ? '(from the slicer: the file was sliced)'
+                : '(estimated from the volume: slice it in Bambu Studio and upload the sliced file for exact numbers)'}
+            </span>
+          </p>
+          {!info.sliced && (
+            <label className="flex flex-wrap items-center gap-2">
+              How solid it prints
+              <input
+                id="model-3mf-solidity"
+                name="model-3mf-solidity"
+                type="number"
+                min={1}
+                max={100}
+                autoComplete="off"
+                value={solidity}
+                onChange={(e) => setSolidity(e.currentTarget.value)}
+                className="w-20 rounded-md border border-border bg-surface px-2 py-1"
+              />
+              %
+              <Button variant="quiet" onClick={read}>
+                Work it out again
+              </Button>
+            </label>
+          )}
+          <ul className="grid gap-1">
+            {info.colours.map((c) => (
+              <li key={c.hex} className="flex flex-wrap items-center gap-2">
+                <Swatch hex={c.hex} />
+                <span className="tabular-nums">{c.grams} g</span>
+                <span className="text-text-muted">
+                  {c.type ?? 'filament'} {c.hex}
+                  {c.suggested ? ` → ${c.suggested}` : ' → choose the colour'}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p>
+            <Button variant="secondary" onClick={() => onUse(info)}>
+              Use these numbers
+            </Button>
+          </p>
+        </>
       )}
     </div>
   );

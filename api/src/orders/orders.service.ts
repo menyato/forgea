@@ -74,6 +74,8 @@ function toStaffOrder(o: StaffOrderRow): Omit<StaffOrder, 'invoices'> {
       options: i.options as unknown as ChosenOption[],
       productSlug: i.product?.slug ?? null,
       design: staffDesign(i.id, i.design),
+      // The product's own print project, for the slicer.
+      printProject: !i.design && !!i.product?.modelFileKey?.endsWith('.3mf'),
     })),
     priceBreakdown: (
       o.priceBreakdown as unknown as { label: string; amount: string }[]

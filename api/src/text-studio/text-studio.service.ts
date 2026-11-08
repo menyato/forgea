@@ -24,7 +24,10 @@ import type {
 import { Prisma } from '../generated/prisma/client.js';
 import { UploadPurpose, UploadStatus } from '../generated/prisma/enums.js';
 import type { ConfigurableProduct } from '../products/product-configurator.js';
-import { profitOf } from '../products/product-configurator.js';
+import {
+  profitOf,
+  withPriceOverride,
+} from '../products/product-configurator.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import { FontsRepository } from './fonts.repository.js';
@@ -280,9 +283,13 @@ export class TextStudio {
       [],
       profitOf(p),
     );
-    return new Prisma.Decimal(base)
-      .plus(p.textExtraColourPrice.times(Math.max(0, m.colours.length - 1)))
-      .toFixed(2);
+    return withPriceOverride(
+      calculator,
+      p,
+      new Prisma.Decimal(base)
+        .plus(p.textExtraColourPrice.times(Math.max(0, m.colours.length - 1)))
+        .toFixed(2),
+    );
   }
 
   /** The print files for an order line's design: one STL per colour. */

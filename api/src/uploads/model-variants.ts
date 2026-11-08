@@ -6,8 +6,8 @@ import { ModelOptimizer, ModelRefusedError } from './model-optimizer.js';
 const VARIANTS: readonly ModelVariant[] = ['view', 'lite'];
 const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
 
-/** True for the uploads that get compressed copies: STL and GLB models. */
-export const isModelKey = (key: string) => /\.(stl|glb)$/.test(key);
+/** True for the uploads that get compressed copies: STL, GLB and 3MF models. */
+export const isModelKey = (key: string) => /\.(stl|glb|3mf)$/.test(key);
 
 /**
  * Stores the compressed copies of an uploaded model next to it. Made right after the upload is

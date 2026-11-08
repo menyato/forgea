@@ -219,7 +219,9 @@ export class UploadsService {
         // The original of a compressed copy is the STL or GLB with its stem: named exactly, so
         // the unique index finds it (a prefix search reads every upload).
         storageKey: copy
-          ? { in: [`${copy.stem}.stl`, `${copy.stem}.glb`] }
+          ? {
+              in: [`${copy.stem}.stl`, `${copy.stem}.glb`, `${copy.stem}.3mf`],
+            }
           : requestedKey,
         status: UploadStatus.CLEAN,
       },
@@ -242,12 +244,15 @@ export class UploadsService {
             (await this.prisma.customRequest.count({
               where: { userId: viewer.userId, designPreviewKey: key },
             })) > 0)) ||
-        (await this.prisma.product.count({
-          where: {
-            active: true,
-            OR: [{ modelFileKey: key }, { imageKeys: { has: key } }],
-          },
-        })) > 0 ||
+        // A 3MF is the studio's print project (the design and its settings): shoppers see
+        // only its compressed copies, never the file itself.
+        ((copy !== null || !key.endsWith('.3mf')) &&
+          (await this.prisma.product.count({
+            where: {
+              active: true,
+              OR: [{ modelFileKey: key }, { imageKeys: { has: key } }],
+            },
+          })) > 0) ||
         // A font customers write in: the live preview loads it.
         (await this.prisma.font.count({
           where: { active: true, fileKey: key },

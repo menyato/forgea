@@ -3,6 +3,7 @@ import type {
   AdminProductListItem,
   CategoryView,
   MaterialView,
+  ModelFileInfo,
   OptionGroupView,
   Page,
   PricePreview,
@@ -10,7 +11,11 @@ import type {
   ProfitKind,
   UploadedFile,
 } from '@forgea/types';
-import { PricePreviewDto, SaveProductDto } from '@forgea/validation';
+import {
+  ModelInfoDto,
+  PricePreviewDto,
+  SaveProductDto,
+} from '@forgea/validation';
 import { data, Form, redirect } from 'react-router';
 import { buttonClass } from '~/components/ui/button';
 import { useCan } from '~/features/admin/access';
@@ -73,7 +78,11 @@ export type UploadResult =
   | { uploaded: UploadedFile; error?: undefined }
   | { uploaded?: undefined; error: string };
 
-/** upload-model | upload-image | duplicate | save */
+export type ModelInfoResult =
+  | { info: ModelFileInfo; error?: undefined }
+  | { info?: undefined; error: string };
+
+/** upload-model | upload-image | model-info | preview | duplicate | save */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
@@ -90,6 +99,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       ...(jsonField(form, 'text') ? { text: jsonField(form, 'text') } : {}),
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
+      priceOverride: text(form, 'priceOverride'),
     });
     if (!parsed.ok) return data({ preview: null }, { status: 400 });
     const r = await api.post<PricePreview>(
@@ -99,6 +109,28 @@ export async function action({ request, params, context }: Route.ActionArgs) {
     return r.ok
       ? { preview: r.data }
       : data({ preview: null }, { status: r.status });
+  }
+
+  // What an uploaded 3MF says: size, grams per colour and print time (read by the API).
+  if (intent === 'model-info') {
+    const parsed = validateForm(ModelInfoDto, {
+      key: text(form, 'key'),
+      materialId: text(form, 'materialId'),
+      solidityPercent: text(form, 'solidityPercent'),
+    });
+    if (!parsed.ok) {
+      return data<ModelInfoResult>(
+        { error: Object.values(parsed.errors)[0] ?? 'Check the file' },
+        { status: 400 },
+      );
+    }
+    const r = await api.post<ModelFileInfo>(
+      '/products/model-info',
+      parsed.value,
+    );
+    return r.ok
+      ? data<ModelInfoResult>({ info: r.data })
+      : data<ModelInfoResult>({ error: r.message }, { status: r.status });
   }
 
   if (intent === 'upload-model' || intent === 'upload-image') {
@@ -141,8 +173,10 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       sizeYcm: text(form, 'sizeYcm'),
       sizeZcm: text(form, 'sizeZcm'),
       sizes: jsonField(form, 'sizes') ?? [],
+      colours: jsonField(form, 'colours') ?? [],
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
+      priceOverride: text(form, 'priceOverride'),
     },
     async (dto) => {
       const r = isNew
@@ -197,6 +231,7 @@ async function duplicate(api: ApiClient, id: string) {
         printHours: s.printHours,
         isDefault: s.isDefault,
       })),
+      colours: p.colours,
     });
     if (created.ok) throw redirect(`/admin/products/${created.data.id}`);
     // The address is taken: try the next one.
@@ -217,7 +252,7 @@ export default function EditProduct({ loaderData }: Route.ComponentProps) {
       <AdminHeader
         trail={[{ label: 'Products', to: '/admin/products' }]}
         title={product ? product.name : 'New product'}
-        intro="Upload the model to see it in 3D and get suggested grams and print time, then its sizes and the options customers can pick."
+        intro="Upload the model (STL, GLB, or a Bambu Studio 3MF with its colours) to see it in 3D and get its grams and print time, then its sizes and the options customers can pick."
         action={
           product && editable ? (
             <Form method="post">

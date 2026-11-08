@@ -204,7 +204,11 @@ export class ProductsService {
 
   /** `mayPrice`: the caller manages pricing; only they may give a product its own profit. */
   async create(dto: SaveProductDto, mayPrice: boolean): Promise<AdminProduct> {
-    if (!mayPrice && dto.profitKind !== undefined) throw profitNotYours();
+    if (
+      !mayPrice &&
+      (dto.profitKind !== undefined || dto.priceOverride !== undefined)
+    )
+      throw profitNotYours();
     await this.checkSetup(dto);
     return this.toAdmin(await this.withSample(await this.products.create(dto)));
   }
@@ -226,6 +230,14 @@ export class ProductsService {
       if (
         now?.kind !== asked?.kind ||
         (now && asked && !new Prisma.Decimal(now.value).eq(asked.value))
+      ) {
+        throw profitNotYours();
+      }
+      // Their own price too.
+      const price = current.priceOverride;
+      if (
+        (price === null) !== (dto.priceOverride === undefined) ||
+        (price !== null && !price.eq(dto.priceOverride!))
       ) {
         throw profitNotYours();
       }
@@ -265,8 +277,12 @@ export class ProductsService {
         throw new BadRequestException(error.message);
       throw error;
     }
+    // The owner's own price: what it sells at with nothing chosen (the base itself).
     return {
-      unitPrice: b.unitPrice,
+      unitPrice: dto.priceOverride
+        ? new Prisma.Decimal(dto.priceOverride).toFixed(2)
+        : b.unitPrice,
+      calculatedPrice: b.unitPrice,
       breakdown: mayPrice
         ? {
             material: b.materialCost,
@@ -363,6 +379,22 @@ export class ProductsService {
     if (dto.sizes.filter((s) => s.isDefault).length > 1) {
       throw new BadRequestException('Only one size can be the default');
     }
+    const colours = dto.colours.map((c) => c.colour.toLowerCase());
+    if (new Set(colours).size !== colours.length) {
+      throw new BadRequestException('A colour is listed twice');
+    }
+    if (dto.colours.length > 0) {
+      // They are the product's grams split by colour: they must add up (to a gram).
+      const sum = dto.colours.reduce(
+        (n, c) => n.plus(c.grams),
+        new Prisma.Decimal(0),
+      );
+      if (sum.minus(dto.grams).abs().gt(1)) {
+        throw new BadRequestException(
+          `The colours add up to ${sum.toFixed(1)} g; the product takes ${dto.grams} g`,
+        );
+      }
+    }
     if (dto.modelFileKey) {
       await this.uploads.requireClean(
         [dto.modelFileKey],
@@ -427,6 +459,12 @@ export class ProductsService {
       imageKeys: p.imageKeys,
       text: this.studio.settingsView(p),
       profit: profitOf(p),
+      priceOverride: p.priceOverride?.toFixed(2) ?? null,
+      colours: p.colours.map((c) => ({
+        colour: c.colour,
+        hex: c.hex,
+        grams: c.grams.toString(),
+      })),
       size: productSize(p),
       sizes: p.sizes.map((s) => ({
         id: s.id,
@@ -497,5 +535,5 @@ function productSize(p: ConfigurableProduct) {
 
 const profitNotYours = () =>
   new ForbiddenException(
-    "Only someone who manages pricing can change a product's profit",
+    "Only someone who manages pricing can change a product's profit or price",
   );

@@ -27,6 +27,7 @@ const catalog: Catalog = {
         grams: '100',
         printHours: '5',
         materialId: 'pla',
+        colours: [],
         sizes: [
           {
             label: '10 × 10 × 10 cm',
@@ -52,6 +53,7 @@ const catalog: Catalog = {
         grams: '50',
         printHours: '0',
         materialId: 'pla',
+        colours: [],
         sizes: [],
       },
     ],

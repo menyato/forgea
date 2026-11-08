@@ -20,7 +20,7 @@ test('the owner adds a product with a 3D model and options, and a shopper buys i
     .fill('A 30 mm calibration cube, printed to order.');
 
   // Upload an STL: it appears in 3D and is measured.
-  await page.getByLabel(/3D model \(STL or GLB/).setInputFiles({
+  await page.getByLabel(/3D model \(STL, GLB or 3MF/).setInputFiles({
     name: 'cube.stl',
     mimeType: 'model/stl',
     buffer: cube(30),

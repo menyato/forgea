@@ -140,8 +140,44 @@ export interface AdminProduct {
   text: ProductTextSettings | null;
   /** Its own profit rule; null = the shop's (Pricing page). */
   profit: { kind: ProfitKind; value: string } | null;
+  /** The owner's own price in place of the calculated one; null = calculated. */
+  priceOverride: Money | null;
+  /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
+  colours: ProductColourView[];
   /** Base price with default options, from the current pricing settings. */
   price: Money;
+}
+
+/** What one filament colour takes for one piece of a multi-colour product. */
+export interface ProductColourView {
+  /** The colour as the shop names it: its stock line. */
+  colour: string;
+  /** #rrggbb. */
+  hex: string;
+  grams: string;
+}
+
+/**
+ * POST /products/model-info: what a 3MF says about printing it, with grams and hours worked
+ * out in the chosen material. A sliced file (Bambu Studio "Export plate sliced file") gives
+ * the slicer's own time and grams; otherwise they are estimated from the volume.
+ */
+export interface ModelFileInfo {
+  /** Width × depth × height, cm. */
+  size: SizeCm;
+  /** True when the time and grams are the slicer's; false: estimated from the volume. */
+  sliced: boolean;
+  grams: string;
+  printHours: string;
+  colours: {
+    /** #rrggbb, the file's filament colour. */
+    hex: string;
+    /** PLA, PETG…, as the file says. */
+    type: string | null;
+    grams: string;
+    /** The closest colour the shop sells (a swatch's label), when there is one. */
+    suggested: string | null;
+  }[];
 }
 
 /**
@@ -149,7 +185,10 @@ export interface AdminProduct {
  * and profit rule, while it is being edited. The breakdown only for whoever manages pricing.
  */
 export interface PricePreview {
+  /** What it sells at: the owner's price when set, else the calculated one. */
   unitPrice: Money;
+  /** What the costs and profit rule work out to, whatever the owner's price. */
+  calculatedPrice: Money;
   breakdown: {
     material: Money;
     printer: Money;

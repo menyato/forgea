@@ -14,6 +14,7 @@ import type {
   AdminProduct,
   AdminProductListItem,
   HomePlate,
+  ModelFileInfo,
   Page,
   Permission,
   PricePreview,
@@ -21,6 +22,7 @@ import type {
   ProductListItem,
 } from '@forgea/types';
 import {
+  ModelInfoDto,
   PricePreviewDto,
   ProductListQuery,
   ProductPriceDto,
@@ -34,11 +36,15 @@ import {
   RequirePermission,
 } from '../authorization/decorators.js';
 import { THROTTLE } from '../security/throttle-policies.js';
+import { ModelFileInfoService } from './model-file-info.js';
 import { ProductsService } from './products.service.js';
 
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(
+    private readonly products: ProductsService,
+    private readonly modelFiles: ModelFileInfoService,
+  ) {}
 
   @Public()
   @Get()
@@ -127,6 +133,14 @@ export class ProductsController {
       dto,
       permissions.includes('pricing.manage'),
     );
+  }
+
+  /** What an uploaded 3MF says: size, grams per colour and time, in a material. */
+  @RequirePermission('catalog.manage')
+  @HttpCode(200)
+  @Post('model-info')
+  modelInfo(@Body() dto: ModelInfoDto): Promise<ModelFileInfo> {
+    return this.modelFiles.info(dto);
   }
 
   @RequirePermission('catalog.manage')

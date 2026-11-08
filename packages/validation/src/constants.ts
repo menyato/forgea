@@ -57,6 +57,8 @@ export const STATUS_NOTE_MAX_LENGTH = 500;
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 /** Zero or more, up to 2 decimals: prices and add-ons in USD. */
 export const MONEY_PATTERN = /^\d{1,8}(\.\d{1,2})?$/;
+/** Greater than zero, up to 2 decimals: a price the owner sets in place of the calculated one. */
+export const POSITIVE_MONEY_PATTERN = /^(?!0+(\.0+)?$)\d{1,8}(\.\d{1,2})?$/;
 /** Greater than zero, up to 3 decimals: option multipliers ("1.8"), grams, hours, density. */
 export const POSITIVE_DECIMAL = /^(?!0+(\.0+)?$)\d{1,6}(\.\d{1,3})?$/;
 /** Zero or more, up to 3 decimals: print hours may be 0 for bought-in parts. */
@@ -111,6 +113,8 @@ export const CUSTOM_UPLOAD_CEILING_MB = 100;
 export const SIZE_CM_PATTERN = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
 /** Sizes a product can be sold in. */
 export const PRODUCT_SIZES_MAX = 10;
+/** Filament colours one product may print in (a multi-colour 3MF). */
+export const PRODUCT_COLOURS_MAX = 16;
 
 /** Filament stock: a colour as the shop names it, and the most grams one movement may move. */
 export const STOCK_COLOUR_MAX_LENGTH = 40;

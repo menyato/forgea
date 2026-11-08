@@ -14,7 +14,7 @@ test('a product is sold in real sizes: measured from its model, shown in cm, pri
   await page.goto('/admin/products/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByLabel('Description').fill('A cube in three real sizes.');
-  await page.getByLabel(/3D model \(STL or GLB/).setInputFiles({
+  await page.getByLabel(/3D model \(STL, GLB or 3MF/).setInputFiles({
     name: 'cube.stl',
     mimeType: 'model/stl',
     buffer: cube(30),

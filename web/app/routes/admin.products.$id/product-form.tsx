@@ -4,6 +4,7 @@ import {
   formatSizeCm,
   type MaterialView,
   type OptionGroupView,
+  type ProductColourView,
   type ProductOptionConfig,
   type ProductSizeView,
   type ProductTextSettings,
@@ -13,6 +14,7 @@ import {
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
+import { ColoursEditor } from './colours-editor';
 import { PricePanel } from './price-panel';
 import { RealCostPanel } from './real-cost-panel';
 import { TextSettingsPanel } from './text-settings';
@@ -87,6 +89,19 @@ export function ProductForm({
       ? { kind: product.profit.kind, value: product.profit.value }
       : { kind: 'SHOP', value: '' },
   );
+  const [priceOverride, setPriceOverride] = useState(
+    product?.priceOverride ?? '',
+  );
+  const [colours, setColoursOnly] = useState<ProductColourView[]>(
+    product?.colours ?? [],
+  );
+  // The colours are the product's grams split up: their sum is its grams.
+  const setColours = useCallback((next: ProductColourView[]) => {
+    setColoursOnly(next);
+    if (next.length > 0) {
+      setGrams(next.reduce((n, c) => n + (Number(c.grams) || 0), 0).toFixed(1));
+    }
+  }, []);
   const suggest = useCallback(
     (e: { grams: string; printHours: string; size: SizeCm }) => {
       setGrams(e.grams);
@@ -108,6 +123,7 @@ export function ProductForm({
             onModelKey={setModelKey}
             material={materials.find((m) => m.id === materialId)}
             onSuggest={suggest}
+            onColours={setColours}
             name={name}
           />
         </Panel>
@@ -125,6 +141,7 @@ export function ProductForm({
           value={JSON.stringify(imageKeys)}
         />
         <input type="hidden" name="options" value={JSON.stringify(options)} />
+        <input type="hidden" name="colours" value={JSON.stringify(colours)} />
         <input type="hidden" name="sizeXcm" value={measured.x} />
         <input type="hidden" name="sizeYcm" value={measured.y} />
         <input type="hidden" name="sizeZcm" value={measured.z} />
@@ -243,6 +260,12 @@ export function ProductForm({
               error={errors['printHours']}
             />
           </div>
+          <ColoursEditor
+            value={colours}
+            onChange={setColours}
+            groups={groups}
+            errors={errors}
+          />
           <CheckboxField
             label="Made to order"
             name="isCustom"
@@ -260,6 +283,8 @@ export function ProductForm({
             printHours={hours}
             profit={profit}
             onProfit={setProfit}
+            priceOverride={priceOverride}
+            onPriceOverride={setPriceOverride}
             shopProfit={shopProfit}
             errors={errors}
           />

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   configuredUnitPrice,
   type OptionEffect,
+  overriddenUnitPrice,
   type ProfitRule,
   type UnitCostCalculator,
 } from '@forgea/pricing';
@@ -44,6 +45,7 @@ export const withConfiguration = {
     orderBy: [{ value: { sortOrder: 'asc' } }, { value: { label: 'asc' } }],
   },
   sizes: { orderBy: { sortOrder: 'asc' } },
+  colours: { orderBy: { sortOrder: 'asc' } },
 } as const satisfies Prisma.ProductInclude;
 
 export type ConfigurableProduct = Prisma.ProductGetPayload<{
@@ -187,13 +189,16 @@ export class ProductConfigurator {
     );
   }
 
-  /** The unit price of the product with these options (USD). */
+  /**
+   * The unit price of the product with these options (USD): calculated, or the owner's own
+   * price moved by what the chosen size and options change (see `withPriceOverride`).
+   */
   unitPrice(
     calculator: UnitCostCalculator,
     product: ConfigurableProduct,
     configuration: Configuration,
   ): string {
-    return configuredUnitPrice(
+    const calculated = configuredUnitPrice(
       calculator,
       {
         grams: configuration.base?.grams ?? product.grams.toString(),
@@ -204,6 +209,7 @@ export class ProductConfigurator {
       configuration.effects,
       profitOf(product),
     );
+    return withPriceOverride(calculator, product, calculated);
   }
 
   private applyChoice(
@@ -315,6 +321,42 @@ const sizeOf = (s: {
   y: s.sizeYcm.toString(),
   z: s.sizeZcm.toString(),
 });
+
+/**
+ * A price worked out from the costs, or, when the owner set their own price for the product,
+ * that price plus what this configuration (`calculated`) changes against the product's own
+ * grams and hours.
+ */
+export function withPriceOverride(
+  calculator: UnitCostCalculator,
+  product: Pick<
+    ConfigurableProduct,
+    | 'priceOverride'
+    | 'grams'
+    | 'printHours'
+    | 'material'
+    | 'profitKind'
+    | 'profitValue'
+  >,
+  calculated: string,
+): string {
+  if (product.priceOverride === null) return calculated;
+  const base = configuredUnitPrice(
+    calculator,
+    {
+      grams: product.grams.toString(),
+      printHours: product.printHours.toString(),
+      pricePerGram: product.material.pricePerGram.toString(),
+    },
+    [],
+    profitOf(product),
+  );
+  return overriddenUnitPrice(
+    product.priceOverride.toString(),
+    base,
+    calculated,
+  );
+}
 
 /** The product's own profit rule, or null for the shop's. */
 export function profitOf(product: {
