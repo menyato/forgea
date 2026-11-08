@@ -26,11 +26,11 @@ model Product {
   sizeZcm    Decimal? @db.Decimal(7, 1)
 
   /// Its own profit rule; both null = the shop's (Pricing page). Both or neither (CHECK).
-  profitKind  ProfitKind?
-  profitValue Decimal?    @db.Decimal(10, 2)
+  profitKind    ProfitKind?
+  profitValue   Decimal?    @db.Decimal(10, 2)
   /// The owner's own selling price (USD) in place of the calculated one; null = calculated.
   /// Sizes and options still add what they change in the calculated price. Above 0 (CHECK).
-  priceOverride Decimal? @db.Decimal(10, 2)
+  priceOverride Decimal?    @db.Decimal(10, 2)
 
   /// Personalised: the customer types their text and sees it in 3D (null = a regular product).
   /// The pieces are made from the text (@forgea/text3d), not from a model file; grams and
@@ -60,6 +60,11 @@ model Product {
   textDecor            TextDecor?
   /// Added for every colour beyond the first (a multi-colour print), USD.
   textExtraColourPrice Decimal      @default(0) @db.Decimal(10, 2)
+
+  /// Multi-colour (3MF): the colours customers may recolour its named parts in (an option group
+  /// with swatches; each value's add-on is that colour's price). Set when a part is named.
+  partColourGroupId String?      @db.Uuid
+  partColourGroup   OptionGroup? @relation("PartColours", fields: [partColourGroupId], references: [id], onDelete: Restrict)
 
   /// Made to order for the customer: requires the 50% deposit at checkout.
   isCustom  Boolean  @default(false)
@@ -113,8 +118,12 @@ model ProductColour {
   id        String  @id @default(uuid(7)) @db.Uuid
   productId String  @db.Uuid
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  /// The colour as the shop names it (an option value with a swatch): its stock line.
+  /// The colour as the shop names it (an option value with a swatch): its stock line, and the
+  /// part's starting colour when customers choose it.
   colour    String
+  /// What customers call this part ("Body", "Ears"): they choose its colour from the product's
+  /// part colours. Null = it always prints in `colour`. 1–40 characters (CHECK).
+  part      String?
   /// The file's colour, #RRGGBB (CHECK), for the swatch.
   hex       String
   /// Above 0 (CHECK).

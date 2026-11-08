@@ -266,7 +266,7 @@ describe('3MF products and own prices (e2e)', () => {
         )
         .expect(200)
     ).body as AdminProduct;
-    expect(saved.colours).toEqual(colours);
+    expect(saved.colours).toEqual(colours.map((c) => ({ ...c, part: null })));
     expect(saved.modelFileKey).toBe(slicedKey);
 
     // On a product in the shop: shoppers get its coloured copies, never the 3MF itself.

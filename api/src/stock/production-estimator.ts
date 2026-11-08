@@ -97,6 +97,7 @@ export class ProductionEstimator {
             colours: p.colours.map((c) => ({
               colour: c.colour,
               grams: c.grams.toString(),
+              part: c.part,
             })),
             sizes: p.sizes.map((s) => ({
               label: sizeLabel(s),

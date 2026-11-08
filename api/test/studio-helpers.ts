@@ -180,6 +180,8 @@ export async function placeOrder(
     size: 'standard' | 'wide';
     colour: 'red' | 'silk';
     quantity: number;
+    /** Other choices than the size and colour (a product's recoloured parts). */
+    options?: object[];
   },
   how: {
     paymentMethod: 'COD' | 'TRANSFER';
@@ -195,7 +197,7 @@ export async function placeOrder(
     .send({
       productId: studio.product.id,
       quantity: line.quantity,
-      options: studio.options(line.size, line.colour),
+      options: line.options ?? studio.options(line.size, line.colour),
     })
     .expect(201);
   // Each checkout from its own address, as the storefront forwards it: a test placing many

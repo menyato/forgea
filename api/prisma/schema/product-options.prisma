@@ -23,6 +23,8 @@ model OptionGroup {
   products     ProductOptionGroup[]
   /// Personalised products whose text and backing colours come from this group.
   textProducts Product[]            @relation("TextColours")
+  /// Multi-colour products whose parts customers recolour from this group.
+  partProducts Product[]            @relation("PartColours")
 
   @@map("option_groups")
 }

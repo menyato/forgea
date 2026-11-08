@@ -289,7 +289,11 @@ export class CatalogImporter {
             colour: c.colour,
             hex: c.hex,
             grams: c.grams,
+            ...(c.part ? { part: c.part } : {}),
           })),
+          ...(p.partColourGroup
+            ? { partColourGroupId: groupId(p.partColourGroup) }
+            : {}),
           ...(p.text
             ? {
                 text: {

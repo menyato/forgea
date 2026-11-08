@@ -27,6 +27,7 @@ import {
   POSITIVE_MONEY_PATTERN,
   PRICE_PER_GRAM_PATTERN,
   PRODUCT_COLOURS_MAX,
+  PRODUCT_PART_NAME_MAX_LENGTH,
   PRODUCT_IMAGES_MAX,
   SLUG_PATTERN,
   STORAGE_KEY_PATTERN,
@@ -246,6 +247,15 @@ export class ProductColourDto {
 
   @Matches(POSITIVE_DECIMAL, { message: 'Enter the grams of this colour' })
   grams!: string;
+
+  /** What customers call this part ("Body"), when they choose its colour; `colour` starts it. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(PRODUCT_PART_NAME_MAX_LENGTH, {
+    message: `At most ${PRODUCT_PART_NAME_MAX_LENGTH} characters`,
+  })
+  part?: string;
 }
 
 /** The owner's own price, in place of the calculated one (USD, above 0). */
@@ -369,6 +379,11 @@ export class SaveProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductColourDto)
   colours: ProductColourDto[] = [];
+
+  /** The colours customers recolour its named parts in: an option group with swatches. */
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the colours customers pick from' })
+  partColourGroupId?: string;
 }
 
 /** A customer's choice for one option. */

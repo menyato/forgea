@@ -97,6 +97,38 @@ export async function loadModel(
   return (await pending).clone();
 }
 
+const FILE_COLOUR = /^#[0-9a-f]{6}$/;
+
+/**
+ * A copy of a multi-colour model whose parts can be recoloured: its own materials, so the
+ * loaded file (shared by every view of it) keeps its colours.
+ */
+export function recolourable(model: Object3D): Object3D {
+  const copy = model.clone();
+  copy.traverse((child) => {
+    if (child instanceof Mesh && child.material instanceof MeshStandardMaterial)
+      child.material = child.material.clone();
+  });
+  return copy;
+}
+
+/**
+ * Shows a 3MF copy's parts in other colours: each material is named after its file colour
+ * (#rrggbb); one listed in `colours` takes the colour given for it, the others their file's.
+ */
+export function recolourParts(
+  model: Object3D,
+  colours: Readonly<Record<string, string>>,
+): void {
+  model.traverse((child) => {
+    if (!(child instanceof Mesh)) return;
+    const m: unknown = child.material;
+    if (!(m instanceof MeshStandardMaterial)) return;
+    const file = m.name.toLowerCase();
+    if (FILE_COLOUR.test(file)) m.color.set(colours[file] ?? file);
+  });
+}
+
 /** Gives models that came from an STL the chosen colour; GLB models keep their own. */
 export function paint(model: Object3D, color: string): void {
   model.traverse((child) => {

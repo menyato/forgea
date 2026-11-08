@@ -57,6 +57,15 @@ calculated price: own price + (calculated price of the choice − calculated pri
 product as it is), never below zero (`overriddenUnitPrice` in `@forgea/pricing`). So a bigger
 size, a heavier option, an add-on or a longer personalised text still costs more.
 
+## Parts customers recolour (3MF products)
+
+A multi-colour product's colour rows may name a part ("Body", "Ears"). Customers then choose
+that part's colour from the product's part colours (an option group with swatches). Each
+colour is priced by its own add-on (`extraPrice`), added once per part in it; the part's grams
+stay as the file says, so a colour's material price per gram is not applied to the part. The
+part starts in its row's colour, so the shop's "from" price includes that colour's add-on.
+Stock takes the part's grams from the colour chosen.
+
 ## Not verified / to decide
 
 - No Lebanese studio publishes per-gram prices, so there is no direct local benchmark.

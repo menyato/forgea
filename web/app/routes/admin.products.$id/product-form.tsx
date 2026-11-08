@@ -95,6 +95,9 @@ export function ProductForm({
   const [colours, setColoursOnly] = useState<ProductColourView[]>(
     product?.colours ?? [],
   );
+  const [partGroupId, setPartGroupId] = useState(
+    product?.partColourGroupId ?? '',
+  );
   // The colours are the product's grams split up: their sum is its grams.
   const setColours = useCallback((next: ProductColourView[]) => {
     setColoursOnly(next);
@@ -123,7 +126,15 @@ export function ProductForm({
             onModelKey={setModelKey}
             material={materials.find((m) => m.id === materialId)}
             onSuggest={suggest}
-            onColours={setColours}
+            // Read again from the file: parts keep their names (by file colour).
+            onColours={(next) =>
+              setColours(
+                next.map((c) => ({
+                  ...c,
+                  part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                })),
+              )
+            }
             name={name}
           />
         </Panel>
@@ -263,6 +274,8 @@ export function ProductForm({
           <ColoursEditor
             value={colours}
             onChange={setColours}
+            partGroupId={partGroupId}
+            onPartGroupId={setPartGroupId}
             groups={groups}
             errors={errors}
           />

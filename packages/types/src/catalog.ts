@@ -80,6 +80,11 @@ export interface ProductOption {
     swatchHex: string | null;
   }[];
   defaultValueId: string | null;
+  /**
+   * A part of a multi-colour (3MF) product the customer recolours: the file's colour of that
+   * part (#rrggbb), which the 3D view swaps for the chosen swatch.
+   */
+  recolours?: string;
 }
 
 /** A customer's choice for one option, as sent with "add to cart" and the price check. */
@@ -144,6 +149,8 @@ export interface AdminProduct {
   priceOverride: Money | null;
   /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
   colours: ProductColourView[];
+  /** The colours customers recolour its named parts in (an option group); null = none. */
+  partColourGroupId: string | null;
   /** Base price with default options, from the current pricing settings. */
   price: Money;
 }
@@ -155,6 +162,8 @@ export interface ProductColourView {
   /** #rrggbb. */
   hex: string;
   grams: string;
+  /** What customers call this part when they choose its colour; null = always `colour`. */
+  part: string | null;
 }
 
 /**

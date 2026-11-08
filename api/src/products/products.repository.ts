@@ -3,6 +3,7 @@ import type { ProductListQuery, SaveProductDto } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { OptionKind } from '../generated/prisma/enums.js';
 import { SAMPLE_MODEL_NAMES } from '../text-studio/text-studio.service.js';
 import {
   type ConfigurableProduct,
@@ -171,6 +172,19 @@ export class ProductsRepository {
     });
   }
 
+  /** A group parts are recoloured from: its switched-on colours that have a swatch. */
+  partColours(groupId: string) {
+    return this.prisma.optionGroup.findFirst({
+      where: { id: groupId, active: true, kind: OptionKind.CHOICE },
+      select: {
+        values: {
+          where: { active: true, swatchHex: { not: null } },
+          select: { label: true },
+        },
+      },
+    });
+  }
+
   /** The shop's colours (option values with a swatch, switched on), for matching a file's. */
   async swatches(): Promise<{ label: string; swatchHex: string }[]> {
     const values = await this.prisma.optionValue.findMany({
@@ -289,12 +303,22 @@ const fields = (dto: SaveProductDto) => ({
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
   priceOverride: dto.priceOverride ?? null,
+  // Kept only while a part is recoloured by customers.
+  partColourGroupId: dto.colours.some((c) => c.part)
+    ? (dto.partColourGroupId ?? null)
+    : null,
 });
 
 const colourRow = (
   c: SaveProductDto['colours'][number],
   sortOrder: number,
-) => ({ colour: c.colour, hex: c.hex, grams: c.grams, sortOrder });
+) => ({
+  colour: c.colour,
+  hex: c.hex,
+  grams: c.grams,
+  part: c.part || null,
+  sortOrder,
+});
 
 const sizeRow = (s: SaveProductDto['sizes'][number], sortOrder: number) => ({
   label: s.label,

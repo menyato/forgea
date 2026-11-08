@@ -115,6 +115,8 @@ export const SIZE_CM_PATTERN = /^(?!0+(\.0)?$)\d{1,4}(\.\d)?$/;
 export const PRODUCT_SIZES_MAX = 10;
 /** Filament colours one product may print in (a multi-colour 3MF). */
 export const PRODUCT_COLOURS_MAX = 16;
+/** What customers call a part they recolour ("Body", "Ears"). */
+export const PRODUCT_PART_NAME_MAX_LENGTH = 40;
 
 /** Filament stock: a colour as the shop names it, and the most grams one movement may move. */
 export const STOCK_COLOUR_MAX_LENGTH = 40;

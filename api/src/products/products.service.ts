@@ -395,6 +395,7 @@ export class ProductsService {
         );
       }
     }
+    await this.checkParts(dto);
     if (dto.modelFileKey) {
       await this.uploads.requireClean(
         [dto.modelFileKey],
@@ -441,6 +442,50 @@ export class ProductsService {
     }
   }
 
+  /**
+   * Parts customers recolour: each named once (and not like another option), each a different
+   * file colour, from a colour group the shop offers, starting in one of its colours.
+   */
+  private async checkParts(dto: SaveProductDto): Promise<void> {
+    const parts = dto.colours.filter((c) => c.part);
+    if (parts.length === 0) return;
+    const names = parts.map((c) => c.part!.toLowerCase());
+    if (new Set(names).size !== names.length)
+      throw new BadRequestException('Two parts have the same name');
+    if (new Set(parts.map((c) => c.hex.toLowerCase())).size !== parts.length)
+      throw new BadRequestException(
+        'Two parts customers recolour share a file colour',
+      );
+    if (!dto.partColourGroupId)
+      throw new BadRequestException(
+        'Choose the colours customers pick parts in',
+      );
+    const group = await this.products.partColours(dto.partColourGroupId);
+    if (!group || group.values.length === 0)
+      throw new BadRequestException(
+        'Choose a colour group with colours switched on, each with a swatch',
+      );
+    const taken = new Set(
+      [
+        'size',
+        ...(
+          await this.products.optionGroups(dto.options.map((o) => o.groupId))
+        ).map((g) => g.name),
+      ].map((n) => n.toLowerCase()),
+    );
+    const clash = parts.find((c) => taken.has(c.part!.toLowerCase()));
+    if (clash)
+      throw new BadRequestException(
+        `"${clash.part}" is already an option of this product: name the part differently`,
+      );
+    const offered = new Set(group.values.map((v) => v.label.toLowerCase()));
+    const outside = parts.find((c) => !offered.has(c.colour.toLowerCase()));
+    if (outside)
+      throw new BadRequestException(
+        `${outside.part} starts in ${outside.colour}, which isn't one of the colours customers pick from`,
+      );
+  }
+
   private async toAdmin(p: ConfigurableProduct): Promise<AdminProduct> {
     const calculator = await this.pricing.costCalculator();
     return {
@@ -464,7 +509,9 @@ export class ProductsService {
         colour: c.colour,
         hex: c.hex,
         grams: c.grams.toString(),
+        part: c.part,
       })),
+      partColourGroupId: p.partColourGroupId,
       size: productSize(p),
       sizes: p.sizes.map((s) => ({
         id: s.id,
