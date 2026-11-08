@@ -3,13 +3,22 @@
 // one) never stalls requests; ModelOptimizer ends it after a time limit, which also frees all
 // its memory.
 import { parentPort, workerData } from 'node:worker_threads';
-import { makeVariants, measureVolume } from './model-processing.js';
+import {
+  makeVariants,
+  measureVolume,
+  threeMfInfo,
+} from './model-processing.js';
 
 const job = workerData as
   | { task: 'variants'; data: Uint8Array; extension: string }
-  | { task: 'volume'; data: Uint8Array };
+  | { task: 'volume'; data: Uint8Array }
+  | { task: 'info'; data: Uint8Array };
 
 const run = async () => {
+  if (job.task === 'info') {
+    parentPort!.postMessage({ ok: true, info: threeMfInfo(job.data) });
+    return;
+  }
   if (job.task === 'volume') {
     parentPort!.postMessage({ ok: true, volumeMm3: measureVolume(job.data) });
     return;

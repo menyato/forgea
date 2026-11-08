@@ -1,6 +1,7 @@
 import { Worker } from 'node:worker_threads';
 import type { ModelVariant } from '@forgea/validation';
 import { Injectable } from '@nestjs/common';
+import type { ThreeMfInfo } from './three-mf.js';
 
 /** A model that takes longer than this is refused (a real 100 MB model needs ~20 s). */
 const TIME_LIMIT_MS = 90_000;
@@ -21,6 +22,7 @@ type Result =
       view?: Uint8Array;
       lite?: Uint8Array;
       volumeMm3?: number | null;
+      info?: ThreeMfInfo;
     }
   | { ok: false; message: string };
 
@@ -56,6 +58,12 @@ export class ModelOptimizer {
   async volume(load: Load): Promise<number | null> {
     const result = await this.run(load, (data) => ({ task: 'volume', data }));
     return result.volumeMm3 ?? null;
+  }
+
+  /** What a 3MF says about printing it: colours, volumes, the slicer's time and grams. */
+  async threeMfInfo(load: Load): Promise<ThreeMfInfo> {
+    const result = await this.run(load, (data) => ({ task: 'info', data }));
+    return result.info!;
   }
 
   private async run(

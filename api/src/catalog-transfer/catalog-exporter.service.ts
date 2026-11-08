@@ -154,6 +154,12 @@ export class CatalogExporter {
             };
           }),
           profit: profitOf(p),
+          priceOverride: p.priceOverride?.toFixed(2) ?? null,
+          colours: p.colours.map((c) => ({
+            colour: c.colour,
+            hex: c.hex,
+            grams: c.grams.toString(),
+          })),
           text:
             p.textStyle && p.textColourGroup
               ? {

@@ -228,6 +228,21 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                         </span>
                       </span>
                     )}
+                    {i.printProject && (
+                      <span className="mt-1 flex flex-wrap gap-2">
+                        <a
+                          href={`/admin/orders/${o.id}/project/${i.id}`}
+                          download
+                          title="The product's own Bambu Studio project: its colours, plates and settings"
+                          className={buttonClass(
+                            'primary',
+                            'px-3 py-1 text-sm',
+                          )}
+                        >
+                          Download print project (3MF)
+                        </a>
+                      </span>
+                    )}
                     {i.options.length > 0 && (
                       <span className="block text-sm text-text-muted">
                         {i.options

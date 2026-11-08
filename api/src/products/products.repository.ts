@@ -163,8 +163,28 @@ export class ProductsRepository {
   material(id: string) {
     return this.prisma.material.findUnique({
       where: { id },
-      select: { pricePerGram: true },
+      select: {
+        pricePerGram: true,
+        densityGPerCm3: true,
+        gramsPerHour: true,
+      },
     });
+  }
+
+  /** The shop's colours (option values with a swatch, switched on), for matching a file's. */
+  async swatches(): Promise<{ label: string; swatchHex: string }[]> {
+    const values = await this.prisma.optionValue.findMany({
+      where: {
+        active: true,
+        swatchHex: { not: null },
+        group: { active: true },
+      },
+      select: { label: true, swatchHex: true },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    });
+    return values.flatMap((v) =>
+      v.swatchHex ? [{ label: v.label, swatchHex: v.swatchHex }] : [],
+    );
   }
 
   findById(id: string): Promise<ConfigurableProduct | null> {
@@ -193,6 +213,7 @@ export class ProductsRepository {
         ...fields(dto),
         ...optionRows(dto),
         sizes: { create: dto.sizes.map(sizeRow) },
+        colours: { create: dto.colours.map(colourRow) },
       },
       include: withConfiguration,
     });
@@ -203,6 +224,7 @@ export class ProductsRepository {
     return this.prisma.$transaction(async (tx) => {
       await tx.productOptionValue.deleteMany({ where: { productId: id } });
       await tx.productOptionGroup.deleteMany({ where: { productId: id } });
+      await tx.productColour.deleteMany({ where: { productId: id } });
       // Sizes keep their ids (matched by name), so carts holding one still find it.
       const labels = dto.sizes.map((s) => s.label);
       await tx.productSize.deleteMany({
@@ -221,7 +243,11 @@ export class ProductsRepository {
       }
       return tx.product.update({
         where: { id },
-        data: { ...fields(dto), ...optionRows(dto) },
+        data: {
+          ...fields(dto),
+          ...optionRows(dto),
+          colours: { create: dto.colours.map(colourRow) },
+        },
         include: withConfiguration,
       });
     });
@@ -262,7 +288,13 @@ const fields = (dto: SaveProductDto) => ({
     dto.text?.style === 'INITIAL_NAME' ? (dto.text.decor ?? null) : null,
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
+  priceOverride: dto.priceOverride ?? null,
 });
+
+const colourRow = (
+  c: SaveProductDto['colours'][number],
+  sortOrder: number,
+) => ({ colour: c.colour, hex: c.hex, grams: c.grams, sortOrder });
 
 const sizeRow = (s: SaveProductDto['sizes'][number], sortOrder: number) => ({
   label: s.label,

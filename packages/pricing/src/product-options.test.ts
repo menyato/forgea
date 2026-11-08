@@ -3,6 +3,7 @@ import { PricingError } from './errors.js';
 import {
   configuredUnitCost,
   configuredUnitPrice,
+  overriddenUnitPrice,
   configureUnit,
   type OptionEffect,
 } from './product-options.js';
@@ -117,5 +118,20 @@ describe('configuredUnitCost', () => {
       grams: '180',
       hours: '6',
     });
+  });
+});
+
+describe('overriddenUnitPrice', () => {
+  it('sells at the owner price when nothing is chosen beyond the product itself', () => {
+    expect(overriddenUnitPrice('25', '18.40', '18.40')).toBe('25.00');
+  });
+
+  it('adds what a bigger size or an add-on adds to the calculated price', () => {
+    expect(overriddenUnitPrice('25', '18.40', '22.15')).toBe('28.75');
+  });
+
+  it('takes off what a smaller size takes off, never going below zero', () => {
+    expect(overriddenUnitPrice('25', '18.40', '15.40')).toBe('22.00');
+    expect(overriddenUnitPrice('2', '18.40', '10.00')).toBe('0.00');
   });
 });

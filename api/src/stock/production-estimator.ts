@@ -65,6 +65,7 @@ export class ProductionEstimator {
             where: { id: { in: productIds } },
             include: {
               sizes: { orderBy: { sortOrder: 'asc' } },
+              colours: { orderBy: { sortOrder: 'asc' } },
               category: { select: { name: true } },
             },
           })
@@ -91,6 +92,10 @@ export class ProductionEstimator {
             grams: p.grams.toString(),
             printHours: p.printHours.toString(),
             materialId: p.materialId,
+            colours: p.colours.map((c) => ({
+              colour: c.colour,
+              grams: c.grams.toString(),
+            })),
             sizes: p.sizes.map((s) => ({
               label: sizeLabel(s),
               grams: s.grams.toString(),

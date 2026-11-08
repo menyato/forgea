@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
+import { Prisma } from '../generated/prisma/client.js';
+import { UploadsService } from '../uploads/uploads.service.js';
 import { printProject } from './print-project.js';
 import { TextStudio, type Measurement } from './text-studio.service.js';
 
@@ -12,6 +14,7 @@ export class PrintFiles {
   constructor(
     private readonly prisma: PrismaService,
     private readonly studio: TextStudio,
+    private readonly uploads: UploadsService,
   ) {}
 
   async stl(
@@ -43,6 +46,8 @@ export class PrintFiles {
     orderId: string,
     itemId: string,
   ): Promise<{ name: string; bytes: Uint8Array }> {
+    const own = await this.productProject(orderId, itemId);
+    if (own) return own;
     const { item, m } = await this.line(orderId, itemId);
     const [files, values] = await Promise.all([
       this.studio.printFiles(m.design, m.settings),
@@ -61,6 +66,29 @@ export class PrintFiles {
     if (parts.length === 0) throw new NotFoundException('No such print file');
     const number = item.order.orderNumber;
     return { name: `${number}.3mf`, bytes: printProject(number, parts) };
+  }
+
+  /**
+   * A catalog line whose product has a 3MF: that file as the studio uploaded it (its colours,
+   * plates and slicer settings), named after the order. Null for any other line.
+   */
+  private async productProject(
+    orderId: string,
+    itemId: string,
+  ): Promise<{ name: string; bytes: Uint8Array } | null> {
+    const item = await this.prisma.orderItem.findFirst({
+      where: { id: itemId, orderId, design: { equals: Prisma.DbNull } },
+      select: {
+        order: { select: { orderNumber: true } },
+        product: { select: { slug: true, modelFileKey: true } },
+      },
+    });
+    const key = item?.product?.modelFileKey;
+    if (!item || !key?.endsWith('.3mf')) return null;
+    return {
+      name: `${item.order.orderNumber}-${item.product!.slug}.3mf`,
+      bytes: await this.uploads.read(key),
+    };
   }
 
   /** A personalised order line and the design it was ordered with. */

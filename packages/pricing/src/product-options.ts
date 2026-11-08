@@ -125,3 +125,21 @@ function positive(value: DecimalInput, field: string): Big {
   if (n.lte(0)) throw new PricingError(`${field} must be greater than 0`);
   return n;
 }
+
+/**
+ * The owner's own price for a product in place of the calculated one, moved by what the
+ * customer's choices change in the calculated price: a bigger size, a heavier option, an
+ * add-on or a longer personalised text still costs more (a smaller one less). `calculatedBase`
+ * is the calculated price at the product's own grams and hours with no options;
+ * `calculatedChosen` the calculated price of what the customer chose. Never below zero.
+ */
+export function overriddenUnitPrice(
+  override: DecimalInput,
+  calculatedBase: DecimalInput,
+  calculatedChosen: DecimalInput,
+): string {
+  const price = toBig(override, 'price override')
+    .plus(toBig(calculatedChosen, 'calculated price'))
+    .minus(toBig(calculatedBase, 'calculated price'));
+  return money(price.lt(0) ? new Big(0) : price);
+}

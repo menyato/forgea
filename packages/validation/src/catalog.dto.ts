@@ -24,12 +24,15 @@ import {
   MONEY_PATTERN,
   OPTION_TEXT_MAX_LENGTH,
   POSITIVE_DECIMAL,
+  POSITIVE_MONEY_PATTERN,
   PRICE_PER_GRAM_PATTERN,
+  PRODUCT_COLOURS_MAX,
   PRODUCT_IMAGES_MAX,
   SLUG_PATTERN,
   STORAGE_KEY_PATTERN,
   PRODUCT_SIZES_MAX,
   SIZE_CM_PATTERN,
+  STOCK_COLOUR_MAX_LENGTH,
 } from './constants.js';
 import { Trim } from './email.js';
 import {
@@ -229,6 +232,25 @@ export class ProductSizeDto {
   isDefault: boolean = false;
 }
 
+/** A multi-colour product: what one colour takes for one piece at the product's own size. */
+export class ProductColourDto {
+  /** The colour as the shop names it: the stock line its grams come from. */
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Choose the colour' })
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour!: string;
+
+  @Matches(HEX_COLOR_PATTERN, { message: 'Pick a colour' })
+  hex!: string;
+
+  @Matches(POSITIVE_DECIMAL, { message: 'Enter the grams of this colour' })
+  grams!: string;
+}
+
+/** The owner's own price, in place of the calculated one (USD, above 0). */
+const PRICE_OVERRIDE_MESSAGE = { message: 'Enter your price, e.g. 25.00' };
+
 export class SaveProductDto {
   @Trim()
   @Matches(SLUG_PATTERN, { message: SLUG_MESSAGE })
@@ -284,6 +306,11 @@ export class SaveProductDto {
   })
   profitValue?: string;
 
+  /** Your own selling price in place of the calculated one; none = calculated. */
+  @IsOptional()
+  @Matches(POSITIVE_MONEY_PATTERN, PRICE_OVERRIDE_MESSAGE)
+  priceOverride?: string;
+
   /** Made to order: needs the deposit at checkout. */
   @IsBoolean()
   isCustom!: boolean;
@@ -335,6 +362,13 @@ export class SaveProductDto {
   @ValidateNested({ each: true })
   @Type(() => ProductSizeDto)
   sizes: ProductSizeDto[] = [];
+
+  /** Multi-colour: the grams per colour (they add up to `grams`); none: one colour. */
+  @IsArray()
+  @ArrayMaxSize(PRODUCT_COLOURS_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => ProductColourDto)
+  colours: ProductColourDto[] = [];
 }
 
 /** A customer's choice for one option. */
@@ -401,4 +435,24 @@ export class PricePreviewDto {
     message: 'Enter the profit, e.g. 120 (%) or 4.50 (USD)',
   })
   profitValue?: string;
+
+  @IsOptional()
+  @Matches(POSITIVE_MONEY_PATTERN, PRICE_OVERRIDE_MESSAGE)
+  priceOverride?: string;
+}
+
+/** POST /products/model-info: what a 3MF says, priced with a material (dashboard). */
+export class ModelInfoDto {
+  @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the model again' })
+  key!: string;
+
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  /** For files never sliced: walls and infill as a share of the volume (%). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  solidityPercent: number = 40;
 }

@@ -14,6 +14,8 @@ interface CatalogProduct {
   grams: string;
   printHours: string;
   materialId: string;
+  /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
+  colours: { colour: string; grams: string }[];
   /** Measurements as the order stores them ("18 × 12 × 9 cm"), in the product's order. */
   sizes: {
     label: string;
@@ -49,7 +51,7 @@ export interface ItemEstimate {
   materialId: string;
   /** The chosen colour (a value with a swatch); "" when none. */
   colour: string;
-  /** A multi-colour piece (personalised text): the grams each colour takes. */
+  /** A multi-colour piece (personalised text, a 3MF product): the grams each colour takes. */
   colours?: { colour: string; gramsPerUnit: string }[];
 }
 
@@ -116,15 +118,32 @@ export function estimateItem(
       },
       effects,
     );
+    // A multi-colour product: its grams (at the chosen size and options) shared out as its
+    // colours share its own grams.
+    const colours = splitByColour(product.colours, grams);
     return {
       unitCost: cost,
       gramsPerUnit: grams,
       hoursPerUnit: hours,
       materialId,
-      colour,
+      colour: colours?.[0]?.colour ?? colour,
+      ...(colours ? { colours } : {}),
     };
   } catch (error) {
     if (error instanceof PricingError) return null;
     throw error;
   }
+}
+
+/** `grams` shared out in proportion to a product's colours; null for a one-colour product. */
+function splitByColour(
+  colours: readonly { colour: string; grams: string }[],
+  grams: string,
+): { colour: string; gramsPerUnit: string }[] | null {
+  const total = colours.reduce((n, c) => n + Number(c.grams), 0);
+  if (colours.length === 0 || total <= 0) return null;
+  return colours.map((c) => ({
+    colour: c.colour,
+    gramsPerUnit: ((Number(grams) * Number(c.grams)) / total).toFixed(2),
+  }));
 }

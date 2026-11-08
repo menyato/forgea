@@ -284,6 +284,12 @@ export class CatalogImporter {
           ...(p.profit
             ? { profitKind: p.profit.kind, profitValue: p.profit.value }
             : {}),
+          ...(p.priceOverride ? { priceOverride: p.priceOverride } : {}),
+          colours: (p.colours ?? []).map((c) => ({
+            colour: c.colour,
+            hex: c.hex,
+            grams: c.grams,
+          })),
           ...(p.text
             ? {
                 text: {

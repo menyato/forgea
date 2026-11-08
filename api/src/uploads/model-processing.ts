@@ -16,6 +16,7 @@ import {
   MeshoptSimplifier,
 } from 'meshoptimizer';
 import { glbProblem } from './glb-check.js';
+import { readThreeMf, type ThreeMfInfo } from './three-mf.js';
 
 /** Triangles kept in the `lite` copy: plenty for a shop card or the home page bed. */
 export const LITE_TRIANGLES = 30_000;
@@ -43,8 +44,36 @@ export async function makeVariants(
   if (extension === 'stl') {
     const mesh = weldedStl(data);
     return {
-      view: await io.writeBinary(meshDocument(mesh)),
-      lite: await io.writeBinary(meshDocument(simplified(mesh))),
+      view: await io.writeBinary(meshDocument([{ mesh, hex: null }])),
+      lite: await io.writeBinary(
+        meshDocument([{ mesh: simplified(mesh, LITE_TRIANGLES), hex: null }]),
+      ),
+    };
+  }
+  if (extension === '3mf') {
+    // One mesh per filament, each in its colour; the lite copy shares its triangles out by size.
+    const { parts } = readThreeMf(data);
+    const meshes = parts.map((p) => ({
+      mesh: welded(p.positions),
+      hex: p.hex,
+    }));
+    const total = meshes.reduce((n, m) => n + m.mesh.indices.length / 3, 0);
+    return {
+      view: await io.writeBinary(meshDocument(meshes)),
+      lite: await io.writeBinary(
+        meshDocument(
+          meshes.map(({ mesh, hex }) => ({
+            mesh: simplified(
+              mesh,
+              Math.max(
+                500,
+                Math.floor((LITE_TRIANGLES * mesh.indices.length) / 3 / total),
+              ),
+            ),
+            hex,
+          })),
+        ),
+      ),
     };
   }
   if (extension === 'glb') {
@@ -62,6 +91,11 @@ export async function makeVariants(
     return { view, lite: view };
   }
   throw new Error(`Not a 3D model: .${extension}`);
+}
+
+/** What a 3MF says about printing it (colours, volumes, the slicer's time and grams). */
+export function threeMfInfo(data: Uint8Array): ThreeMfInfo {
+  return readThreeMf(data).info;
 }
 
 /**
@@ -112,7 +146,11 @@ function weldedStl(data: Uint8Array): IndexedMesh {
   if (stlTriangleCount(data) > MAX_TRIANGLES) {
     throw new Error(`More than ${MAX_TRIANGLES} triangles`);
   }
-  const raw = stlPositions(data);
+  return welded(stlPositions(data));
+}
+
+/** Triangle corners (millimetres, Z-up) as an indexed mesh in metres, Y-up. */
+function welded(raw: Float32Array): IndexedMesh {
   const positions = new Float32Array(raw.length);
   for (let i = 0; i < raw.length; i += 3) {
     // Z-up millimetres → Y-up metres (a quarter turn about X, as the viewer does).
@@ -136,13 +174,13 @@ function weldedStl(data: Uint8Array): IndexedMesh {
 }
 
 /** Fewer triangles, same outline. A model already small enough is left as it is. */
-function simplified(mesh: IndexedMesh): IndexedMesh {
-  if (mesh.indices.length / 3 <= LITE_TRIANGLES) return mesh;
+function simplified(mesh: IndexedMesh, triangles: number): IndexedMesh {
+  if (mesh.indices.length / 3 <= triangles) return mesh;
   const [indices] = MeshoptSimplifier.simplify(
     mesh.indices,
     mesh.positions,
     3,
-    LITE_TRIANGLES * 3,
+    triangles * 3,
     LITE_MAX_ERROR,
   );
   return compact({ positions: mesh.positions, indices });
@@ -161,48 +199,71 @@ function compact(mesh: IndexedMesh): IndexedMesh {
   return { positions, indices };
 }
 
-/** One mesh, positions as 16-bit fractions of its bounding box (the node scales them back). */
-function meshDocument({ positions, indices }: IndexedMesh): Document {
+/**
+ * One node, positions as 16-bit fractions of the whole model's bounding box (the node scales
+ * them back). A part with a colour (a 3MF's filament) gets a plastic material in it; one
+ * without (an STL) has none, and the viewer paints it.
+ */
+function meshDocument(
+  parts: readonly { mesh: IndexedMesh; hex: string | null }[],
+): Document {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < positions.length; i++) {
-    const axis = i % 3;
-    min[axis] = Math.min(min[axis]!, positions[i]!);
-    max[axis] = Math.max(max[axis]!, positions[i]!);
+  for (const { mesh } of parts) {
+    const { positions } = mesh;
+    for (let i = 0; i < positions.length; i++) {
+      const axis = i % 3;
+      min[axis] = Math.min(min[axis]!, positions[i]!);
+      max[axis] = Math.max(max[axis]!, positions[i]!);
+    }
   }
   const extent = max.map((m, axis) => Math.max(m - min[axis]!, 1e-9));
-  const quantized = new Uint16Array(positions.length);
-  for (let i = 0; i < positions.length; i++) {
-    const axis = i % 3;
-    quantized[i] = Math.round(
-      ((positions[i]! - min[axis]!) / extent[axis]!) * 65535,
-    );
-  }
 
   const document = new Document();
   const buffer = document.createBuffer();
-  const position = document
-    .createAccessor()
-    .setType('VEC3')
-    .setArray(quantized)
-    .setNormalized(true)
-    .setBuffer(buffer);
-  const index = document
-    .createAccessor()
-    .setType('SCALAR')
-    .setArray(
-      positions.length / 3 <= 65535
-        ? Uint16Array.from(indices)
-        : Uint32Array.from(indices),
-    )
-    .setBuffer(buffer);
-  const primitive = document
-    .createPrimitive()
-    .setAttribute('POSITION', position)
-    .setIndices(index);
+  const gltfMesh = document.createMesh('model');
+  for (const { mesh, hex } of parts) {
+    const { positions, indices } = mesh;
+    const quantized = new Uint16Array(positions.length);
+    for (let i = 0; i < positions.length; i++) {
+      const axis = i % 3;
+      quantized[i] = Math.round(
+        ((positions[i]! - min[axis]!) / extent[axis]!) * 65535,
+      );
+    }
+    const position = document
+      .createAccessor()
+      .setType('VEC3')
+      .setArray(quantized)
+      .setNormalized(true)
+      .setBuffer(buffer);
+    const index = document
+      .createAccessor()
+      .setType('SCALAR')
+      .setArray(
+        positions.length / 3 <= 65535
+          ? Uint16Array.from(indices)
+          : Uint32Array.from(indices),
+      )
+      .setBuffer(buffer);
+    const primitive = document
+      .createPrimitive()
+      .setAttribute('POSITION', position)
+      .setIndices(index);
+    if (hex) {
+      primitive.setMaterial(
+        document
+          .createMaterial(hex)
+          .setBaseColorFactor([...linearRgb(hex), 1])
+          .setRoughnessFactor(0.5)
+          .setMetallicFactor(0.05),
+      );
+    }
+    gltfMesh.addPrimitive(primitive);
+  }
   const node = document
     .createNode('model')
-    .setMesh(document.createMesh('model').addPrimitive(primitive))
+    .setMesh(gltfMesh)
     .setTranslation(min as [number, number, number])
     .setScale(extent as [number, number, number]);
   document.createScene().addChild(node);
@@ -214,4 +275,12 @@ function meshDocument({ positions, indices }: IndexedMesh): Document {
       method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     });
   return document;
+}
+
+/** #RRGGBB as glTF wants colours: linear, 0–1. */
+function linearRgb(hex: string): [number, number, number] {
+  return [1, 3, 5].map((at) => {
+    const c = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
 }

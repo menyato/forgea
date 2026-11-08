@@ -37,6 +37,7 @@ export {
   configuredUnitPrice,
   type ConfiguredUnit,
   type OptionEffect,
+  overriddenUnitPrice,
 } from './product-options.js';
 export {
   estimatePrint,

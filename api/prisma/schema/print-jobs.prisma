@@ -62,6 +62,7 @@ model PrintJob {
   @@index([orderId])
   @@index([orderItemId])
   @@index([printerId])
+  @@index([replacesJobId])
   @@map("print_jobs")
 }
 

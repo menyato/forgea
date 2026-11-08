@@ -55,7 +55,9 @@ export {
 } from './dashboard.dto.js';
 export {
   OptionSelectionDto,
+  ModelInfoDto,
   PricePreviewDto,
+  ProductColourDto,
   ProductOptionConfigDto,
   ProductPriceDto,
   ProductSizeDto,

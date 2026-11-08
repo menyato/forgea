@@ -47,7 +47,9 @@ export type CustomerOrderRow = Prisma.OrderGetPayload<{
 
 const withStaffView = {
   user: { select: { email: true } },
-  items: { include: { product: { select: { slug: true } } } },
+  items: {
+    include: { product: { select: { slug: true, modelFileKey: true } } },
+  },
   statusHistory: {
     orderBy: { changedAt: 'asc' },
     include: { changedBy: { select: { email: true } } },

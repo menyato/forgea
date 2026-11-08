@@ -28,6 +28,9 @@ model Product {
   /// Its own profit rule; both null = the shop's (Pricing page). Both or neither (CHECK).
   profitKind  ProfitKind?
   profitValue Decimal?    @db.Decimal(10, 2)
+  /// The owner's own selling price (USD) in place of the calculated one; null = calculated.
+  /// Sizes and options still add what they change in the calculated price. Above 0 (CHECK).
+  priceOverride Decimal? @db.Decimal(10, 2)
 
   /// Personalised: the customer types their text and sees it in 3D (null = a regular product).
   /// The pieces are made from the text (@forgea/text3d), not from a model file; grams and
@@ -72,6 +75,7 @@ model Product {
   optionValues   ProductOptionValue[]
   quotationLines QuotationLine[]
   sizes          ProductSize[]
+  colours        ProductColour[]
   stockMovements StockMovement[]
   readyPieces    ReadyPiece[]
 
@@ -100,4 +104,23 @@ model ProductSize {
 
   @@unique([productId, label])
   @@map("product_sizes")
+}
+
+/// A multi-colour product (from its 3MF): what each filament colour takes for one piece at the
+/// product's own size. They add up to the product's grams; orders take each from its colour's
+/// stock (scaled with the chosen size and options).
+model ProductColour {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// The colour as the shop names it (an option value with a swatch): its stock line.
+  colour    String
+  /// The file's colour, #RRGGBB (CHECK), for the swatch.
+  hex       String
+  /// Above 0 (CHECK).
+  grams     Decimal @db.Decimal(10, 2)
+  sortOrder Int     @default(0)
+
+  @@unique([productId, colour])
+  @@map("product_colours")
 }

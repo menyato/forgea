@@ -242,6 +242,7 @@ describe('Easy pricing (e2e)', () => {
     ).body as PricePreview;
     expect(forAdmin).toEqual({
       unitPrice: '26.00',
+      calculatedPrice: '26.00',
       breakdown: {
         material: '5.00',
         printer: '5.00',
@@ -262,7 +263,11 @@ describe('Easy pricing (e2e)', () => {
         })
         .expect(200)
     ).body as PricePreview;
-    expect(forDesigner).toEqual({ unitPrice: '15.00', breakdown: null });
+    expect(forDesigner).toEqual({
+      unitPrice: '15.00',
+      calculatedPrice: '15.00',
+      breakdown: null,
+    });
     const customer = await signedInAs(app, Role.CUSTOMER);
     await as(customer.cookie).post('/products/price-preview', ask).expect(403);
   });
