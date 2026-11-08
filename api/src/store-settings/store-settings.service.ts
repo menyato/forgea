@@ -108,6 +108,7 @@ function toView(row: StoreSettingsRow): StoreSettings {
       customUploadMaxMb: row.customUploadMaxMb,
       estimateSolidityPercent: row.estimateSolidityPercent,
       estimateSpreadPercent: row.estimateSpreadPercent,
+      autoQuoteSlicedFiles: row.autoQuoteSlicedFiles,
     },
   };
 }

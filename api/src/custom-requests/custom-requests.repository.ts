@@ -32,6 +32,8 @@ export interface NewRequest {
   colour: string | null;
   fileKey: string | null;
   estimate: { low: string; high: string } | null;
+  /** An attached 3MF: what one piece takes (PrintFile), read from the file. */
+  printFile: object | null;
 }
 
 /** Number of fresh request numbers to try if one collides (≈ never at 50 bits). */
@@ -69,6 +71,9 @@ export class CustomRequestsRepository {
               fileKey: r.fileKey,
               estimateLow: r.estimate?.low ?? null,
               estimateHigh: r.estimate?.high ?? null,
+              ...(r.printFile
+                ? { printFile: r.printFile as Prisma.InputJsonValue }
+                : {}),
             },
             include: withDetail,
           });
@@ -137,7 +142,8 @@ export class CustomRequestsRepository {
    */
   quote(
     id: string,
-    actorId: string,
+    /** Null for a quote the shop made itself (a sliced file's exact price). */
+    actorId: string | null,
     q: { price: string; note: string | null; expiresAt: Date },
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {

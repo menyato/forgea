@@ -7,6 +7,7 @@ import {
 import type {
   CheckoutResult,
   Page,
+  PrintFile,
   QuotationContact,
   QuotationDetail,
   QuotationListItem,
@@ -22,6 +23,7 @@ import {
 } from '../generated/prisma/enums.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { CheckoutService } from '../orders/checkout.service.js';
+import { QuotationPrintFiles } from './quotation-print-files.js';
 import { OrderStatusService } from '../orders/order-status.service.js';
 import { LeadsService } from '../leads/leads.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
@@ -71,6 +73,7 @@ export class QuotationsService {
     private readonly store: StoreSettingsService,
     private readonly leads: LeadsService,
     private readonly orderStatus: OrderStatusService,
+    private readonly printFiles: QuotationPrintFiles,
   ) {}
 
   counts(): Promise<Partial<Record<QuotationStatus, number>>> {
@@ -85,8 +88,9 @@ export class QuotationsService {
     return this.quotations.contact(email);
   }
 
+  /** The team's view: with each line's 3MF. */
   async detail(id: string): Promise<QuotationDetail> {
-    return toDetail(await this.require(id));
+    return toDetail(await this.require(id), true);
   }
 
   async create(
@@ -94,7 +98,7 @@ export class QuotationsService {
     actorId: string,
   ): Promise<QuotationDetail> {
     const data = await this.prepare(dto);
-    return toDetail(await this.quotations.create(data, actorId));
+    return toDetail(await this.quotations.create(data, actorId), true);
   }
 
   async update(id: string, dto: SaveQuotationDto): Promise<QuotationDetail> {
@@ -468,6 +472,7 @@ export class QuotationsService {
             discountPercent: l.discountPercent.toString(),
           }),
           isCustom: l.isCustom,
+          printFile: l.printFile as PrintFile | null,
         })),
       },
       actorId,
@@ -507,6 +512,14 @@ export class QuotationsService {
     if (dto.leadId && !(await this.quotations.leadExists(dto.leadId))) {
       throw new BadRequestException('Lead not found');
     }
+    // A line made from a 3MF keeps what the file itself says, read again here.
+    const printFiles = await Promise.all(
+      dto.lines.map((l) =>
+        l.printFileKey && l.printMaterialId
+          ? this.printFiles.forLine(l.printFileKey, l.printMaterialId)
+          : null,
+      ),
+    );
     const total = dto.lines.reduce(
       (sum, l) => sum.plus(lineTotal(l)),
       new Prisma.Decimal(0),
@@ -524,7 +537,7 @@ export class QuotationsService {
       city: dto.delivery ? (dto.city ?? null) : null,
       addressLine: dto.delivery ? (dto.addressLine ?? null) : null,
       total: total.toFixed(2),
-      lines: dto.lines.map((l) => ({
+      lines: dto.lines.map((l, i) => ({
         productId: l.productId ?? null,
         description: l.description,
         quantity: l.quantity,
@@ -534,6 +547,9 @@ export class QuotationsService {
         sizeXcm: l.sizeXcm ?? null,
         sizeYcm: l.sizeYcm ?? null,
         sizeZcm: l.sizeZcm ?? null,
+        printFile: printFiles[i]
+          ? (printFiles[i] as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull,
       })),
     };
   }
@@ -594,7 +610,8 @@ function refuseIfChanged(q: { updatedAt: Date }, seen: string | undefined) {
     );
 }
 
-function toDetail(q: QuotationRow): QuotationDetail {
+/** `team`: the studio's view, with each line's 3MF; customers never get the file. */
+function toDetail(q: QuotationRow, team = false): QuotationDetail {
   return {
     ...toListItem(q),
     version: q.updatedAt.toISOString(),
@@ -620,6 +637,7 @@ function toDetail(q: QuotationRow): QuotationDetail {
       }).toFixed(2),
       isCustom: l.isCustom,
       size: sizeOf(l),
+      printFile: team ? (l.printFile as PrintFile | null) : null,
     })),
     history: q.statusHistory.map((h) => ({
       status: h.status,

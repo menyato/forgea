@@ -67,6 +67,8 @@ export interface OrderLineSource {
   options: readonly ChosenOption[];
   /** A personalised piece: the design as made and priced (TextStudio Measurement). */
   design?: object | null;
+  /** Made from a 3MF: the file and what one unit of the line takes (PrintFile). */
+  printFile?: object | null;
 }
 
 export interface NewOrder {
@@ -160,6 +162,12 @@ export class OrdersRepository {
                   ...(lineOf(o, l.id).design
                     ? {
                         design: lineOf(o, l.id).design as Prisma.InputJsonValue,
+                      }
+                    : {}),
+                  ...(lineOf(o, l.id).printFile
+                    ? {
+                        printFile: lineOf(o, l.id)
+                          .printFile as Prisma.InputJsonValue,
                       }
                     : {}),
                   name: l.name,

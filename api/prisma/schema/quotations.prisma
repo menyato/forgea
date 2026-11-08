@@ -75,6 +75,9 @@ model QuotationLine {
   sizeXcm         Decimal?  @db.Decimal(7, 1)
   sizeYcm         Decimal?  @db.Decimal(7, 1)
   sizeZcm         Decimal?  @db.Decimal(7, 1)
+  /// Made from a 3MF: the file and what one piece takes (PrintFile in @forgea/types), read by
+  /// the API from the file itself. The order line gets it, for the stock and the print project.
+  printFile       Json?
 
   @@index([quotationId])
   @@map("quotation_lines")

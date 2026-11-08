@@ -36,6 +36,7 @@ import {
   PERCENT_PATTERN,
   QUOTATION_SORTS,
   SIZE_CM_PATTERN,
+  STORAGE_KEY_PATTERN,
 } from './constants.js';
 import {
   CommaList,
@@ -274,6 +275,27 @@ export class QuotationLineDto {
   @IsOptional()
   @Matches(SIZE_CM_PATTERN, sizeMessage)
   sizeZcm?: string;
+
+  /** Made from a 3MF the team uploaded for this quotation: the API reads it itself. */
+  @IsOptional()
+  @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the file again' })
+  printFileKey?: string;
+
+  /** The material it prints in (with `printFileKey`). */
+  @ValidateIf((o: QuotationLineDto) => o.printFileKey !== undefined)
+  @IsUUID('all', { message: 'Choose the material it prints in' })
+  printMaterialId?: string;
+}
+
+/** POST /quotations/print-file: what a 3MF for a quotation line takes, and its price. */
+export class QuotationPrintFileDto {
+  @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the file again' })
+  key!: string;
+
+  /** The material it prints in; none: the cheapest one switched on. */
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId?: string;
 }
 
 export class SaveQuotationDto {

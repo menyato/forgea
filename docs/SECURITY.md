@@ -246,7 +246,10 @@ cookie domain), so staging and production never see each other's sessions.
    Compressed copies of 3D models (`<id>.view.glb`, `<id>.lite.glb`) follow their original's rules.
    A **3MF** is the studio's print project (the design, its colours and slicer settings): shoppers
    only ever get its compressed copies, never the file itself; staff download it from the
-   product (`catalog.view`) or from an order line (`orders.view`).
+   product (`catalog.view`) or from an order line (`orders.view`). A file the team attaches to
+   a quotation line is seen only by the team (`quotations.view`); customers never get it, even
+   in their own quotation. Numbers kept with a line or request (grams, time, colours) are read
+   by the API from the stored file, never taken from the browser.
 6. Only admins and designers upload product files (`POST /uploads/product-model`,
    `/uploads/product-image`), and a product only accepts keys of clean uploads made for that
    purpose.

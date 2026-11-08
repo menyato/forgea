@@ -158,6 +158,23 @@ export interface ProductColourView {
 }
 
 /**
+ * A piece made from a 3MF (a quotation line, a custom request, their order lines): the file
+ * and what one piece takes, read by the API from the file itself. Stock takes each colour's
+ * grams; staff download the file from the order.
+ */
+export interface PrintFile {
+  /** The 3MF's object key. */
+  fileKey: string;
+  materialId: string;
+  /** True when grams and time are the slicer's own; false: estimated from the volume. */
+  sliced: boolean;
+  grams: string;
+  printHours: string;
+  /** Each colour as the shop names it (its stock line), the file's #rrggbb and its grams. */
+  colours: { colour: string; hex: string; grams: string }[];
+}
+
+/**
  * POST /products/model-info: what a 3MF says about printing it, with grams and hours worked
  * out in the chosen material. A sliced file (Bambu Studio "Export plate sliced file") gives
  * the slicer's own time and grams; otherwise they are estimated from the volume.

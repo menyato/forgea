@@ -6,11 +6,14 @@ import { ModelViewer } from '~/features/model-viewer/model-viewer';
 import type { EstimateResult, FileResult } from './route';
 
 const MB = 1024 * 1024;
-const ACCEPT = '.stl,.glb,.png,.jpg,.jpeg,.webp';
+const ACCEPT = '.stl,.glb,.3mf,.png,.jpg,.jpeg,.webp';
+/** Files the API prices at once: STL and 3MF. */
+const PRICED = /\.(stl|3mf)$/;
 
 /**
- * The optional attachment: a 3D model (shown in 3D, with an instant price range for STL)
- * or a photo. Uploaded on its own, before the request is sent.
+ * The optional attachment: a 3D model (shown in 3D, with an instant price for STL and 3MF:
+ * a range, or the exact price of a sliced 3MF) or a photo. Uploaded on its own, before the
+ * request is sent.
  */
 export function RequestFile({
   fileKey,
@@ -18,12 +21,15 @@ export function RequestFile({
   materialId,
   quantity,
   maxMb,
+  autoQuote,
 }: {
   fileKey: string | null;
   onFileKey: (key: string | null) => void;
   materialId: string;
   quantity: string;
   maxMb: number | null;
+  /** A sliced 3MF's price comes as a quote right after sending. */
+  autoQuote: boolean;
 }) {
   const upload = useFetcher<FileResult>();
   const estimate = useFetcher<EstimateResult>();
@@ -38,7 +44,7 @@ export function RequestFile({
   // Re-estimate when the model, material or quantity changes (after a short pause).
   const { submit: requestEstimate } = estimate;
   useEffect(() => {
-    if (!fileKey?.endsWith('.stl')) return;
+    if (!fileKey || !PRICED.test(fileKey)) return;
     const timer = setTimeout(
       () =>
         void requestEstimate(
@@ -51,7 +57,7 @@ export function RequestFile({
   }, [requestEstimate, fileKey, materialId, quantity]);
 
   const range = estimate.data?.estimate;
-  const isModel = fileKey !== null && /\.(stl|glb)$/.test(fileKey);
+  const isModel = fileKey !== null && /\.(stl|glb|3mf)$/.test(fileKey);
 
   return (
     <div className="grid gap-4">
@@ -78,7 +84,8 @@ export function RequestFile({
             }}
           />
           <span className="text-text-muted">
-            STL, GLB, PNG, JPEG or WebP
+            STL, GLB, 3MF (a sliced Bambu Studio file gets its exact price),
+            PNG, JPEG or WebP
             {maxMb !== null ? `, up to ${maxMb} MB` : ''}.
           </span>
         </label>
@@ -110,10 +117,23 @@ export function RequestFile({
           />
         ))}
 
-      {fileKey?.endsWith('.stl') && (
+      {fileKey && PRICED.test(fileKey) && (
         <p aria-live="polite" className="text-sm">
           {estimate.state !== 'idle' && !range ? (
             <Busy label="Estimating…" className="text-text-muted" />
+          ) : range?.exact ? (
+            <>
+              <span className="text-lg font-semibold">
+                <Money amount={range.low} />
+              </span>{' '}
+              <span className="text-text-muted">
+                for {quantity || 1}, in {range.material.name} (
+                {Number(range.grams)} g each, from your slicer).{' '}
+                {autoQuote
+                  ? 'Send the request and this is your quote: you can order straight away.'
+                  : 'We confirm it with a quote.'}
+              </span>
+            </>
           ) : range ? (
             <>
               <span className="text-lg font-semibold">

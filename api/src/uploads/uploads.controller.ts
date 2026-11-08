@@ -53,6 +53,17 @@ export class UploadsController {
     return this.accept(file, UploadPurpose.FONT, user);
   }
 
+  /** A 3MF (or STL/GLB) a quotation line is made from: whoever writes quotations. */
+  @RequirePermission('quotations.manage')
+  @Post('quotation-file')
+  @UseInterceptors(single(UploadPurpose.QUOTATION_FILE))
+  quotationFile(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UploadedFileView> {
+    return this.accept(file, UploadPurpose.QUOTATION_FILE, user);
+  }
+
   /** A product photo: PNG, JPEG or WebP. */
   @Post('product-image')
   @UseInterceptors(single(UploadPurpose.PRODUCT_IMAGE))

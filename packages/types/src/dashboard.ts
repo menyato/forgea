@@ -141,6 +141,8 @@ export interface CustomRequestListItem {
 export interface RequestEstimate {
   low: Money;
   high: Money;
+  /** A sliced 3MF: the slicer's own grams and time, so low = high is the price itself. */
+  exact: boolean;
   grams: string;
   printHours: string;
   material: { code: string; name: string };

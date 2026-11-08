@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { estimatePrint, PricingError } from '@forgea/pricing';
-import type { ModelFileInfo } from '@forgea/types';
+import type { ModelFileInfo, PrintFile } from '@forgea/types';
 import type { ModelInfoDto } from '@forgea/validation';
 import { Prisma } from '../generated/prisma/client.js';
 import { UploadPurpose } from '../generated/prisma/enums.js';
@@ -29,14 +29,49 @@ export class ModelFileInfoService {
     private readonly products: ProductsRepository,
   ) {}
 
+  /** A product's 3MF (Dashboard → Products). */
   async info(dto: ModelInfoDto): Promise<ModelFileInfo> {
     if (!dto.key.endsWith('.3mf')) {
       throw new BadRequestException('Only a 3MF file carries its colours');
     }
     await this.uploads.requireClean([dto.key], UploadPurpose.PRODUCT_MODEL);
-    const material = await this.products.material(dto.materialId);
+    return this.measure(dto.key, dto.materialId, dto.solidityPercent);
+  }
+
+  /**
+   * What one piece made from this 3MF takes, kept with a quotation line, a custom request and
+   * their orders (for the stock and the print project). Each colour goes by the shop's name
+   * for it, else its #rrggbb. The caller checks the file is one the person may use.
+   */
+  async printFile(
+    key: string,
+    materialId: string,
+    solidityPercent: number,
+  ): Promise<PrintFile> {
+    const info = await this.measure(key, materialId, solidityPercent);
+    return {
+      fileKey: key,
+      materialId,
+      sliced: info.sliced,
+      grams: info.grams,
+      printHours: info.printHours,
+      colours: info.colours.map((c) => ({
+        colour: c.suggested ?? c.hex,
+        hex: c.hex,
+        grams: c.grams,
+      })),
+    };
+  }
+
+  /** The file's size, grams per colour and time, in a material. */
+  async measure(
+    key: string,
+    materialId: string,
+    solidityPercent: number,
+  ): Promise<ModelFileInfo> {
+    const material = await this.products.material(materialId);
     if (!material) throw new BadRequestException('Choose a material');
-    const file = await this.read(dto.key);
+    const file = await this.read(key);
     const swatches = await this.products.swatches();
 
     const sliced = file.colours.some((c) => c.grams !== null);
@@ -57,7 +92,7 @@ export class ModelFileInfoService {
         estimate = estimatePrint({
           volumeMm3: volume.toFixed(0),
           densityGPerCm3: material.densityGPerCm3.toString(),
-          solidityPercent: dto.solidityPercent,
+          solidityPercent,
           gramsPerHour: material.gramsPerHour.toString(),
         });
       } catch (error) {

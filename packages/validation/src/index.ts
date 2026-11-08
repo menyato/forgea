@@ -95,6 +95,7 @@ export {
   SaveLeadDto,
   SaveLeadStageDto,
   SaveLostReasonDto,
+  QuotationPrintFileDto,
   SaveQuotationDto,
   UpdateAccountingSettingsDto,
 } from './back-office.dto.js';

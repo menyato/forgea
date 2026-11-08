@@ -96,6 +96,9 @@ model OrderItem {
   /// A personalised piece: the design as ordered, with the fonts, colours, grams and hours it
   /// was priced at (a snapshot, so the studio prints exactly what was bought).
   design    Json?
+  /// Made from a 3MF (a quotation line, a custom request): the file and what one unit of this
+  /// line takes, per colour (PrintFile in @forgea/types). A snapshot from when it was ordered.
+  printFile Json?
 
   stockMovements StockMovement[]
   printJobs      PrintJob[]

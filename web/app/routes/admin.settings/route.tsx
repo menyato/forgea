@@ -71,6 +71,7 @@ export async function action({ request, context }: Route.ActionArgs) {
         customUploadMaxMb: text(form, 'customUploadMaxMb'),
         estimateSolidityPercent: text(form, 'estimateSolidityPercent'),
         estimateSpreadPercent: text(form, 'estimateSpreadPercent'),
+        autoQuoteSlicedFiles: checked(form, 'autoQuoteSlicedFiles'),
       },
       (dto) =>
         context.get(apiContext).put('/store-settings/custom-requests', dto),
@@ -232,6 +233,12 @@ function RequestRules({ settings }: { settings: StoreSettings }) {
             hint="How wide the shown price range is"
           />
         </div>
+        <CheckboxField
+          label="Quote sliced 3MF files at once"
+          name="autoQuoteSlicedFiles"
+          defaultChecked={rules.autoQuoteSlicedFiles}
+          hint="A customer who attaches a sliced Bambu Studio file (with the slicer's grams and time) gets its exact price as a quote straight away, and can order. Off: you quote every request yourself."
+        />
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={fetcher.state !== 'idle'}>
             Save the rules

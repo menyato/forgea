@@ -31,6 +31,7 @@ const STAFF_SEES: Record<UploadPurpose, Permission> = {
   PRODUCT_IMAGE: 'catalog.view',
   PRODUCT_MODEL: 'catalog.view',
   FONT: 'catalog.view',
+  QUOTATION_FILE: 'quotations.view',
 };
 
 @Injectable()

@@ -11,6 +11,7 @@ import {
   CUSTOM_REQUEST_STATUS_LABELS,
   isRequestExpired,
   type Page,
+  type PrintFile,
   type RequestEstimate,
   type StaffCustomRequest,
 } from '@forgea/types';
@@ -86,9 +87,9 @@ export class CustomRequestsService {
       throw new BadRequestException('That material is not available');
     }
     const file = dto.fileKey ? await this.ownFile(dto.fileKey, userId) : null;
-    const estimate = file
-      ? await this.estimator.estimate(file, materialId, dto.quantity)
-      : null;
+    const { estimate, printFile } = file
+      ? await this.estimator.assess(file, materialId, dto.quantity)
+      : { estimate: null, printFile: null };
     const created = await this.requests.create({
       userId,
       title: dto.title,
@@ -98,6 +99,7 @@ export class CustomRequestsService {
       colour: dto.colour ?? null,
       fileKey: file?.key ?? null,
       estimate: estimate && { low: estimate.low, high: estimate.high },
+      printFile,
     });
     // It shows in the sales pipeline too, linked to the request.
     await this.leads.fromCustomRequest({
@@ -115,6 +117,19 @@ export class CustomRequestsService {
       ],
       `/admin/requests/${created.id}`,
     );
+    // A sliced 3MF has its exact price: quoted at once, if the owner wants it so, and the
+    // customer can order straight away (the quote email tells them).
+    if (
+      estimate?.exact &&
+      (await this.settings.get()).requests.autoQuoteSlicedFiles
+    ) {
+      await this.quote(
+        created.id,
+        { price: estimate.low, note: AUTO_QUOTE_NOTE },
+        null,
+      );
+      return this.mineOne(userId, created.requestNumber);
+    }
     this.tellCustomer(created, CustomRequestStatus.SUBMITTED, null);
     return toView(created);
   }
@@ -208,6 +223,10 @@ export class CustomRequestsService {
       requestNumber: r.requestNumber,
       title: r.title,
       quotedPrice: r.quotedPrice.toFixed(2),
+      // The order is one line for the whole request: its file's grams for every piece.
+      printFile: r.printFile
+        ? timesPieces(r.printFile as unknown as PrintFile, r.quantity)
+        : null,
     });
   }
 
@@ -238,10 +257,11 @@ export class CustomRequestsService {
   }
 
   /** Sends or replaces the quote; it stays open for the owner's number of days. */
+  /** `actorId` null: the shop quoted it itself (a sliced file's exact price). */
   async quote(
     id: string,
-    dto: QuoteCustomRequestDto,
-    actorId: string,
+    dto: Pick<QuoteCustomRequestDto, 'price' | 'note'>,
+    actorId: string | null,
   ): Promise<StaffCustomRequest> {
     const { requests: rules } = await this.settings.get();
     const quoted = await this.requests.quote(id, actorId, {
@@ -398,7 +418,22 @@ export class CustomRequestsService {
   }
 }
 
-const MODEL_FILE = /\.(stl|glb)$/;
+const MODEL_FILE = /\.(stl|glb|3mf)$/;
+
+/** The history note (and the customer's) of a quote the shop made from a sliced file. */
+const AUTO_QUOTE_NOTE =
+  'Priced from your sliced file: the grams and print time your slicer worked out.';
+
+/** What a whole request takes: one piece's file numbers × its pieces. */
+function timesPieces(p: PrintFile, pieces: number): PrintFile {
+  const times = (v: string) => (Number(v) * pieces).toFixed(2);
+  return {
+    ...p,
+    grams: times(p.grams),
+    printHours: times(p.printHours),
+    colours: p.colours.map((c) => ({ ...c, grams: times(c.grams) })),
+  };
+}
 
 const fileView = (key: string | null): CustomRequestView['file'] =>
   key ? { key, kind: MODEL_FILE.test(key) ? 'model' : 'image' } : null;

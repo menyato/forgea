@@ -37,6 +37,8 @@ export const UPLOAD_POLICIES: Readonly<Record<UploadPurpose, UploadPolicy>> = {
       ['font/otf', 'otf'],
     ]),
   },
+  // A 3MF (or STL/GLB) a quotation line is made from: staff only.
+  [UploadPurpose.QUOTATION_FILE]: { maxBytes: 100 * MB, types: models },
   [UploadPurpose.CUSTOM_REQUEST_FILE]: {
     maxBytes: 100 * MB,
     types: new Map([...models, ...rasterImages]),

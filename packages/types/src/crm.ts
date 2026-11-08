@@ -6,6 +6,7 @@ import type {
   PaymentMethod,
   QuotationStatus,
 } from './generated/prisma/enums.js';
+import type { PrintFile } from './catalog.js';
 import type { Money } from './lists.js';
 
 // CRM (Phase 11) ------------------------------------------------------------
@@ -103,6 +104,19 @@ export interface QuotationLineView {
   isCustom: boolean;
   /** The printed size in cm, e.g. { x: "12.5", y: "8", z: "4.2" }, or null when not given. */
   size: { x: string; y: string; z: string } | null;
+  /** Made from a 3MF (team views only; customers never get it). */
+  printFile: PrintFile | null;
+}
+
+/** POST /quotations/print-file: a 3MF read for a quotation line. */
+export interface QuotationPrintFileView {
+  printFile: PrintFile;
+  /** The file's size, cm. */
+  size: { x: string; y: string; z: string };
+  /** What one piece sells at in the shop's pricing (the team may change it on the line). */
+  unitPrice: Money;
+  /** The materials it can print in, the chosen one first. */
+  materials: { id: string; code: string; name: string }[];
 }
 
 export interface QuotationListItem {

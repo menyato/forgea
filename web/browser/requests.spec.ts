@@ -1,28 +1,13 @@
 import { palettes } from '@forgea/brand';
-import { finishSignUp } from './mail';
 import type { Browser, Page } from '@playwright/test';
 import { cube } from '../../api/prisma/example-models';
 import { signInAsAdmin } from './admin-session';
+import { signUp } from './sign-up';
 import { expect, test, newVisitor } from './fixtures';
 
 /** The dashboard's save confirmation (SaveStatus), not other text that says "Saved". */
 const saved = (page: Page) =>
   page.locator('p[aria-live="polite"]').getByText('Saved', { exact: true });
-
-async function signUp(page: Page, next: string) {
-  await page.goto(`/sign-in?next=${encodeURIComponent(next)}`);
-  await page.getByRole('link', { name: 'Create an account' }).click();
-  await page.getByLabel('Name (optional)').fill('Rana Request');
-  await page
-    .getByLabel('Email')
-    .fill(
-      `request-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`,
-    );
-  await page.getByLabel('Password').fill('correct-horse-battery-9');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await finishSignUp(page);
-  await expect(page).toHaveURL(new RegExp(next));
-}
 
 test('a customer asks for something custom, the studio quotes it, the customer orders it', async ({
   page,

@@ -47,12 +47,19 @@ export class OrderStock {
         select: {
           orderNumber: true,
           items: {
-            where: { productId: { not: null } },
+            // Catalog lines, and lines made from a 3MF (quotations, custom requests).
+            where: {
+              OR: [
+                { productId: { not: null } },
+                { printFile: { not: Prisma.DbNull } },
+              ],
+            },
             select: {
               id: true,
               productId: true,
               options: true,
               design: true,
+              printFile: true,
               quantity: true,
             },
           },
