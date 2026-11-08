@@ -49,6 +49,8 @@ export interface QuotationData {
     sizeXcm: string | null;
     sizeYcm: string | null;
     sizeZcm: string | null;
+    /** Made from a 3MF: the file and what one piece takes (PrintFile). */
+    printFile: Prisma.InputJsonValue | typeof Prisma.DbNull;
   }[];
 }
 

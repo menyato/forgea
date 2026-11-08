@@ -156,6 +156,10 @@ export class UpdateRequestSettingsDto {
   @Min(0)
   @Max(100)
   estimateSpreadPercent!: number;
+
+  /** A customer's sliced 3MF is quoted at once at its exact price. */
+  @IsBoolean()
+  autoQuoteSlicedFiles: boolean = true;
 }
 
 const TEAM_ROLES = [Role.STAFF, Role.DESIGNER, Role.ADMIN] as const;

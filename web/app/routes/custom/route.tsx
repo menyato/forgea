@@ -180,6 +180,7 @@ export default function CustomOrder({
             materialId={materialId}
             quantity={quantity}
             maxMb={store?.requests.customUploadMaxMb ?? null}
+            autoQuote={store?.requests.autoQuoteSlicedFiles ?? false}
           />
           <Form method="post" className="grid gap-5" noValidate>
             <input type="hidden" name="intent" value="send" />

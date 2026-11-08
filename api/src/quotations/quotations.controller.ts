@@ -16,6 +16,7 @@ import type {
   QuotationContact,
   QuotationDetail,
   QuotationListItem,
+  QuotationPrintFileView,
 } from '@forgea/types';
 import {
   AddNoteDto,
@@ -23,6 +24,7 @@ import {
   AcceptQuotationDto,
   DeclineQuotationDto,
   QuotationListQuery,
+  QuotationPrintFileDto,
   SaveQuotationDto,
 } from '@forgea/validation';
 import type { QuotationStatus } from '../generated/prisma/enums.js';
@@ -35,6 +37,7 @@ import {
 } from '../authorization/decorators.js';
 import { ParsePatternPipe } from '../custom-requests/parse-pattern.pipe.js';
 import { THROTTLE } from '../security/throttle-policies.js';
+import { QuotationPrintFiles } from './quotation-print-files.js';
 import { QuotationsService } from './quotations.service.js';
 
 const QuotationNumber = () =>
@@ -52,7 +55,10 @@ const LinkToken = new ParsePatternPipe(
 /** Staff write and confirm quotations; the customer sees and accepts their own online. */
 @Controller('quotations')
 export class QuotationsController {
-  constructor(private readonly quotations: QuotationsService) {}
+  constructor(
+    private readonly quotations: QuotationsService,
+    private readonly printFiles: QuotationPrintFiles,
+  ) {}
 
   @Get('mine/:number')
   mine(
@@ -128,6 +134,16 @@ export class QuotationsController {
   @Get('counts')
   counts(): Promise<Partial<Record<QuotationStatus, number>>> {
     return this.quotations.counts();
+  }
+
+  /** A 3MF for a line: what one piece takes (from the file itself) and its shop price. */
+  @RequirePermission('quotations.manage')
+  @HttpCode(200)
+  @Post('print-file')
+  printFile(
+    @Body() dto: QuotationPrintFileDto,
+  ): Promise<QuotationPrintFileView> {
+    return this.printFiles.read(dto.key, dto.materialId);
   }
 
   /** Name, phone and address from their account, last order, quotation or lead. */

@@ -41,6 +41,7 @@ export class StoreSettingsRepository {
       | 'customUploadMaxMb'
       | 'estimateSolidityPercent'
       | 'estimateSpreadPercent'
+      | 'autoQuoteSlicedFiles'
     >,
     updatedByUserId: string,
   ): Promise<StoreSettings> {

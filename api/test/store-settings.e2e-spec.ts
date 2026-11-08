@@ -19,6 +19,7 @@ const RULES = {
   customUploadMaxMb: 50,
   estimateSolidityPercent: 40,
   estimateSpreadPercent: 20,
+  autoQuoteSlicedFiles: true,
 };
 
 describe('Store settings (e2e)', () => {

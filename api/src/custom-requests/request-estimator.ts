@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { estimatePrint, priceRange } from '@forgea/pricing';
-import type { RequestEstimate } from '@forgea/types';
+import type { PrintFile, RequestEstimate } from '@forgea/types';
+import { ModelFileInfoService } from '../products/model-file-info.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
 import {
@@ -11,10 +12,10 @@ import { UploadsService } from '../uploads/uploads.service.js';
 import { CustomRequestsRepository } from './custom-requests.repository.js';
 
 /**
- * The instant price range for a customer's 3D model. The server measures the stored file
- * itself (never numbers from the browser) and prices it with the shop's own cost settings,
- * material and the owner's estimate rules. Only STL can be measured; other files are
- * quoted by hand.
+ * The instant price for a customer's 3D model. The server measures the stored file itself
+ * (never numbers from the browser) and prices it with the shop's own cost settings, material
+ * and the owner's estimate rules. An STL or a 3MF never sliced gets a range; a sliced 3MF (the
+ * slicer's own grams and time) an exact price. Other files are quoted by hand.
  */
 @Injectable()
 export class RequestEstimator {
@@ -24,6 +25,7 @@ export class RequestEstimator {
     private readonly settings: StoreSettingsService,
     private readonly requests: CustomRequestsRepository,
     private readonly optimizer: ModelOptimizer,
+    private readonly files: ModelFileInfoService,
   ) {}
 
   /**
@@ -56,6 +58,81 @@ export class RequestEstimator {
     materialId: string | null,
     quantity: number,
   ): Promise<RequestEstimate | null> {
+    return (await this.assess(file, materialId, quantity)).estimate;
+  }
+
+  /** The estimate, and for a 3MF what one piece takes (kept with the request, for stock). */
+  async assess(
+    file: { key: string; mimeType: string },
+    materialId: string | null,
+    quantity: number,
+  ): Promise<{
+    estimate: RequestEstimate | null;
+    printFile: PrintFile | null;
+  }> {
+    if (file.mimeType === 'model/3mf') {
+      return this.threeMf(file.key, materialId, quantity);
+    }
+    return {
+      estimate: await this.stl(file, materialId, quantity),
+      printFile: null,
+    };
+  }
+
+  private async threeMf(
+    key: string,
+    materialId: string | null,
+    quantity: number,
+  ): Promise<{
+    estimate: RequestEstimate | null;
+    printFile: PrintFile | null;
+  }> {
+    const material = await this.requests.materialFor(materialId);
+    if (!material) {
+      throw new BadRequestException('That material is not available');
+    }
+    const { requests: rules } = await this.settings.get();
+    let printFile: PrintFile;
+    try {
+      printFile = await this.files.printFile(
+        key,
+        material.id,
+        rules.estimateSolidityPercent,
+      );
+    } catch (error) {
+      // A 3MF we can't read is still a valid request: the studio prices it by hand.
+      if (error instanceof BadRequestException) {
+        return { estimate: null, printFile: null };
+      }
+      throw error;
+    }
+    const { unitPrice } = await this.pricing.unitPrice({
+      grams: printFile.grams,
+      printHours: printFile.printHours,
+      pricePerGram: material.pricePerGram.toString(),
+    });
+    const cents = Math.round(Number(unitPrice) * 100) * quantity;
+    const total = (cents / 100).toFixed(2);
+    return {
+      estimate: {
+        // The slicer's own numbers: the price itself, no range.
+        ...(printFile.sliced
+          ? { low: total, high: total }
+          : priceRange(total, rules.estimateSpreadPercent)),
+        exact: printFile.sliced,
+        grams: printFile.grams,
+        printHours: printFile.printHours,
+        material: { code: material.code, name: material.name },
+      },
+      printFile,
+    };
+  }
+
+  private async stl(
+    file: { key: string; mimeType: string },
+    materialId: string | null,
+    quantity: number,
+  ): Promise<RequestEstimate | null> {
     if (file.mimeType !== 'model/stl') return null;
     const material = await this.requests.materialFor(materialId);
     if (!material) {
@@ -80,6 +157,7 @@ export class RequestEstimator {
     const cents = Math.round(Number(unitPrice) * 100) * quantity;
     return {
       ...priceRange((cents / 100).toFixed(2), rules.estimateSpreadPercent),
+      exact: false,
       grams: print.grams,
       printHours: print.printHours,
       material: { code: material.code, name: material.name },

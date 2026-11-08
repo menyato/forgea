@@ -19,6 +19,9 @@ model StoreSettings {
   estimateSolidityPercent Int      @default(40)
   /// …and how wide the shown range is around the computed price (±%).
   estimateSpreadPercent   Int      @default(20)
+  /// A customer's sliced 3MF (the slicer's own grams and time) is quoted at once at its exact
+  /// price, so they can order straight away; off: the studio quotes every request.
+  autoQuoteSlicedFiles    Boolean  @default(true)
   // The quotation email in the owner's words; empty means the standard wording
   // (QUOTATION_EMAIL_DEFAULTS in @forgea/types). {name}, {number}, {total} and {validUntil} are
   // filled in; the lines, sizes and totals always follow the introduction.

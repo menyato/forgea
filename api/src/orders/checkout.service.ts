@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { type OrderLineInput, orderLinesFromCart } from '@forgea/pricing';
-import type { CheckoutResult } from '@forgea/types';
+import type { CheckoutResult, PrintFile } from '@forgea/types';
 import type { CheckoutDto } from '@forgea/validation';
 import { CartService } from '../cart/cart.service.js';
 import type { EnvironmentVariables } from '../config/environment.js';
@@ -30,6 +30,8 @@ export interface AcceptedQuote {
   title: string;
   /** USD, for the whole request. */
   quotedPrice: string;
+  /** Its 3MF: what the whole request takes (one order line), for the stock and printing. */
+  printFile: PrintFile | null;
 }
 
 /** A quotation being confirmed; unit prices already include the line discounts. */
@@ -52,6 +54,8 @@ export interface QuotationToOrder {
     quantity: number;
     unitPrice: string;
     isCustom: boolean;
+    /** Made from a 3MF: what one piece takes, for the stock and the print project. */
+    printFile: PrintFile | null;
   }[];
 }
 
@@ -150,6 +154,7 @@ export class CheckoutService {
             id: request.id,
             productId: null,
             options: [{ group: 'Request', value: request.requestNumber }],
+            printFile: request.printFile,
           },
         ],
         rush: false,
@@ -203,6 +208,7 @@ export class CheckoutService {
           id: l.id,
           productId: l.productId,
           options: [{ group: 'Quotation', value: q.number }],
+          printFile: l.printFile,
         })),
         rush: false,
         bulkDiscounts: false,

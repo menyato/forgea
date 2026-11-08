@@ -10,6 +10,8 @@ export interface RequestSettings {
   /** For the instant estimate: how solid the print is assumed to be, and the range's width. */
   estimateSolidityPercent: number;
   estimateSpreadPercent: number;
+  /** A customer's sliced 3MF is quoted at once at its exact price. */
+  autoQuoteSlicedFiles: boolean;
 }
 
 /** Shop-wide settings (GET /store-settings), editable by the admin. */

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ChosenOption } from '@forgea/types';
+import type { ChosenOption, PrintFile } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import { OptionKind } from '../generated/prisma/enums.js';
 import type { UnitCostCalculator } from '@forgea/pricing';
@@ -18,6 +18,8 @@ export interface LineConfig {
   options: unknown;
   /** A personalised piece: its design as ordered, with the grams and hours it takes. */
   design?: unknown;
+  /** Made from a 3MF (a quotation line, a custom request): what one unit takes (PrintFile). */
+  printFile?: unknown;
 }
 
 export type Estimate = (line: LineConfig) => ItemEstimate | null;
@@ -123,14 +125,16 @@ export class ProductionEstimator {
     return {
       catalog,
       estimate: (line) =>
-        line.design
-          ? designEstimate(catalog, calculator, line.productId, line.design)
-          : estimateItem(
-              catalog,
-              calculator,
-              line.productId,
-              chosenOptions(line.options),
-            ),
+        line.printFile
+          ? printFileEstimate(catalog, calculator, line.printFile)
+          : line.design
+            ? designEstimate(catalog, calculator, line.productId, line.design)
+            : estimateItem(
+                catalog,
+                calculator,
+                line.productId,
+                chosenOptions(line.options),
+              ),
     };
   }
 }
@@ -168,6 +172,38 @@ function designEstimate(
     gramsPerUnit: m.grams,
     hoursPerUnit: m.printHours,
     materialId: product.materialId,
+    colour: colours[0]?.colour ?? '',
+    colours,
+  };
+}
+
+/**
+ * A piece made from a 3MF: its own grams and hours (read from the file when it was quoted),
+ * costed with today's settings and its material, its grams by colour.
+ */
+function printFileEstimate(
+  catalog: Catalog,
+  calculator: UnitCostCalculator,
+  printFile: unknown,
+): ItemEstimate | null {
+  const p = printFile as Partial<PrintFile>;
+  const pricePerGram = p.materialId
+    ? catalog.pricePerGram.get(p.materialId)
+    : undefined;
+  if (!p.materialId || !pricePerGram || !p.grams || !p.printHours) return null;
+  const colours = (p.colours ?? []).map((c) => ({
+    colour: c.colour,
+    gramsPerUnit: c.grams,
+  }));
+  return {
+    unitCost: calculator.price({
+      grams: p.grams,
+      printHours: p.printHours,
+      pricePerGram,
+    }).subtotal,
+    gramsPerUnit: p.grams,
+    hoursPerUnit: p.printHours,
+    materialId: p.materialId,
     colour: colours[0]?.colour ?? '',
     colours,
   };

@@ -19,6 +19,12 @@ import { TextStudioModule } from '../text-studio/text-studio.module.js';
     ModelFileInfoService,
   ],
   // The cart configures and prices products the same way the product page does.
-  exports: [ProductsRepository, ProductConfigurator, ProductsService],
+  exports: [
+    ProductsRepository,
+    ProductConfigurator,
+    ProductsService,
+    // Quotations and custom requests read 3MF files the same way.
+    ModelFileInfoService,
+  ],
 })
 export class ProductsModule {}

@@ -4,6 +4,7 @@ import { LeadsModule } from '../leads/leads.module.js';
 import { MailModule } from '../mail/mail.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { PricingModule } from '../pricing/pricing.module.js';
+import { ProductsModule } from '../products/products.module.js';
 import { StoreSettingsModule } from '../store-settings/store-settings.module.js';
 import { UploadsModule } from '../uploads/uploads.module.js';
 import { CustomerFilesService } from './customer-files.service.js';
@@ -23,6 +24,7 @@ import { RequestEstimator } from './request-estimator.js';
     UploadsModule,
     MailModule,
     LeadsModule,
+    ProductsModule,
   ],
   controllers: [CustomRequestsController],
   providers: [

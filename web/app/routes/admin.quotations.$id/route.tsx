@@ -3,6 +3,9 @@ import {
   type CheckoutResult,
   type Page,
   PAYMENT_METHOD_LABELS,
+  type PrintFile,
+  type QuotationPrintFileView,
+  type UploadedFile,
   PaymentMethod,
   type QuotationDetail,
   QuotationStatus,
@@ -30,10 +33,12 @@ import { jsonField } from '~/lib/forms.server';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
 import { DeliveryAreaField } from '~/features/orders/delivery-area-field';
+import type { ApiClient } from '~/lib/api-client.server';
 import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import type { QuotationLookup } from '../admin.quotations.lookup/route';
+import { LinePrintFile, type PrintFileResult } from './line-print-file';
 
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -69,12 +74,14 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
 
 type ActionResult = SaveResult & { order?: CheckoutResult };
 
-/** save | send | confirm | cancel */
+/** save | send | confirm | cancel | print-file */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
   const intent = form.get('intent');
   const base = `/quotations/${encodeURIComponent(params.id)}`;
+  // A line's 3D file: uploaded (or read again in another material) and read by the API.
+  if (intent === 'print-file') return printFile(api, form);
   if (intent === 'send' || intent === 'confirm' || intent === 'cancel') {
     const r =
       intent === 'cancel'
@@ -118,6 +125,32 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   return result;
 }
 
+async function printFile(api: ApiClient, form: FormData) {
+  let key = text(form, 'key');
+  const file = form.get('file');
+  if (file instanceof File && file.size > 0) {
+    const upload = new FormData();
+    upload.set('file', file, file.name);
+    const r = await api.postForm<UploadedFile>(
+      '/uploads/quotation-file',
+      upload,
+    );
+    if (!r.ok)
+      return data<PrintFileResult>({ error: r.message }, { status: r.status });
+    key = r.data.key;
+  }
+  if (!key)
+    return data<PrintFileResult>({ error: 'Choose a file' }, { status: 400 });
+  const materialId = text(form, 'materialId');
+  const r = await api.post<QuotationPrintFileView>('/quotations/print-file', {
+    key,
+    ...(materialId ? { materialId } : {}),
+  });
+  return r.ok
+    ? data<PrintFileResult>({ file: r.data })
+    : data<PrintFileResult>({ error: r.message }, { status: r.status });
+}
+
 interface Line {
   productId: string;
   /** The product's own size chosen, when it has sizes. */
@@ -131,6 +164,8 @@ interface Line {
   sizeX: string;
   sizeY: string;
   sizeZ: string;
+  /** Made from a 3D file the API read: what one piece takes. */
+  printFile: PrintFile | null;
 }
 
 const lineTotal = (l: Line) =>
@@ -187,6 +222,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
       sizeX: l.size?.x ?? '',
       sizeY: l.size?.y ?? '',
       sizeZ: l.size?.z ?? '',
+      printFile: l.printFile,
     })) ?? [
       {
         productId: '',
@@ -199,6 +235,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
         sizeX: '',
         sizeY: '',
         sizeZ: '',
+        printFile: null,
       },
     ],
   );
@@ -270,6 +307,12 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
               isCustom: l.isCustom,
               ...(l.sizeX || l.sizeY || l.sizeZ
                 ? { sizeXcm: l.sizeX, sizeYcm: l.sizeY, sizeZcm: l.sizeZ }
+                : {}),
+              ...(l.printFile
+                ? {
+                    printFileKey: l.printFile.fileKey,
+                    printMaterialId: l.printFile.materialId,
+                  }
                 : {}),
             })),
           )}
@@ -377,6 +420,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                             sizeX: '',
                             sizeY: '',
                             sizeZ: '',
+                            printFile: null,
                           }
                         : { productId: '', sizeId: '' },
                     );
@@ -453,6 +497,26 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                   slug={products.find((p) => p.id === l.productId)?.slug}
                   onChange={(change) => set(i, change)}
                 />
+                {!l.productId && (
+                  <LinePrintFile
+                    index={i}
+                    printFile={l.printFile}
+                    onRead={(f) =>
+                      set(i, {
+                        printFile: f.printFile,
+                        unitPrice: f.unitPrice,
+                        sizeX: f.size.x,
+                        sizeY: f.size.y,
+                        sizeZ: f.size.z,
+                        isCustom: true,
+                        ...(l.description
+                          ? {}
+                          : { description: 'Custom print' }),
+                      })
+                    }
+                    onRemove={() => set(i, { printFile: null })}
+                  />
+                )}
               </div>
             ))}
             {Object.entries(errors)
@@ -480,6 +544,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
                       sizeX: '',
                       sizeY: '',
                       sizeZ: '',
+                      printFile: null,
                     },
                   ])
                 }

@@ -24,7 +24,12 @@ export class PrintFilesController {
   ): Promise<StreamableFile> {
     const file = await this.files.project(id, itemId);
     return new StreamableFile(file.bytes, {
-      type: 'model/3mf',
+      // A line made from an STL or GLB the team uploaded sends that file as it is.
+      type: file.name.endsWith('.stl')
+        ? 'model/stl'
+        : file.name.endsWith('.glb')
+          ? 'model/gltf-binary'
+          : 'model/3mf',
       disposition: `attachment; filename="${file.name}"`,
       length: file.bytes.byteLength,
     });

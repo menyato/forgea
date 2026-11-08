@@ -69,8 +69,9 @@ export class PrintFiles {
   }
 
   /**
-   * A catalog line whose product has a 3MF: that file as the studio uploaded it (its colours,
-   * plates and slicer settings), named after the order. Null for any other line.
+   * A line made from a 3MF (a quotation line, a custom request), or a catalog line whose
+   * product has one: that file as it was uploaded (its colours, plates and slicer settings),
+   * named after the order. Null for any other line.
    */
   private async productProject(
     orderId: string,
@@ -79,14 +80,21 @@ export class PrintFiles {
     const item = await this.prisma.orderItem.findFirst({
       where: { id: itemId, orderId, design: { equals: Prisma.DbNull } },
       select: {
+        printFile: true,
         order: { select: { orderNumber: true } },
         product: { select: { slug: true, modelFileKey: true } },
       },
     });
-    const key = item?.product?.modelFileKey;
-    if (!item || !key?.endsWith('.3mf')) return null;
+    if (!item) return null;
+    const own = (item.printFile as { fileKey?: unknown } | null)?.fileKey;
+    const key =
+      typeof own === 'string' ? own : (item.product?.modelFileKey ?? null);
+    if (!key || !/\.(3mf|stl|glb)$/.test(key)) return null;
+    if (typeof own !== 'string' && !key.endsWith('.3mf')) return null;
+    const extension = key.slice(key.lastIndexOf('.'));
+    const name = item.product?.slug ?? 'print';
     return {
-      name: `${item.order.orderNumber}-${item.product!.slug}.3mf`,
+      name: `${item.order.orderNumber}-${name}${extension}`,
       bytes: await this.uploads.read(key),
     };
   }
