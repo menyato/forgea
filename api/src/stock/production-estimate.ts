@@ -14,8 +14,11 @@ interface CatalogProduct {
   grams: string;
   printHours: string;
   materialId: string;
-  /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
-  colours: { colour: string; grams: string }[];
+  /**
+   * Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. A named
+   * part prints in the colour the order chose for it ("Body: Copper"), else in `colour`.
+   */
+  colours: { colour: string; grams: string; part: string | null }[];
   /** Measurements as the order stores them ("18 × 12 × 9 cm"), in the product's order. */
   sizes: {
     label: string;
@@ -91,7 +94,12 @@ export function estimateItem(
   const effects: OptionEffect[] = [];
   let materialId = product.materialId;
   let colour = '';
+  // Parts recoloured by the customer: their choice is the part's filament, not an option.
+  const parts = new Set(
+    product.colours.flatMap((c) => (c.part ? [c.part] : [])),
+  );
   for (const o of options) {
+    if (parts.has(o.group)) continue;
     const v = catalog.values.get(valueKey(o.group, o.value));
     if (!v) continue;
     if (v.materialId) materialId = v.materialId;
@@ -120,7 +128,15 @@ export function estimateItem(
     );
     // A multi-colour product: its grams (at the chosen size and options) shared out as its
     // colours share its own grams.
-    const colours = splitByColour(product.colours, grams);
+    const colours = splitByColour(
+      product.colours.map((c) => ({
+        colour:
+          (c.part && options.find((o) => o.group === c.part)?.value) ||
+          c.colour,
+        grams: c.grams,
+      })),
+      grams,
+    );
     return {
       unitCost: cost,
       gramsPerUnit: grams,
@@ -142,8 +158,12 @@ function splitByColour(
 ): { colour: string; gramsPerUnit: string }[] | null {
   const total = colours.reduce((n, c) => n + Number(c.grams), 0);
   if (colours.length === 0 || total <= 0) return null;
-  return colours.map((c) => ({
-    colour: c.colour,
-    gramsPerUnit: ((Number(grams) * Number(c.grams)) / total).toFixed(2),
+  // Two parts chosen in the same colour come from one reel.
+  const byColour = new Map<string, number>();
+  for (const c of colours)
+    byColour.set(c.colour, (byColour.get(c.colour) ?? 0) + Number(c.grams));
+  return [...byColour].map(([colour, g]) => ({
+    colour,
+    gramsPerUnit: ((Number(grams) * g) / total).toFixed(2),
   }));
 }

@@ -174,6 +174,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       sizeZcm: text(form, 'sizeZcm'),
       sizes: jsonField(form, 'sizes') ?? [],
       colours: jsonField(form, 'colours') ?? [],
+      partColourGroupId: text(form, 'partColourGroupId'),
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
@@ -232,6 +233,9 @@ async function duplicate(api: ApiClient, id: string) {
         isDefault: s.isDefault,
       })),
       colours: p.colours,
+      ...(p.partColourGroupId
+        ? { partColourGroupId: p.partColourGroupId }
+        : {}),
     });
     if (created.ok) throw redirect(`/admin/products/${created.data.id}`);
     // The address is taken: try the next one.

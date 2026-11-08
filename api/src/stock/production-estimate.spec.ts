@@ -138,6 +138,53 @@ describe('estimateItem', () => {
     expect(estimateItem(broken, calculator, 'zero', [])).toBeNull();
   });
 
+  it('takes a recoloured part from the colour the order chose, merging parts of one colour', () => {
+    const panda: Catalog = {
+      ...catalog,
+      products: new Map([
+        [
+          'panda',
+          {
+            ...catalog.products.get('stand')!,
+            colours: [
+              { colour: 'White', grams: '30', part: 'Body' },
+              { colour: 'Black', grams: '15', part: 'Ears' },
+              { colour: 'Grey', grams: '5', part: null },
+            ],
+          },
+        ],
+      ]),
+      // A shop option named like a part changes nothing: the part's choice isn't an option.
+      values: new Map([
+        ...catalog.values,
+        [
+          valueKey('Body', 'Black'),
+          {
+            gramsMultiplier: '3',
+            hoursMultiplier: '1',
+            materialId: null,
+            swatchHex: '#000000',
+          },
+        ],
+      ]),
+    };
+    const e = estimateItem(panda, calculator, 'panda', [
+      { group: 'Body', value: 'Black' },
+      { group: 'Ears', value: 'Black' },
+    ]);
+    expect(e?.gramsPerUnit).toBe('50');
+    expect(e?.colours).toEqual([
+      { colour: 'Black', gramsPerUnit: '45.00' },
+      { colour: 'Grey', gramsPerUnit: '5.00' },
+    ]);
+    // Nothing chosen (an older order): each part in the colour it starts in.
+    expect(estimateItem(panda, calculator, 'panda', [])?.colours).toEqual([
+      { colour: 'White', gramsPerUnit: '30.00' },
+      { colour: 'Black', gramsPerUnit: '15.00' },
+      { colour: 'Grey', gramsPerUnit: '5.00' },
+    ]);
+  });
+
   it('labels sizes the way orders store them', () => {
     expect(sizeLabel({ sizeXcm: '18', sizeYcm: '12.5', sizeZcm: '9' })).toBe(
       '18 × 12.5 × 9 cm',

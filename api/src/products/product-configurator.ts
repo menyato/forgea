@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   configuredUnitPrice,
@@ -46,6 +47,15 @@ export const withConfiguration = {
   },
   sizes: { orderBy: { sortOrder: 'asc' } },
   colours: { orderBy: { sortOrder: 'asc' } },
+  // Multi-colour products: the colours customers recolour named parts in.
+  partColourGroup: {
+    include: {
+      values: {
+        where: { active: true, swatchHex: { not: null } },
+        orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      },
+    },
+  },
 } as const satisfies Prisma.ProductInclude;
 
 export type ConfigurableProduct = Prisma.ProductGetPayload<{
@@ -74,7 +84,45 @@ export interface Configuration {
 export class ProductConfigurator {
   /** What the shop shows: the choices only, never the price rules behind them. */
   offered(product: ConfigurableProduct): ProductOption[] {
-    return [...this.sizeOption(product), ...this.groupOptions(product)];
+    return [
+      ...this.sizeOption(product),
+      ...this.groupOptions(product),
+      ...this.partOptions(product),
+    ];
+  }
+
+  /**
+   * A multi-colour product's named parts: each a colour choice from the product's part colours,
+   * starting in the colour the owner set for it. Kept apart from option groups (a part is not
+   * one), with an id made from the product and the part's file colour, so saving the product
+   * (which rewrites its colour rows) keeps carts' choices.
+   */
+  private partOptions(product: ConfigurableProduct): ProductOption[] {
+    const group = product.partColourGroup;
+    if (!group?.active || group.values.length === 0) return [];
+    return product.colours.flatMap((c): ProductOption[] => {
+      if (!c.part) return [];
+      const start =
+        group.values.find(
+          (v) => v.label.toLowerCase() === c.colour.toLowerCase(),
+        ) ?? group.values[0]!;
+      return [
+        {
+          groupId: partGroupId(product.id, c.hex),
+          name: c.part,
+          kind: OptionKind.CHOICE,
+          required: true,
+          maxLength: null,
+          choices: group.values.map((v) => ({
+            id: v.id,
+            label: v.label,
+            swatchHex: v.swatchHex,
+          })),
+          defaultValueId: start.id,
+          recolours: c.hex.toLowerCase(),
+        },
+      ];
+    });
   }
 
   /**
@@ -126,7 +174,8 @@ export class ProductConfigurator {
 
   /** The swatch a model is first shown in: the default colour, else the first one with a swatch. */
   previewColor(product: ConfigurableProduct): string | null {
-    for (const option of this.offered(product)) {
+    // A recoloured part's swatch isn't the model's colour: the model has its own.
+    for (const option of this.offered(product).filter((o) => !o.recolours)) {
       const swatched = option.choices.filter((c) => c.swatchHex !== null);
       if (swatched.length === 0) continue;
       const chosen =
@@ -160,6 +209,8 @@ export class ProductConfigurator {
       const selection = given.get(option.groupId);
       if (option.kind === 'SIZE') {
         this.applySize(product, option, selection, result);
+      } else if (option.recolours) {
+        this.applyPart(product, option, selection, result);
       } else if (option.kind === OptionKind.TEXT) {
         this.applyText(product, option, selection, result);
       } else {
@@ -276,6 +327,35 @@ export class ProductConfigurator {
     });
   }
 
+  /**
+   * A part's colour: the order records "Body: Copper" (stock takes the part's grams from that
+   * colour) and the price adds the colour's own add-on; the grams stay the part's.
+   */
+  private applyPart(
+    product: ConfigurableProduct,
+    option: ProductOption,
+    selection: OptionSelection | undefined,
+    result: Configuration,
+  ): void {
+    if (selection?.text !== undefined) {
+      throw new BadRequestException(`Choose the ${option.name}'s colour`);
+    }
+    const valueId = selection?.valueId ?? option.defaultValueId;
+    const v = product.partColourGroup?.values.find((pv) => pv.id === valueId);
+    if (!v)
+      throw new BadRequestException(
+        `This colour is not available for the ${option.name}`,
+      );
+    result.selections.push({ groupId: option.groupId, valueId: v.id });
+    result.chosen.push({ group: option.name, value: v.label });
+    result.effects.push({
+      label: `${option.name}: ${v.label}`,
+      gramsMultiplier: 1,
+      hoursMultiplier: 1,
+      extraPrice: v.extraPrice.toString(),
+    });
+  }
+
   /** A size: its grams and hours replace the product's; the order keeps its measurements. */
   private applySize(
     product: ConfigurableProduct,
@@ -310,6 +390,15 @@ export class ProductConfigurator {
       (pv) => pv.value.groupId === groupId && pv.value.active,
     );
   }
+}
+
+/** A part's option id: stable for the product and the part's file colour (UUID-shaped). */
+export function partGroupId(productId: string, hex: string): string {
+  const h = createHash('sha256')
+    .update(`part:${productId}:${hex.toLowerCase()}`)
+    .digest('hex');
+  // Version 8 (custom) and the RFC variant, so it reads as any other id.
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
 const sizeOf = (s: {

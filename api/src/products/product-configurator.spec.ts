@@ -5,6 +5,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { OptionKind } from '../generated/prisma/enums.js';
 import {
   type ConfigurableProduct,
+  partGroupId,
   ProductConfigurator,
 } from './product-configurator.js';
 
@@ -77,6 +78,8 @@ function product(): ConfigurableProduct {
     sizeZcm: null,
     sizes: [],
     colours: [],
+    partColourGroupId: null,
+    partColourGroup: null,
     profitKind: null,
     profitValue: null,
     priceOverride: null,
@@ -343,6 +346,103 @@ describe('ProductConfigurator', () => {
           { groupId: PRODUCT_SIZE_GROUP_ID, valueId: 'x' },
         ]),
       ).toThrow(BadRequestException);
+    });
+  });
+
+  describe('parts customers recolour (a 3MF product)', () => {
+    const calculator = new UnitCostCalculator({
+      machineRatePerHour: 0,
+      purgeWastePercent: 0,
+      failureAllowancePercent: 0,
+      laborCostPerUnit: 0,
+      packagingCostPerUnit: 0,
+      profit: { kind: 'PERCENT', value: 0 },
+    });
+    const swatch = (id: string, label: string, hex: string, extra = {}) => ({
+      ...value(id, 'parts', label, { swatchHex: hex, ...extra }).value,
+    });
+    const colour = (
+      c: string,
+      hex: string,
+      grams: number,
+      part: string | null,
+    ) => ({
+      id: `${c}-row`,
+      productId: 'p',
+      colour: c,
+      hex,
+      grams: D(grams),
+      part,
+      sortOrder: 0,
+    });
+    const parted = (): ConfigurableProduct => ({
+      ...product(),
+      optionGroups: [],
+      optionValues: [],
+      colours: [
+        colour('White', '#ffffff', 6, 'Body'),
+        colour('Black', '#000000', 3, 'Ears'),
+        colour('Grey', '#808080', 1, null),
+      ],
+      partColourGroupId: 'parts',
+      partColourGroup: {
+        ...group('parts', 'Filament colours', OptionKind.CHOICE),
+        values: [
+          swatch('white', 'White', '#f5f5f5'),
+          swatch('black', 'Black', '#1c1c1c'),
+          swatch('copper', 'Copper silk', '#b87333', { extraPrice: D(2) }),
+        ],
+      },
+    });
+    const body = partGroupId('p', '#FFFFFF');
+
+    it('offers each named part, starting in its own colour, keyed by its file colour', () => {
+      const offered = configurator.offered(parted());
+      expect(
+        offered.map((o) => [o.name, o.defaultValueId, o.recolours]),
+      ).toEqual([
+        ['Body', 'white', '#ffffff'],
+        ['Ears', 'black', '#000000'],
+      ]);
+      expect(offered[0]!.groupId).toBe(body);
+      expect(body).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+      // A part's swatches never paint the model: it shows in its file's colours.
+      expect(configurator.previewColor(parted())).toBeNull();
+    });
+
+    it("prices each part's colour with that colour's own add-on and records it by part", () => {
+      const c = configurator.configure(parted(), [
+        { groupId: body, valueId: 'copper' },
+      ]);
+      expect(c.chosen).toEqual([
+        { group: 'Body', value: 'Copper silk' },
+        { group: 'Ears', value: 'Black' },
+      ]);
+      // 10 g × $0.10 = $1.00, + $2 copper silk
+      expect(configurator.unitPrice(calculator, parted(), c)).toBe('3.00');
+      expect(
+        configurator.unitPrice(
+          calculator,
+          parted(),
+          configurator.starting(parted()),
+        ),
+      ).toBe('1.00');
+    });
+
+    it('refuses a colour outside the part colours', () => {
+      expect(() =>
+        configurator.configure(parted(), [{ groupId: body, valueId: 'red' }]),
+      ).toThrow(
+        new BadRequestException('This colour is not available for the Body'),
+      );
+    });
+
+    it('offers no parts once the colour group is switched off', () => {
+      const p = parted();
+      p.partColourGroup!.active = false;
+      expect(configurator.offered(p)).toEqual([]);
     });
   });
 });

@@ -139,6 +139,7 @@ export function ModelField({
                     colour: c.suggested ?? '',
                     hex: c.hex,
                     grams: c.grams,
+                    part: null,
                   }))
                 : [],
             );

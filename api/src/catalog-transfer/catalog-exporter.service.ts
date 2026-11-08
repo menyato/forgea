@@ -47,6 +47,7 @@ export class CatalogExporter {
       products.flatMap((p) => [
         ...p.optionGroups.map((g) => g.group.name),
         ...(p.textColourGroup ? [p.textColourGroup.name] : []),
+        ...(p.partColourGroup ? [p.partColourGroup.name] : []),
       ]),
     );
     const groups = textOnly
@@ -159,7 +160,9 @@ export class CatalogExporter {
             colour: c.colour,
             hex: c.hex,
             grams: c.grams.toString(),
+            ...(c.part ? { part: c.part } : {}),
           })),
+          partColourGroup: p.partColourGroup?.name ?? null,
           text:
             p.textStyle && p.textColourGroup
               ? {

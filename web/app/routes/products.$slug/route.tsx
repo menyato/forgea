@@ -85,6 +85,18 @@ const initialChoices = (product: ProductDetail): Choices =>
     ),
   );
 
+/** A 3MF product's parts in the colours chosen: file colour → swatch; none without parts. */
+const partColours = (product: ProductDetail, choices: Choices) => {
+  const parts = product.options.filter((o) => o.recolours);
+  if (parts.length === 0) return undefined;
+  return Object.fromEntries(
+    parts.flatMap((o) => {
+      const hex = o.choices.find((c) => c.id === choices[o.groupId])?.swatchHex;
+      return o.recolours && hex ? [[o.recolours, hex]] : [];
+    }),
+  );
+};
+
 const toSelections = (product: ProductDetail, choices: Choices) =>
   product.options.flatMap((o): OptionSelection[] => {
     const v = choices[o.groupId]?.trim();
@@ -150,11 +162,17 @@ function CatalogProduct({
   const lbpPrice = lbp
     ? new CurrencyConverter(lbp, lbp.rate).convert(unitPrice)
     : null;
+  // A one-colour model shows in the chosen colour; a 3MF's parts each in their own choice.
   const color = product.options
+    .filter((o) => !o.recolours)
     .flatMap((o) => o.choices)
     .find(
       (c) => c.swatchHex && Object.values(choices).includes(c.id),
     )?.swatchHex;
+  const recolour = useMemo(
+    () => partColours(product, choices),
+    [product, choices],
+  );
   // "Added" only while the choices are the ones that went in: another size or colour is a new line.
   const [addedFor, setAddedFor] = useState<string | null>(null);
   const added =
@@ -174,6 +192,7 @@ function CatalogProduct({
             modelKey={product.modelKey}
             label={product.name}
             color={color ?? undefined}
+            recolour={recolour}
             className="sm:rounded-lg lg:aspect-auto lg:h-[min(78dvh,52rem)]"
           />
         ) : (

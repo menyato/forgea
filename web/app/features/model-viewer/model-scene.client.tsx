@@ -18,6 +18,8 @@ import {
   gltfLoader,
   markPaintable,
   paint,
+  recolourable,
+  recolourParts,
   studioEnvironment,
   uprightStl,
 } from './model-assets.client';
@@ -31,6 +33,11 @@ export interface SceneProps {
   paintable: boolean;
   /** Colour for STL models (they carry none); GLB models keep their own materials. */
   color: string;
+  /**
+   * A multi-colour (3MF) copy: its parts' file colours (#rrggbb, the materials' names) shown in
+   * the colours the customer chose instead.
+   */
+  recolour?: Readonly<Record<string, string>> | undefined;
   /** Slow turntable; off when the visitor prefers reduced motion. */
   spin: boolean;
   onMeasured?: ((m: ModelMeasurement) => void) | undefined;
@@ -79,15 +86,31 @@ function Stl({ src, color, spin, onMeasured }: SceneProps) {
   );
 }
 
-function Glb({ src, paintable, color, spin, onMeasured }: SceneProps) {
+function Glb({
+  src,
+  paintable,
+  color,
+  recolour,
+  spin,
+  onMeasured,
+}: SceneProps) {
   const gltf = useLoader(GLTFLoader, src, (loader) => gltfLoader(loader));
   // A copy made from an STL takes the chosen colour, like the STL itself.
+  const parts = !paintable && recolour !== undefined;
   const model = useMemo(() => {
+    if (parts) return recolourable(gltf.scene);
     if (!paintable) return gltf.scene;
     const painted = markPaintable(gltf.scene.clone());
     paint(painted, color);
     return painted;
-  }, [gltf, paintable, color]);
+  }, [gltf, paintable, color, parts]);
+  // A 3MF's parts in the customer's colours: the same meshes, their own materials recoloured.
+  const { invalidate } = useThree();
+  useEffect(() => {
+    if (!parts || !recolour) return;
+    recolourParts(model, recolour);
+    invalidate();
+  }, [model, parts, recolour, invalidate]);
   useEffect(() => {
     // glTF is in metres; printing (and the estimate) works in millimetres.
     onMeasured?.(measure(model, 1000));

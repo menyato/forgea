@@ -37,6 +37,7 @@ export function ModelViewer({
   modelKey,
   label,
   color = '#b87333',
+  recolour,
   onMeasured,
   className = '',
 }: {
@@ -44,6 +45,8 @@ export function ModelViewer({
   /** What the model shows, for screen readers. */
   label: string;
   color?: string | undefined;
+  /** A multi-colour (3MF) model's parts in other colours: file colour → chosen colour. */
+  recolour?: Readonly<Record<string, string>> | undefined;
   onMeasured?: ((m: ModelMeasurement) => void) | undefined;
   className?: string;
 }) {
@@ -68,6 +71,7 @@ export function ModelViewer({
               // needs the uploaded file itself.
               {...modelSource(modelKey, onMeasured ? undefined : 'view')}
               color={color}
+              recolour={recolour}
               spin={!prefersReducedMotion()}
               onMeasured={onMeasured}
             />

@@ -123,8 +123,18 @@ export interface CatalogProduct {
   profit?: { kind: ProfitKind; value: string } | null;
   /** The owner's own price in place of the calculated one (optional; none = calculated). */
   priceOverride?: string | null;
-  /** Multi-colour: grams per colour at its own size (optional; none = one colour). */
-  colours?: { colour: string; hex: string; grams: string }[];
+  /**
+   * Multi-colour: grams per colour at its own size (optional; none = one colour). A `part`
+   * customers recolour from `partColourGroup`, starting in its `colour`.
+   */
+  colours?: {
+    colour: string;
+    hex: string;
+    grams: string;
+    part?: string | null;
+  }[];
+  /** The option group customers recolour named parts from (by name). */
+  partColourGroup?: string | null;
   /** The printed size grams and printHours are for (optional in older files). */
   size?: { x: string; y: string; z: string } | null;
   /** The real sizes it is sold in (optional in older files). */
