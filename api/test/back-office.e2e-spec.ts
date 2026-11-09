@@ -9,6 +9,7 @@ import {
   signedInAs,
   signedInCustomer,
 } from './commerce-helpers.js';
+import { studioDay } from '../src/common/studio-day.js';
 import { createApp } from './create-app.js';
 
 /** Phase 11: the CRM pipeline, quotations into orders, and the books that follow. */
@@ -37,7 +38,7 @@ describe('Back office (e2e)', () => {
     });
     await app.close();
   });
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => studioDay();
   /** The settings as they are, with a change: the lock date never moves back. */
   const settingsWith = async (cookie: string, change: object) => {
     const current = (await as(cookie).get('/accounting/settings').expect(200))
@@ -388,7 +389,7 @@ describe('Back office (e2e)', () => {
         invoiceId: final.id,
         amount: '1000.00',
         method: 'BANK',
-        date: new Date().toISOString().slice(0, 10),
+        date: studioDay(),
       })
       .expect(400);
     const half = (Number(rest) / 2).toFixed(2);
@@ -397,7 +398,7 @@ describe('Back office (e2e)', () => {
         invoiceId: final.id,
         amount: half,
         method: 'CASH',
-        date: new Date().toISOString().slice(0, 10),
+        date: studioDay(),
       })
       .expect(201);
     expect(partial.body.paymentState).toBe('partial');
@@ -436,7 +437,7 @@ describe('Back office (e2e)', () => {
     const refund = {
       invoiceId: note.body.id,
       method: 'CASH',
-      date: new Date().toISOString().slice(0, 10),
+      date: studioDay(),
     };
     await s
       .post('/accounting/payments', { ...refund, amount: '9999.00' })
@@ -521,9 +522,7 @@ describe('Back office (e2e)', () => {
     const yesterday = new Date(Date.now() - 86_400_000)
       .toISOString()
       .slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    const tomorrow = studioDay(new Date(Date.now() + 86_400_000));
     const in14 = new Date(Date.now() + 14 * 86_400_000)
       .toISOString()
       .slice(0, 10);
@@ -670,7 +669,7 @@ describe('Back office (e2e)', () => {
     const invoice = clicks.find((r) => r.status === 201)!.body;
 
     // Two payments of the whole amount at once: one is recorded, the other refused.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = studioDay();
     const pay = () =>
       s.post('/accounting/payments', {
         invoiceId: invoice.id,
@@ -688,9 +687,7 @@ describe('Back office (e2e)', () => {
     expect(after).toMatchObject({ residual: '0.00', paymentState: 'paid' });
 
     // No payment dated in the future.
-    const tomorrow = new Date(Date.now() + 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    const tomorrow = studioDay(new Date(Date.now() + 86_400_000));
     await s
       .post('/accounting/payments', {
         invoiceId: invoice.id,
