@@ -153,7 +153,7 @@ test('an admin gives one staff member the books and takes away orders; it applie
       row('See the books and financial reports').getByRole('cell').last(),
     ).toHaveText('Can');
     await page.getByRole('button', { name: 'Save access' }).click();
-    await expect(page.getByText('Saved')).toBeVisible();
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
     // Their very next page, same sign-in: the books open, orders and production are gone.
     await staff.page.goto('/admin/accounting');
@@ -209,7 +209,7 @@ test('admins edit what each role may do; team members never reach that page', as
   await staffForm
     .getByRole('button', { name: 'Save staff permissions' })
     .click();
-  await expect(staffForm.getByText('Saved')).toBeVisible();
+  await expect(staffForm.getByText('Saved', { exact: true })).toBeVisible();
 
   const staff = await secondBrowser(browser, baseURL!);
   try {

@@ -83,7 +83,7 @@ test('how many to keep is saved; delete and back up now are asked for', async ({
   await page.goto('/admin/backups');
   await page.getByLabel('Backups kept on the server').selectOption('7');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
   expect(
     JSON.parse(await readFile(join(ROOT, 'requests', 'settings.json'), 'utf8')),
   ).toEqual({ keep: 7 });

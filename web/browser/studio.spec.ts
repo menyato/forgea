@@ -30,7 +30,7 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await page.goto('/admin/settings');
   await page.getByLabel('Subject').fill('Your Forgea quote {number}, {name}');
   await page.getByRole('button', { name: 'Save the email' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
   await page.goto('/admin/leads');
   await page.getByRole('link', { name: 'New lead' }).click();
@@ -129,7 +129,8 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   ).toBeVisible();
   await page.goto(`/admin/orders?q=${order}`);
   await page.getByRole('link', { name: order }).first().click();
-  await expect(page.getByText(email)).toBeVisible();
+  // The order names the customer (in its details, and as a link to them).
+  await expect(page.getByText(email).first()).toBeVisible();
   await expect(page.getByText(/Twist vase in sand/)).toBeVisible();
 
   // A new quotation for someone the studio knows fills in their name and phone.
@@ -162,7 +163,7 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await page.goto('/admin/settings');
   await page.getByLabel('Subject').fill('');
   await page.getByRole('button', { name: 'Save the email' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 });
 
 test('a custom piece: deposit, production, pickup, then a credit note; the customer follows every step', async ({
@@ -200,7 +201,7 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
   await page.getByRole('link', { name: new RegExp(title) }).click();
   await page.getByLabel('Price (USD, for everything)').fill('40');
   await page.getByRole('button', { name: 'Send the quote' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
   // The customer accepts, cash at pickup: the deposit is due first.
   await c.goto(requestUrl);
@@ -403,7 +404,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
     ),
   ).toBeVisible();
   await record.getByRole('button', { name: 'Add to the shelf' }).click();
-  await expect(record.getByText('Saved')).toBeVisible();
+  await expect(record.getByText('Saved', { exact: true })).toBeVisible();
   const moves = page.getByRole('table', { name: 'Latest movements' });
   await page.goto('/admin/stock/movements');
   await expect(
@@ -461,7 +462,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
     .getByLabel('Printer')
     .selectOption({ label: `${printerName} (200 W)` });
   await plan.getByRole('button', { name: 'Save the plan' }).click();
-  await expect(plan.getByText('Saved')).toBeVisible();
+  await expect(plan.getByText('Saved', { exact: true })).toBeVisible();
   await plan
     .getByLabel('When it prints (Beirut time)')
     .fill('2026-07-01T09:30');
@@ -502,7 +503,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await record.getByRole('radio', { name: 'Forest green' }).click();
   await record.getByRole('radio', { name: 'Display' }).click();
   await record.getByRole('button', { name: 'Take it off the shelf' }).click();
-  await expect(record.getByText('Saved')).toBeVisible();
+  await expect(record.getByText('Saved', { exact: true })).toBeVisible();
   await page.goto('/admin/stock/movements');
   await expect(
     moves
@@ -523,7 +524,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await record.getByRole('radio', { name: 'Forest green' }).click();
   await record.getByLabel(/How far it got/).fill('50');
   await record.getByRole('button', { name: 'Record the failure' }).click();
-  await expect(record.getByText('Saved')).toBeVisible();
+  await expect(record.getByText('Saved', { exact: true })).toBeVisible();
   await page.goto('/admin/stock/movements');
   await expect(
     moves

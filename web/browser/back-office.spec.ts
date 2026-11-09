@@ -92,7 +92,7 @@ test('a lead becomes a quotation, the customer accepts it, and the order is invo
   const draftPanel = page.getByRole('region', { name: 'Draft' });
   await draftPanel.getByLabel('Due date').fill(later);
   await draftPanel.getByRole('button', { name: 'Save the dates' }).click();
-  await expect(draftPanel.getByText('Saved')).toBeVisible();
+  await expect(draftPanel.getByText('Saved', { exact: true })).toBeVisible();
   await page.goto(orderPage);
   await expect(invoices.getByRole('cell', { name: later })).toBeVisible();
   await invoices.getByRole('button', { name: 'Post it' }).click();
