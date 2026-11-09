@@ -57,6 +57,15 @@ calculated price: own price + (calculated price of the choice − calculated pri
 product as it is), never below zero (`overriddenUnitPrice` in `@forgea/pricing`). So a bigger
 size, a heavier option, an add-on or a longer personalised text still costs more.
 
+## Sliced 3MF files
+
+A sliced Bambu Studio file (`.gcode.3mf`) gives each filament's grams and the print time as
+the slicer worked them out: the purge between colours, the prime tower and any supports are
+already in them. A product priced with its sliced file's own numbers (`slicedFile`), a
+quotation line and a customer's request from a sliced file add no purge waste on top; the
+failure allowance, labour and packaging still apply. A 3MF never sliced is only a guess, so it
+prices nothing: the dashboard asks for the sliced file.
+
 ## Parts customers recolour (3MF products)
 
 A multi-colour product's colour rows may name a part ("Body", "Ears"). Customers then choose

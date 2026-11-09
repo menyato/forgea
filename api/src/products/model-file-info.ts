@@ -63,6 +63,31 @@ export class ModelFileInfoService {
     };
   }
 
+  /**
+   * Whether these grams and hours are this sliced 3MF's own (to a 20th of a gram and a minute
+   * or so): then they hold the slicer's purge, prime tower and supports already. A file that
+   * can't be read, or isn't sliced, says no.
+   */
+  async slicedNumbers(
+    key: string | undefined,
+    materialId: string,
+    grams: string,
+    printHours: string,
+  ): Promise<boolean> {
+    if (!key?.endsWith('.3mf')) return false;
+    try {
+      const info = await this.measure(key, materialId, 100);
+      return (
+        info.sliced &&
+        new Prisma.Decimal(info.grams).minus(grams).abs().lte(0.05) &&
+        new Prisma.Decimal(info.printHours).minus(printHours).abs().lte(0.02)
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) return false;
+      throw error;
+    }
+  }
+
   /** The file's size, grams per colour and time, in a material. */
   async measure(
     key: string,
@@ -74,14 +99,15 @@ export class ModelFileInfoService {
     const file = await this.read(key);
     const swatches = await this.products.swatches();
 
-    const sliced = file.colours.some((c) => c.grams !== null);
+    const sliced =
+      file.printSeconds !== null && file.colours.some((c) => c.grams !== null);
     let grams: Prisma.Decimal;
     let printHours: string;
     let byColour: Prisma.Decimal[];
-    if (sliced && file.printSeconds !== null) {
+    if (sliced) {
       byColour = file.colours.map((c) => new Prisma.Decimal(c.grams ?? 0));
       grams = byColour.reduce((n, g) => n.plus(g), new Prisma.Decimal(0));
-      printHours = new Prisma.Decimal(file.printSeconds)
+      printHours = new Prisma.Decimal(file.printSeconds ?? 0)
         .div(3600)
         .toDecimalPlaces(2, Prisma.Decimal.ROUND_UP)
         .toFixed(2);

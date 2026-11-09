@@ -29,7 +29,9 @@ test('a product from a sliced Bambu Studio 3MF: its colours, grams and time, and
     .getByRole('button', { name: 'Read colours, grams and time from the file' })
     .click();
   await expect(
-    page.getByText('(from the slicer: the file was sliced)'),
+    page.getByText(
+      /from the slicer: the file was sliced, so the purge, prime tower and supports are counted/,
+    ),
   ).toBeVisible();
   await expect(page.getByText('10.25 g')).toBeVisible();
   await expect(page.getByText('2.25 g')).toBeVisible();
@@ -86,20 +88,21 @@ test('customers recolour the parts of a 3MF product: each colour priced by its o
   // The owner names the parts customers recolour; the colour beside each is where it starts.
   await page.getByLabel(/Colour 1 \(file colour #aa2222\)/).fill('Black');
   await page.getByLabel(/Colour 2 \(file colour #b87333\)/).fill('Copper silk');
-  await page
-    .getByLabel('Part customers recolour, colour 1 (optional)')
-    .fill('Body');
-  await page
-    .getByLabel('Part customers recolour, colour 2 (optional)')
-    .fill('Ears');
+  const choose = page.getByRole('checkbox', {
+    name: 'Customers choose this colour',
+  });
+  await choose.nth(0).check();
+  await choose.nth(1).check();
+  await page.getByLabel('What customers call colour 1').fill('Body');
+  await page.getByLabel('What customers call colour 2').fill('Ears');
   await page
     .getByLabel('Colours customers choose parts in')
     .selectOption({ label: 'Colour' });
   await page.getByRole('button', { name: 'Create product' }).click();
   await expect(page).toHaveURL(/\/admin\/products\/[0-9a-f-]{36}$/);
-  await expect(
-    page.getByLabel('Part customers recolour, colour 2 (optional)'),
-  ).toHaveValue('Ears');
+  await expect(page.getByLabel('What customers call colour 2')).toHaveValue(
+    'Ears',
+  );
 
   // The shop offers each part in the group's colours, starting as the owner set them.
   await page.goto(`/products/panda-${tag}`);
@@ -125,4 +128,30 @@ test('customers recolour the parts of a 3MF product: each colour priced by its o
   const line = page.getByRole('article').filter({ hasText: `Panda ${tag}` });
   await expect(line).toContainText('Body: Black');
   await expect(line).toContainText('Ears: Black');
+});
+
+test('a 3MF never sliced shows in 3D but asks for the sliced file before it prices anything', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/products/new');
+  await page.getByLabel(/3D model \(STL, GLB or 3MF/).setInputFiles({
+    name: 'piece.3mf',
+    mimeType: 'model/3mf',
+    buffer: bambuThreeMf({ sliced: false }),
+  });
+  await page
+    .getByRole('button', { name: 'Upload', exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole('button', { name: 'Read colours, grams and time from the file' })
+    .click();
+  await expect(page.getByText(/This 3MF isn.t sliced/)).toBeVisible();
+  await expect(page.getByText('Export plate sliced file')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Use these numbers' }),
+  ).toHaveCount(0);
 });

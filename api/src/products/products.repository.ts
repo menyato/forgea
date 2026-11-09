@@ -221,10 +221,14 @@ export class ProductsRepository {
     });
   }
 
-  create(dto: SaveProductDto): Promise<ConfigurableProduct> {
+  create(
+    dto: SaveProductDto,
+    slicedFile: boolean,
+  ): Promise<ConfigurableProduct> {
     return this.prisma.product.create({
       data: {
         ...fields(dto),
+        slicedFile,
         ...optionRows(dto),
         sizes: { create: dto.sizes.map(sizeRow) },
         colours: { create: dto.colours.map(colourRow) },
@@ -234,7 +238,11 @@ export class ProductsRepository {
   }
 
   /** Replaces the product's fields and its whole option set-up in one transaction. */
-  update(id: string, dto: SaveProductDto): Promise<ConfigurableProduct> {
+  update(
+    id: string,
+    dto: SaveProductDto,
+    slicedFile: boolean,
+  ): Promise<ConfigurableProduct> {
     return this.prisma.$transaction(async (tx) => {
       await tx.productOptionValue.deleteMany({ where: { productId: id } });
       await tx.productOptionGroup.deleteMany({ where: { productId: id } });
@@ -259,6 +267,7 @@ export class ProductsRepository {
         where: { id },
         data: {
           ...fields(dto),
+          slicedFile,
           ...optionRows(dto),
           colours: { create: dto.colours.map(colourRow) },
         },

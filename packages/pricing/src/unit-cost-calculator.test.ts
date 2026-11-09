@@ -48,6 +48,22 @@ describe('UnitCostCalculator', () => {
     });
   });
 
+  it("adds no purge waste to a slicer's grams: they already hold it", () => {
+    // As above without the 2.97 waste: subtotal 73.34, price 73.34 × 1.6 = 117.344 → 117.34
+    const result = new UnitCostCalculator(settings).price({
+      grams: '120',
+      printHours: '4.5',
+      pricePerGram: '0.12',
+      wasteIncluded: true,
+    });
+    expect(result).toMatchObject({
+      wasteCost: '0.00',
+      failureAllowance: '5.94',
+      subtotal: '73.34',
+      unitPrice: '117.34',
+    });
+  });
+
   it('uses exact decimals, not floating point', () => {
     // 0.1 + 0.2 in floating point is 0.30000000000000004.
     const result = new UnitCostCalculator(zero).price({

@@ -7,6 +7,9 @@ model StockItem {
   material      Material @relation(fields: [materialId], references: [id], onDelete: Restrict)
   /// The colour as the shop names it (an option value with a swatch); "" when none was chosen.
   colour        String   @default("")
+  /// How the colour looks (#rrggbb, CHECK), chosen when the spools come in; null = the shop's
+  /// swatch of that name, if any.
+  hex           String?
   /// Restock when what is left (after open orders) is at or below this.
   lowStockGrams Int
   /// What one spool holds: suggestions are in whole spools.

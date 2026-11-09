@@ -14,6 +14,8 @@ interface CatalogProduct {
   grams: string;
   printHours: string;
   materialId: string;
+  /** Grams and time are its sliced 3MF's own: no purge waste on top. */
+  slicedFile: boolean;
   /**
    * Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. A named
    * part prints in the colour the order chose for it ("Body: Copper"), else in `colour`.
@@ -123,16 +125,19 @@ export function estimateItem(
         grams: size?.grams ?? product.grams,
         printHours: size?.printHours ?? product.printHours,
         pricePerGram,
+        wasteIncluded: product.slicedFile,
       },
       effects,
     );
     // A multi-colour product: its grams (at the chosen size and options) shared out as its
     // colours share its own grams.
+    // A one-colour file sold with a shop colour option prints in the colour chosen there.
+    const single = product.colours.length === 1 && colour !== '';
     const colours = splitByColour(
       product.colours.map((c) => ({
         colour:
           (c.part && options.find((o) => o.group === c.part)?.value) ||
-          c.colour,
+          (single && !c.part ? colour : c.colour),
         grams: c.grams,
       })),
       grams,

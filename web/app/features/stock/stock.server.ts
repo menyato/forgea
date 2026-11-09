@@ -56,6 +56,7 @@ export async function receiveSpools(api: ApiClient, form: FormData) {
     {
       materialId: text(form, 'materialId'),
       colour: text(form, 'colour') ?? '',
+      hex: text(form, 'hex'),
       spools: text(form, 'spools'),
       spoolGrams: text(form, 'spoolGrams'),
       pricePerSpool: text(form, 'pricePerSpool'),
@@ -97,6 +98,7 @@ export async function weighSpools(api: ApiClient, form: FormData) {
     {
       materialId: text(form, 'materialId'),
       colour: text(form, 'colour') ?? '',
+      hex: text(form, 'hex'),
       gramsOnShelf: text(form, 'gramsOnShelf'),
       note: text(form, 'note'),
     },

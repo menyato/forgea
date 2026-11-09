@@ -28,8 +28,10 @@ export interface StockItemView {
   material: { id: string; code: string; name: string };
   /** "" when no colour was chosen. */
   colour: string;
-  /** The colour's swatch in the shop's options, when one has it. */
+  /** How the colour looks: the one picked for this line, else the shop's swatch of its name. */
   swatchHex: string | null;
+  /** The colour picked for this line itself (#rrggbb); null = none picked. */
+  hex: string | null;
   /** The material's cost per gram now (from its reel price), USD. */
   costPerGram: string;
   active: boolean;

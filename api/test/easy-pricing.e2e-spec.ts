@@ -243,6 +243,7 @@ describe('Easy pricing (e2e)', () => {
     expect(forAdmin).toEqual({
       unitPrice: '26.00',
       calculatedPrice: '26.00',
+      wasteIncluded: false,
       breakdown: {
         material: '5.00',
         printer: '5.00',
@@ -266,6 +267,7 @@ describe('Easy pricing (e2e)', () => {
     expect(forDesigner).toEqual({
       unitPrice: '15.00',
       calculatedPrice: '15.00',
+      wasteIncluded: false,
       breakdown: null,
     });
     const customer = await signedInAs(app, Role.CUSTOMER);

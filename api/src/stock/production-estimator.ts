@@ -94,6 +94,7 @@ export class ProductionEstimator {
             grams: p.grams.toString(),
             printHours: p.printHours.toString(),
             materialId: p.materialId,
+            slicedFile: p.slicedFile,
             colours: p.colours.map((c) => ({
               colour: c.colour,
               grams: c.grams.toString(),
@@ -201,6 +202,7 @@ function printFileEstimate(
       grams: p.grams,
       printHours: p.printHours,
       pricePerGram,
+      wasteIncluded: p.sliced === true,
     }).subtotal,
     gramsPerUnit: p.grams,
     hoursPerUnit: p.printHours,

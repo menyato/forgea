@@ -110,6 +110,8 @@ export class RequestEstimator {
       grams: printFile.grams,
       printHours: printFile.printHours,
       pricePerGram: material.pricePerGram.toString(),
+      // A sliced file's grams hold its purge, prime tower and supports already.
+      wasteIncluded: printFile.sliced,
     });
     const cents = Math.round(Number(unitPrice) * 100) * quantity;
     const total = (cents / 100).toFixed(2);

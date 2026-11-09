@@ -27,6 +27,7 @@ const catalog: Catalog = {
         grams: '100',
         printHours: '5',
         materialId: 'pla',
+        slicedFile: false,
         colours: [],
         sizes: [
           {
@@ -53,6 +54,7 @@ const catalog: Catalog = {
         grams: '50',
         printHours: '0',
         materialId: 'pla',
+        slicedFile: false,
         colours: [],
         sizes: [],
       },

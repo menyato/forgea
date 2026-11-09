@@ -37,6 +37,7 @@ import {
   ProductConfigurator,
   profitOf,
 } from './product-configurator.js';
+import { ModelFileInfoService } from './model-file-info.js';
 import { ProductsRepository } from './products.repository.js';
 
 /** The home page's bed: a centre and four corners. */
@@ -50,6 +51,7 @@ export class ProductsService {
     private readonly configurator: ProductConfigurator,
     private readonly uploads: UploadsService,
     private readonly studio: TextStudio,
+    private readonly files: ModelFileInfoService,
   ) {}
 
   /** The public catalog, each product priced by the engine (cost inputs never leave the API). */
@@ -210,7 +212,11 @@ export class ProductsService {
     )
       throw profitNotYours();
     await this.checkSetup(dto);
-    return this.toAdmin(await this.withSample(await this.products.create(dto)));
+    return this.toAdmin(
+      await this.withSample(
+        await this.products.create(dto, await this.slicedFile(dto)),
+      ),
+    );
   }
 
   async update(
@@ -244,7 +250,24 @@ export class ProductsService {
     }
     await this.checkSetup(dto);
     return this.toAdmin(
-      await this.withSample(await this.products.update(id, dto)),
+      await this.withSample(
+        await this.products.update(id, dto, await this.slicedFile(dto)),
+      ),
+    );
+  }
+
+  /** The product takes its sliced 3MF's own grams and time (purge, tower, supports in them). */
+  private slicedFile(dto: {
+    modelFileKey?: string | undefined;
+    materialId: string;
+    grams: string;
+    printHours: string;
+  }): Promise<boolean> {
+    return this.files.slicedNumbers(
+      dto.modelFileKey,
+      dto.materialId,
+      dto.grams,
+      dto.printHours,
     );
   }
 
@@ -262,6 +285,7 @@ export class ProductsService {
       dto.profitKind !== undefined && dto.profitValue !== undefined
         ? { kind: dto.profitKind, value: dto.profitValue }
         : null;
+    const wasteIncluded = await this.slicedFile(dto);
     let b;
     try {
       b = (await this.pricing.costCalculator()).price(
@@ -269,6 +293,7 @@ export class ProductsService {
           grams: dto.grams,
           printHours: dto.printHours,
           pricePerGram: material.pricePerGram.toString(),
+          wasteIncluded,
         },
         profit,
       );
@@ -283,6 +308,7 @@ export class ProductsService {
         ? new Prisma.Decimal(dto.priceOverride).toFixed(2)
         : b.unitPrice,
       calculatedPrice: b.unitPrice,
+      wasteIncluded,
       breakdown: mayPrice
         ? {
             material: b.materialCost,
@@ -447,6 +473,10 @@ export class ProductsService {
    * file colour, from a colour group the shop offers, starting in one of its colours.
    */
   private async checkParts(dto: SaveProductDto): Promise<void> {
+    if (dto.colours.some((c) => c.part === ''))
+      throw new BadRequestException(
+        'Name each colour customers choose (e.g. Body)',
+      );
     const parts = dto.colours.filter((c) => c.part);
     if (parts.length === 0) return;
     const names = parts.map((c) => c.part!.toLowerCase());
@@ -512,6 +542,7 @@ export class ProductsService {
         part: c.part,
       })),
       partColourGroupId: p.partColourGroupId,
+      slicedFile: p.slicedFile,
       size: productSize(p),
       sizes: p.sizes.map((s) => ({
         id: s.id,

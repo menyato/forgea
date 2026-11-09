@@ -100,6 +100,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
+      modelFileKey: text(form, 'modelFileKey'),
     });
     if (!parsed.ok) return data({ preview: null }, { status: 400 });
     const r = await api.post<PricePreview>(

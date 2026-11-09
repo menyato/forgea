@@ -151,6 +151,8 @@ export interface AdminProduct {
   colours: ProductColourView[];
   /** The colours customers recolour its named parts in (an option group); null = none. */
   partColourGroupId: string | null;
+  /** Its grams and time are its sliced 3MF's own: purge, prime tower and supports included. */
+  slicedFile: boolean;
   /** Base price with default options, from the current pricing settings. */
   price: Money;
 }
@@ -215,6 +217,8 @@ export interface PricePreview {
   unitPrice: Money;
   /** What the costs and profit rule work out to, whatever the owner's price. */
   calculatedPrice: Money;
+  /** The grams and time are the sliced 3MF's own: no purge waste added on top. */
+  wasteIncluded: boolean;
   breakdown: {
     material: Money;
     printer: Money;

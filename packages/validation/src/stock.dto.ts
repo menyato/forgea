@@ -25,6 +25,7 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 import {
+  HEX_COLOR_PATTERN,
   MONEY_PATTERN,
   ORDER_NUMBER_PATTERN,
   STOCK_COLOUR_MAX_LENGTH,
@@ -112,6 +113,11 @@ export class SaveStockItemDto {
 
   @IsBoolean()
   active!: boolean;
+
+  /** How a new (or special) colour looks: #rrggbb, picked when it is entered. */
+  @IsOptional()
+  @Matches(HEX_COLOR_PATTERN, { message: 'Pick the colour' })
+  hex?: string;
 }
 
 const note = { message: 'At most 200 characters' };
@@ -139,6 +145,11 @@ export class ReceiveSpoolsDto {
   @IsString()
   @MaxLength(STOCK_COLOUR_MAX_LENGTH)
   colour: string = '';
+
+  /** How a new (or special) colour looks: #rrggbb, picked when it is entered. */
+  @IsOptional()
+  @Matches(HEX_COLOR_PATTERN, { message: 'Pick the colour' })
+  hex?: string;
 
   @Type(() => Number)
   @IsInt({ message: 'Enter how many spools' })
@@ -235,6 +246,11 @@ export class StockCountDto {
   @IsString()
   @MaxLength(STOCK_COLOUR_MAX_LENGTH)
   colour: string = '';
+
+  /** How a new (or special) colour looks: #rrggbb, picked when it is entered. */
+  @IsOptional()
+  @Matches(HEX_COLOR_PATTERN, { message: 'Pick the colour' })
+  hex?: string;
 
   @Type(() => Number)
   @IsInt(grams)

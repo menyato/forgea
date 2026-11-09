@@ -38,6 +38,11 @@ export interface UnitCostInput {
   printHours: DecimalInput;
   /** From the Material table: pricePerGram(material). */
   pricePerGram: DecimalInput;
+  /**
+   * The grams and time are a slicer's own (a sliced 3MF): they already hold the purge, prime
+   * tower and supports, so no purge waste is added on top.
+   */
+  wasteIncluded?: boolean | undefined;
 }
 
 /** Every component as a 2-decimal string. `unitPrice` is computed from unrounded components. */
@@ -61,7 +66,7 @@ export interface UnitPriceBreakdown {
  *
  *   materialCost     = grams × pricePerGram
  *   machineCost      = printHours × machineRate
- *   wasteCost        = (materialCost + machineCost) × purgeWaste%
+ *   wasteCost        = (materialCost + machineCost) × purgeWaste%  (0 when wasteIncluded)
  *   failureAllowance = (materialCost + machineCost) × failureAllowance%
  *   subtotal         = material + machine + waste + failure + labor + packaging
  *   profit           = subtotal × percent%  (PERCENT)  or  the amount  (FIXED)
@@ -116,7 +121,9 @@ export class UnitCostCalculator {
     const materialCost = grams.times(pricePerGram);
     const machineCost = hours.times(this.machineRate);
     const base = materialCost.plus(machineCost);
-    const wasteCost = percentOf(base, this.purgeWaste);
+    const wasteCost = input.wasteIncluded
+      ? base.times(0)
+      : percentOf(base, this.purgeWaste);
     const failureAllowance = percentOf(base, this.failureAllowance);
     const subtotal = base
       .plus(wasteCost)
