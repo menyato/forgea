@@ -42,10 +42,13 @@ export class QuotationPrintFiles {
       this.files.measure(key, material.id, solidity),
       this.files.printFile(key, material.id, solidity),
     ]);
+    requireSliced(key, printFile);
     const { unitPrice } = await this.pricing.unitPrice({
       grams: printFile.grams,
       printHours: printFile.printHours,
       pricePerGram: material.pricePerGram.toString(),
+      // The slicer's grams hold its purge, prime tower and supports already.
+      wasteIncluded: printFile.sliced,
     });
     return {
       printFile,
@@ -61,11 +64,28 @@ export class QuotationPrintFiles {
   /** What a saved line keeps: read again from the file, so it is always the file's own. */
   async forLine(key: string, materialId: string): Promise<PrintFile> {
     await this.uploads.requireClean([key], UploadPurpose.QUOTATION_FILE);
-    return this.files.printFile(key, materialId, await this.solidity());
+    const printFile = await this.files.printFile(
+      key,
+      materialId,
+      await this.solidity(),
+    );
+    requireSliced(key, printFile);
+    return printFile;
   }
 
   /** Files never sliced are estimated as the shop estimates customers' files. */
   private async solidity(): Promise<number> {
     return (await this.store.get()).requests.estimateSolidityPercent;
   }
+}
+
+/**
+ * A 3MF prices a line only once sliced: then its grams and time are the slicer's, purge,
+ * prime tower and supports included. An STL or GLB is still estimated from its volume.
+ */
+function requireSliced(key: string, printFile: PrintFile): void {
+  if (key.endsWith('.3mf') && !printFile.sliced)
+    throw new BadRequestException(
+      "This 3MF isn't sliced. In Bambu Studio, slice it and choose File → Export → Export plate sliced file, then upload that .gcode.3mf",
+    );
 }

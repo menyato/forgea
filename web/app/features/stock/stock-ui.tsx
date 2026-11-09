@@ -3,7 +3,7 @@ import type {
   StockMovementView,
   StockPrintable,
 } from '@forgea/types';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link, type useFetcher } from 'react-router';
 import { Button, buttonClass } from '~/components/ui/button';
 import { Field } from '~/components/ui/field';
@@ -149,6 +149,7 @@ export function ColourChoice({
   onChange,
   allowAny = true,
   allowOther = true,
+  pickLook = false,
   error,
 }: {
   colours: readonly Colour[];
@@ -156,9 +157,12 @@ export function ColourChoice({
   onChange: (colour: string) => void;
   allowAny?: boolean;
   allowOther?: boolean;
+  /** Also how the colour looks (RGB), sent as `hex`: a new or special colour gets its own. */
+  pickLook?: boolean;
   error?: string | undefined;
 }) {
   const known = colours.some((c) => c.label === value);
+  const swatch = colours.find((c) => c.label === value)?.swatchHex ?? null;
   return (
     <fieldset className="grid min-w-0 gap-2">
       <legend className="mb-1 text-sm font-medium">Colour</legend>
@@ -193,8 +197,35 @@ export function ColourChoice({
           placeholder="e.g. Marble white"
         />
       )}
+      {pickLook && value !== '' && (
+        // Keyed by the colour: another colour starts from its own look.
+        <ColourLook key={value} initial={swatch} />
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
     </fieldset>
+  );
+}
+
+/**
+ * How a filament colour looks, picked as RGB (`hex`): a new or special colour gets its own
+ * swatch, shown wherever the stock lists it.
+ */
+export function ColourLook({ initial }: { initial: string | null }) {
+  const [hex, setHex] = useState(initial ?? '#888888');
+  return (
+    <label className="flex flex-wrap items-center gap-2 text-sm font-medium">
+      How it looks
+      <input
+        type="color"
+        id="colour-hex"
+        name="hex"
+        autoComplete="off"
+        value={hex}
+        onChange={(e) => setHex(e.currentTarget.value.toLowerCase())}
+        className="h-9 w-14 cursor-pointer rounded-md border border-border bg-surface p-1"
+      />
+      <span className="font-mono text-text-muted">{hex}</span>
+    </label>
   );
 }
 

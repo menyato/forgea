@@ -256,6 +256,7 @@ export class ProductConfigurator {
         printHours:
           configuration.base?.printHours ?? product.printHours.toString(),
         pricePerGram: product.material.pricePerGram.toString(),
+        wasteIncluded: product.slicedFile,
       },
       configuration.effects,
       profitOf(product),
@@ -426,6 +427,7 @@ export function withPriceOverride(
     | 'material'
     | 'profitKind'
     | 'profitValue'
+    | 'slicedFile'
   >,
   calculated: string,
 ): string {
@@ -436,6 +438,7 @@ export function withPriceOverride(
       grams: product.grams.toString(),
       printHours: product.printHours.toString(),
       pricePerGram: product.material.pricePerGram.toString(),
+      wasteIncluded: product.slicedFile,
     },
     [],
     profitOf(product),

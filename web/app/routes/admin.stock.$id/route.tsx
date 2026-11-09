@@ -29,6 +29,7 @@ import {
   grams,
   lineFilter,
   movementFor,
+  ColourLook,
   SignedGrams,
   STOCK_ACTIONS,
   STOCK_TIME,
@@ -62,6 +63,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   return save(
     SaveStockItemDto,
     {
+      hex: text(form, 'hex'),
       lowStockGrams: text(form, 'lowStockGrams'),
       spoolGrams: text(form, 'spoolGrams'),
       leadTimeDays: text(form, 'leadTimeDays'),
@@ -223,6 +225,7 @@ function LimitsForm({ item: i }: { item: StockItemView }) {
         defaultValue={i.coverDays}
         error={errors['coverDays']}
       />
+      {i.colour && <ColourLook initial={i.hex ?? i.swatchHex} />}
       <CheckboxField
         label="Track this filament"
         name="active"

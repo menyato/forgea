@@ -107,7 +107,12 @@ export function ReceiveForm({
           ))}
       </SelectField>
       <div className="sm:col-span-2 lg:col-span-3">
-        <ColourChoice colours={colours} value={colour} onChange={setColour} />
+        <ColourChoice
+          colours={colours}
+          value={colour}
+          onChange={setColour}
+          pickLook
+        />
       </div>
       <Field
         label="Price of one spool (USD)"
@@ -443,7 +448,12 @@ export function CountForm({
         placeholder="e.g. monthly count"
       />
       <div className="sm:col-span-2 lg:col-span-3">
-        <ColourChoice colours={colours} value={colour} onChange={setColour} />
+        <ColourChoice
+          colours={colours}
+          value={colour}
+          onChange={setColour}
+          pickLook
+        />
       </div>
       <Summary>
         The shelf should hold <strong>{grams(now)}</strong>

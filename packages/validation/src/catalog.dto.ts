@@ -454,6 +454,11 @@ export class PricePreviewDto {
   @IsOptional()
   @Matches(POSITIVE_MONEY_PATTERN, PRICE_OVERRIDE_MESSAGE)
   priceOverride?: string;
+
+  /** The product's model: a sliced 3MF whose numbers these are adds no purge waste. */
+  @IsOptional()
+  @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the model again' })
+  modelFileKey?: string;
 }
 
 /** POST /products/model-info: what a 3MF says, priced with a material (dashboard). */

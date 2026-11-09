@@ -294,6 +294,7 @@ export function ProductForm({
             materialId={materialId}
             grams={grams}
             printHours={hours}
+            modelFileKey={modelKey}
             profit={profit}
             onProfit={setProfit}
             priceOverride={priceOverride}

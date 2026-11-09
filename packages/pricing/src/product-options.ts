@@ -80,6 +80,7 @@ export function configureUnit(
       grams: grams.round(3).toString(),
       printHours: hours.round(3).toString(),
       pricePerGram: pricePerGram.toString(),
+      ...(base.wasteIncluded ? { wasteIncluded: true } : {}),
     },
     extraPrice: money(extra),
   };

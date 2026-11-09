@@ -20,6 +20,7 @@ export function PricePanel({
   materialId,
   grams,
   printHours,
+  modelFileKey,
   profit,
   onProfit,
   priceOverride,
@@ -30,6 +31,8 @@ export function PricePanel({
   materialId: string;
   grams: string;
   printHours: string;
+  /** A sliced 3MF whose own grams these are: its purge, tower and supports are in them. */
+  modelFileKey: string | null;
   profit: ProfitValue;
   onProfit: (next: ProfitValue) => void;
   /** The owner's own price ('' = the calculated one). */
@@ -49,6 +52,7 @@ export function PricePanel({
     materialId,
     grams,
     printHours,
+    ...(modelFileKey ? { modelFileKey } : {}),
     ...rule,
     ...(priceOverride ? { priceOverride } : {}),
   });
@@ -103,7 +107,12 @@ export function PricePanel({
               [
                 ['Filament', b.material],
                 ['Printer time', b.printer],
-                ['Waste and failed prints', b.wasteAndFailures],
+                [
+                  p?.wasteIncluded
+                    ? 'Failed prints (purge, tower and supports are in the sliced grams)'
+                    : 'Waste and failed prints',
+                  b.wasteAndFailures,
+                ],
                 ['Labour', b.labour],
                 ['Packaging', b.packaging],
               ] as const

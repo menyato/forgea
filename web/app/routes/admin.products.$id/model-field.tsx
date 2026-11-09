@@ -40,7 +40,7 @@ export function ModelField({
     printHours: string;
     size: SizeCm;
   }) => void;
-  /** A 3MF's grams per colour (an empty list for a one-colour file). */
+  /** A sliced 3MF's grams per colour. */
   onColours: (colours: ProductColourView[]) => void;
   name: string;
 }) {
@@ -133,15 +133,14 @@ export function ModelField({
               printHours: info.printHours,
               size: info.size,
             });
+            // One colour too: customers may still choose the colour it prints in.
             onColours(
-              info.colours.length > 1
-                ? info.colours.map((c) => ({
-                    colour: c.suggested ?? '',
-                    hex: c.hex,
-                    grams: c.grams,
-                    part: null,
-                  }))
-                : [],
+              info.colours.map((c) => ({
+                colour: c.suggested ?? '',
+                hex: c.hex,
+                grams: c.grams,
+                part: null,
+              })),
             );
           }}
         />
@@ -211,7 +210,7 @@ function ThreeMfInfo({
   onUse: (info: ModelFileInfo) => void;
 }) {
   const reader = useFetcher<ModelInfoResult>();
-  const [solidity, setSolidity] = useState('40');
+  // Sliced files carry their own grams; the solidity only matters for a guess.
   const info = reader.data?.info;
   const read = () =>
     void reader.submit(
@@ -219,7 +218,7 @@ function ThreeMfInfo({
         intent: 'model-info',
         key: modelKey,
         materialId: material?.id ?? '',
-        solidityPercent: solidity || '40',
+        solidityPercent: '40',
       },
       { method: 'post' },
     );
@@ -254,29 +253,21 @@ function ThreeMfInfo({
             <strong>{info.printHours} h</strong>{' '}
             <span className="text-text-muted">
               {info.sliced
-                ? '(from the slicer: the file was sliced)'
-                : '(estimated from the volume: slice it in Bambu Studio and upload the sliced file for exact numbers)'}
+                ? '(from the slicer: the file was sliced, so the purge, prime tower and supports are counted in them)'
+                : '(a guess from the volume)'}
             </span>
           </p>
           {!info.sliced && (
-            <label className="flex flex-wrap items-center gap-2">
-              How solid it prints
-              <input
-                id="model-3mf-solidity"
-                name="model-3mf-solidity"
-                type="number"
-                min={1}
-                max={100}
-                autoComplete="off"
-                value={solidity}
-                onChange={(e) => setSolidity(e.currentTarget.value)}
-                className="w-20 rounded-md border border-border bg-surface px-2 py-1"
-              />
-              %
-              <Button variant="quiet" onClick={read}>
-                Work it out again
-              </Button>
-            </label>
+            <p
+              role="alert"
+              className="rounded-md bg-warning/15 px-3 py-2 text-text"
+            >
+              This 3MF isn&apos;t sliced, so it can&apos;t price the product:
+              its purge, prime tower and supports aren&apos;t known. In Bambu
+              Studio, slice the plate, then choose{' '}
+              <strong>File → Export → Export plate sliced file</strong> and
+              upload that <strong>.gcode.3mf</strong> here.
+            </p>
           )}
           <ul className="grid gap-1">
             {info.colours.map((c) => (
@@ -290,11 +281,13 @@ function ThreeMfInfo({
               </li>
             ))}
           </ul>
-          <p>
-            <Button variant="secondary" onClick={() => onUse(info)}>
-              Use these numbers
-            </Button>
-          </p>
+          {info.sliced && (
+            <p>
+              <Button variant="secondary" onClick={() => onUse(info)}>
+                Use these numbers
+              </Button>
+            </p>
+          )}
         </>
       )}
     </div>

@@ -132,7 +132,8 @@ export class StockService {
         id: r.id,
         material: { id: r.materialId, code: r.code, name: r.name },
         colour: r.colour,
-        swatchHex: swatches.get(r.colour) ?? null,
+        swatchHex: r.hex ?? swatches.get(r.colour) ?? null,
+        hex: r.hex,
         costPerGram: new Prisma.Decimal(r.pricePerGram).toFixed(4),
         active: r.active,
         stockGrams: r.stock,
@@ -223,6 +224,8 @@ export class StockService {
           createdById: actorId,
         },
       ]);
+      if (dto.hex && dto.colour)
+        await this.stock.setColourHex(tx, material.id, dto.colour, dto.hex);
     });
   }
 
@@ -363,6 +366,8 @@ export class StockService {
           },
         ]);
       }
+      if (dto.hex && dto.colour)
+        await this.stock.setColourHex(tx, dto.materialId, dto.colour, dto.hex);
       return { difference };
     });
   }

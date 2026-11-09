@@ -80,6 +80,7 @@ function product(): ConfigurableProduct {
     colours: [],
     partColourGroupId: null,
     partColourGroup: null,
+    slicedFile: false,
     profitKind: null,
     profitValue: null,
     priceOverride: null,

@@ -69,6 +69,7 @@ export interface StockRow {
   code: string;
   name: string;
   colour: string;
+  hex: string | null;
   active: boolean;
   lowStockGrams: number;
   spoolGrams: number;
@@ -165,7 +166,7 @@ export class StockRepository {
     const since30 = new Date(end - 30 * DAY_MS);
     const since90 = new Date(end - 90 * DAY_MS);
     return this.prisma.$queryRaw<StockRow[]>`
-      SELECT i.id, i."materialId", m.code, m.name, i.colour, i.active,
+      SELECT i.id, i."materialId", m.code, m.name, i.colour, i.hex, i.active,
              i."lowStockGrams", i."spoolGrams", i."leadTimeDays", i."coverDays",
              m."pricePerGram"::text AS "pricePerGram",
              coalesce(sum(s.grams), 0)::int AS stock,
@@ -391,6 +392,19 @@ export class StockRepository {
 
   findItem(id: string) {
     return this.prisma.stockItem.findUnique({ where: { id } });
+  }
+
+  /** How a material's colour looks (picked when its spools come in or are weighed). */
+  async setColourHex(
+    tx: Prisma.TransactionClient,
+    materialId: string,
+    colour: string,
+    hex: string,
+  ): Promise<void> {
+    await tx.stockItem.updateMany({
+      where: { materialId, colour },
+      data: { hex },
+    });
   }
 
   updateItem(id: string, data: Prisma.StockItemUpdateInput) {

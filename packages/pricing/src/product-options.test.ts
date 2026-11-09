@@ -119,6 +119,13 @@ describe('configuredUnitCost', () => {
       hours: '6',
     });
   });
+
+  it("adds no purge waste when the grams are a slicer's own", () => {
+    // $15 + 10% failures = $16.50; + $1 = $17.50.
+    expect(
+      configuredUnitCost(calculator, { ...base, wasteIncluded: true }, [large]),
+    ).toMatchObject({ cost: '17.50' });
+  });
 });
 
 describe('overriddenUnitPrice', () => {

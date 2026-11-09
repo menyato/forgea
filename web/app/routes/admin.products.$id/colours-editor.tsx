@@ -58,8 +58,9 @@ export function ColoursEditor({
       </legend>
       <p className="text-sm text-text-muted">
         Orders take each colour&apos;s grams from its stock. Name each colour as
-        the shop does. Name a part (&ldquo;Body&rdquo;) to let customers choose
-        its colour: it starts in the colour beside it.
+        the shop does. Tick &ldquo;Customers choose this colour&rdquo; to let
+        them pick it on the product page: it starts in the colour named here,
+        and the 3D view changes as they choose.
       </p>
       <datalist id="product-colour-names">
         {named.map(([label]) => (
@@ -101,22 +102,40 @@ export function ColoursEditor({
           >
             ×
           </Button>
-          <input
-            id={`product-colour-part-${i}`}
-            name={`product-colour-part-${i}`}
-            aria-label={`Part customers recolour, colour ${i + 1} (optional)`}
-            autoComplete="off"
-            maxLength={PRODUCT_PART_NAME_MAX_LENGTH}
-            placeholder="Part customers recolour, e.g. Body"
-            value={c.part ?? ''}
-            onChange={(e) => {
-              const part = e.currentTarget.value;
-              set(i, { part: part === '' ? null : part });
-              if (part && !partGroupId && colourGroups[0])
-                onPartGroupId(colourGroups[0].id);
-            }}
-            className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
-          />
+          <label className="col-span-3 col-start-2 flex items-center gap-2 text-sm">
+            <input
+              id={`product-colour-choose-${i}`}
+              name={`product-colour-choose-${i}`}
+              type="checkbox"
+              checked={c.part !== null}
+              onChange={(e) => {
+                const on = e.currentTarget.checked;
+                set(i, {
+                  part: on
+                    ? value.length === 1
+                      ? 'Colour'
+                      : `Part ${i + 1}`
+                    : null,
+                });
+                if (on && !partGroupId && colourGroups[0])
+                  onPartGroupId(colourGroups[0].id);
+              }}
+            />
+            Customers choose this colour
+          </label>
+          {c.part !== null && (
+            <input
+              id={`product-colour-part-${i}`}
+              name={`product-colour-part-${i}`}
+              aria-label={`What customers call colour ${i + 1}`}
+              autoComplete="off"
+              maxLength={PRODUCT_PART_NAME_MAX_LENGTH}
+              placeholder="e.g. Body, Ears"
+              value={c.part}
+              onChange={(e) => set(i, { part: e.currentTarget.value })}
+              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+            />
+          )}
         </div>
       ))}
       {parted && (
