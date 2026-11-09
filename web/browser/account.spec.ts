@@ -39,7 +39,7 @@ test('a customer edits their details and finds "forgot your password"', async ({
   await expect(page.getByText('· confirmed')).toBeVisible();
   await page.getByLabel('Phone').fill('70 222 333');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Saved')).toBeVisible();
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Phone')).toHaveValue('70 222 333');
 

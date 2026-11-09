@@ -19,7 +19,7 @@ test('a special filament colour is entered with how it looks, and the shelf show
   await expect(record.getByText('#3b2a6e')).toBeVisible();
   await record.getByLabel('Price of one spool (USD)').fill('22.00');
   await record.getByRole('button', { name: 'Add to the shelf' }).click();
-  await expect(record.getByText('Saved')).toBeVisible();
+  await expect(record.getByText('Saved', { exact: true })).toBeVisible();
 
   await page.goto(`/admin/stock?q=${encodeURIComponent(colour)}`);
   const row = page.getByRole('row').filter({ hasText: colour });
