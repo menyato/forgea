@@ -88,11 +88,14 @@ test('customers recolour the parts of a 3MF product: each colour priced by its o
   // The owner names the parts customers recolour; the colour beside each is where it starts.
   await page.getByLabel(/Colour 1 \(file colour #aa2222\)/).fill('Black');
   await page.getByLabel(/Colour 2 \(file colour #b87333\)/).fill('Copper silk');
-  const choose = page.getByRole('checkbox', {
-    name: 'Customers choose this colour',
-  });
-  await choose.nth(0).check();
-  await choose.nth(1).check();
+  // One box lets customers choose every colour; each starts named after its own colour.
+  await page.getByLabel('Customers choose every colour').check();
+  await expect(page.getByLabel('What customers call colour 1')).toHaveValue(
+    'Black part',
+  );
+  await expect(page.getByLabel('What customers call colour 2')).toHaveValue(
+    'Copper silk part',
+  );
   await page.getByLabel('What customers call colour 1').fill('Body');
   await page.getByLabel('What customers call colour 2').fill('Ears');
   await page

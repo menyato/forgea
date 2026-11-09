@@ -47,6 +47,20 @@ export function ColoursEditor({
   const total = value.reduce((n, c) => n + (Number(c.grams) || 0), 0);
   const set = (i: number, patch: Partial<ProductColourView>) =>
     onChange(value.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  // What customers see above a colour's choices until the owner renames it: its own colour.
+  const startName = (c: ProductColourView, i: number) =>
+    (value.length === 1
+      ? 'Colour'
+      : c.colour.trim()
+        ? `${c.colour.trim()} part`
+        : `Colour ${i + 1}`
+    ).slice(0, PRODUCT_PART_NAME_MAX_LENGTH);
+  const choose = (next: ProductColourView[]) => {
+    onChange(next);
+    if (next.some((c) => c.part !== null) && !partGroupId && colourGroups[0])
+      onPartGroupId(colourGroups[0].id);
+  };
+  const every = value.every((c) => c.part !== null);
   const listError = Object.entries(errors).find(
     ([k]) => k.startsWith('colours') || k.startsWith('partColourGroupId'),
   )?.[1];
@@ -58,10 +72,32 @@ export function ColoursEditor({
       </legend>
       <p className="text-sm text-text-muted">
         Orders take each colour&apos;s grams from its stock. Name each colour as
-        the shop does. Tick &ldquo;Customers choose this colour&rdquo; to let
-        them pick it on the product page: it starts in the colour named here,
-        and the 3D view changes as they choose.
+        the shop does. Tick &ldquo;Customers choose this colour&rdquo; (or every
+        colour at once) to let them pick it on the product page: each one
+        changes only its own colour in the file, starts in the colour named
+        here, and the 3D view changes as they choose. Rename what customers see
+        (&ldquo;Body&rdquo;, &ldquo;Ears&rdquo;) as you like.
       </p>
+      {value.length > 1 && (
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            id="product-colour-choose-all"
+            name="product-colour-choose-all"
+            type="checkbox"
+            checked={every}
+            onChange={(e) => {
+              const on = e.currentTarget.checked;
+              choose(
+                value.map((c, i) => ({
+                  ...c,
+                  part: on ? (c.part ?? startName(c, i)) : null,
+                })),
+              );
+            }}
+          />
+          Customers choose every colour
+        </label>
+      )}
       <datalist id="product-colour-names">
         {named.map(([label]) => (
           <option key={label} value={label} />
@@ -110,15 +146,11 @@ export function ColoursEditor({
               checked={c.part !== null}
               onChange={(e) => {
                 const on = e.currentTarget.checked;
-                set(i, {
-                  part: on
-                    ? value.length === 1
-                      ? 'Colour'
-                      : `Part ${i + 1}`
-                    : null,
-                });
-                if (on && !partGroupId && colourGroups[0])
-                  onPartGroupId(colourGroups[0].id);
+                choose(
+                  value.map((x, j) =>
+                    j === i ? { ...x, part: on ? startName(x, i) : null } : x,
+                  ),
+                );
               }}
             />
             Customers choose this colour
