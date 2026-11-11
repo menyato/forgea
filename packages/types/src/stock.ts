@@ -32,7 +32,7 @@ export interface StockItemView {
   swatchHex: string | null;
   /** The colour picked for this line itself (#rrggbb); null = none picked. */
   hex: string | null;
-  /** The material's cost per gram now (from its reel price), USD. */
+  /** What a gram of this filament costs: its own spools' price, else its material's. USD. */
   costPerGram: string;
   active: boolean;
   /** On the shelf: the sum of every movement. */

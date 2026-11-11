@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PricingError } from './errors.js';
 import {
+  averagePricePerGram,
   configuredUnitCost,
   configuredUnitPrice,
   overriddenUnitPrice,
@@ -140,5 +141,21 @@ describe('overriddenUnitPrice', () => {
   it('takes off what a smaller size takes off, never going below zero', () => {
     expect(overriddenUnitPrice('25', '18.40', '15.40')).toBe('22.00');
     expect(overriddenUnitPrice('2', '18.40', '10.00')).toBe('0.00');
+  });
+});
+
+describe('averagePricePerGram', () => {
+  it("weighs each filament's own price by its grams; one without a price takes the material's", () => {
+    // 20 g at $0.017 + 5 g at the material's $0.02 = $0.44 over 25 g.
+    expect(
+      averagePricePerGram('0.02', [
+        { grams: '20', pricePerGram: '0.017' },
+        { grams: '5', pricePerGram: null },
+      ]),
+    ).toBe('0.0176');
+  });
+
+  it("is the material's price for a product without colours", () => {
+    expect(averagePricePerGram('0.02', [])).toBe('0.02');
   });
 });

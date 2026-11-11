@@ -4,6 +4,15 @@ import { Button } from '~/components/ui/button';
 import { SelectField } from '~/components/ui/field';
 import { Swatch } from '~/features/stock/stock-ui';
 
+/** A filament on the shelf, as bought: its material, name, look and cost per gram. */
+export interface Filament {
+  id: string;
+  material: string;
+  colour: string;
+  swatchHex: string | null;
+  costPerGram: string;
+}
+
 /**
  * A multi-colour product (from its 3MF): the grams each filament colour takes for one piece.
  * Each colour is one the shop names (an option value with a swatch), so orders take its grams
@@ -17,6 +26,7 @@ export function ColoursEditor({
   onChange,
   partGroupId,
   onPartGroupId,
+  filaments,
   groups,
   errors,
 }: {
@@ -24,6 +34,8 @@ export function ColoursEditor({
   onChange: (next: ProductColourView[]) => void;
   partGroupId: string;
   onPartGroupId: (id: string) => void;
+  /** The filaments on the shelf a colour may be printed from. */
+  filaments: readonly Filament[];
   groups: readonly OptionGroupView[];
   errors: Partial<Record<string, string>>;
 }) {
@@ -108,7 +120,13 @@ export function ColoursEditor({
           key={`${c.hex}-${i}`}
           className="grid grid-cols-[auto_minmax(0,1fr)_6rem_auto] items-center gap-2"
         >
-          <Swatch hex={named.find(([l]) => l === c.colour)?.[1] ?? c.hex} />
+          <Swatch
+            hex={
+              filaments.find((f) => f.id === c.stockItemId)?.swatchHex ??
+              named.find(([l]) => l === c.colour)?.[1] ??
+              c.hex
+            }
+          />
           <input
             id={`product-colour-${i}`}
             name={`product-colour-${i}`}
@@ -138,6 +156,37 @@ export function ColoursEditor({
           >
             ×
           </Button>
+          {filaments.length > 0 && (
+            <select
+              id={`product-colour-filament-${i}`}
+              name={`product-colour-filament-${i}`}
+              aria-label={`Filament colour ${i + 1} is printed from`}
+              value={c.stockItemId ?? ''}
+              onChange={(e) => {
+                const filament = filaments.find(
+                  (f) => f.id === e.currentTarget.value,
+                );
+                // Printed from a filament on the shelf: it goes by that filament's name, so
+                // stock takes its grams there and its cost uses that filament's price.
+                set(
+                  i,
+                  filament
+                    ? { stockItemId: filament.id, colour: filament.colour }
+                    : { stockItemId: null },
+                );
+              }}
+              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+            >
+              <option value="">
+                Printed from: the product&apos;s material, by colour name
+              </option>
+              {filaments.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.material} · {f.colour} (${f.costPerGram}/g)
+                </option>
+              ))}
+            </select>
+          )}
           <label className="col-span-3 col-start-2 flex items-center gap-2 text-sm">
             <input
               id={`product-colour-choose-${i}`}

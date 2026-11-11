@@ -1,0 +1,184 @@
+import type {
+  AdminProduct,
+  PricePreview,
+  StockItemView,
+  StockOverview,
+} from '@forgea/types';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import request from 'supertest';
+import { PrismaService } from '../src/database/prisma.service.js';
+import { Role } from '../src/generated/prisma/enums.js';
+import { CSRF, signedInAs } from './commerce-helpers.js';
+import { createApp } from './create-app.js';
+import {
+  createStudio,
+  moveOrder,
+  placeOrder,
+  type Studio,
+  useRoundPricing,
+} from './studio-helpers.js';
+
+/**
+ * Filaments as they are bought: each reel on the shelf keeps its own name, look and price. A
+ * product's colour printed from a reel costs what that reel costs and comes off that reel, of
+ * whatever material it is (PETG supports on a PLA piece); a colour customers choose comes off
+ * the reel the owner linked it to.
+ */
+describe('Filament reels: own price, assigned to colours (e2e)', () => {
+  let app: NestExpressApplication;
+  let prisma: PrismaService;
+  const http = () => request(app.getHttpServer());
+  let admin: Awaited<ReturnType<typeof signedInAs>>;
+  let restorePricing: () => Promise<void>;
+  let studio: Studio;
+  let white: StockItemView;
+  let support: StockItemView;
+
+  const as = (cookie: string) => ({
+    get: (url: string) => http().get(url).set('Cookie', cookie),
+    post: (url: string, body: object = {}) =>
+      http().post(url).set(CSRF).set('Cookie', cookie).send(body),
+    put: (url: string, body: object) =>
+      http().put(url).set(CSRF).set('Cookie', cookie).send(body),
+  });
+  const shelf = async () =>
+    ((await as(admin.cookie).get('/stock').expect(200)).body as StockOverview)
+      .items;
+  const save = (colours: object[]) =>
+    as(admin.cookie).put(`/products/${studio.product.id}`, {
+      slug: studio.product.slug,
+      name: studio.product.name,
+      description: studio.product.description,
+      materialId: studio.material.id,
+      grams: '100',
+      printHours: '5',
+      isCustom: false,
+      active: true,
+      imageKeys: [],
+      options: [],
+      sizes: [],
+      colours,
+    });
+
+  beforeAll(async () => {
+    app = await createApp();
+    prisma = app.get(PrismaService);
+    admin = await signedInAs(app, Role.ADMIN);
+    restorePricing = await useRoundPricing(app, admin.cookie);
+    studio = await createStudio(app);
+    // A second material for the supports' filament.
+    const petg = await prisma.material.create({
+      data: {
+        code: `PETG-${studio.tag}`.toUpperCase(),
+        name: `Support filament ${studio.tag}`,
+        pricePerGram: '0.05',
+        lowStockThresholdGrams: 500,
+      },
+    });
+    const receive = (materialId: string, colour: string, price: string) =>
+      as(admin.cookie)
+        .post('/stock/receipts', {
+          materialId,
+          colour,
+          hex: '#f2f2ee',
+          spools: 1,
+          spoolGrams: 1000,
+          pricePerSpool: price,
+          // The material's own price stays as it is: only this reel costs this.
+          updateCost: false,
+        })
+        .expect(204);
+    await receive(studio.material.id, 'Elegoo PLA Matte (White)', '17.00');
+    await receive(petg.id, 'Elegoo Rapid PETG (Black)', '20.00');
+    const items = await shelf();
+    white = items.find(
+      (i) =>
+        i.material.id === studio.material.id &&
+        i.colour === 'Elegoo PLA Matte (White)',
+    )!;
+    support = items.find((i) => i.material.id === petg.id)!;
+  });
+  afterAll(async () => {
+    await restorePricing();
+    await app.close();
+  });
+
+  it('a reel costs what its own spools cost, whatever its material costs', () => {
+    // The material is $0.05 a gram; this reel was $17 a kilo.
+    expect(white.costPerGram).toBe('0.0170');
+    expect(support.costPerGram).toBe('0.0200');
+  });
+
+  it('prices a product by the reels its colours are printed from', async () => {
+    const preview = async (colours?: object[]) =>
+      (
+        await as(admin.cookie)
+          .post('/products/price-preview', {
+            materialId: studio.material.id,
+            grams: '100',
+            printHours: '5',
+            ...(colours ? { colours } : {}),
+          })
+          .expect(200)
+      ).body as PricePreview;
+    const byMaterial = await preview();
+    const byReel = await preview([
+      { grams: '80', stockItemId: white.id },
+      { grams: '20', stockItemId: support.id },
+    ]);
+    // 100 g at the material's $0.05 = $5.00; from the reels 80 × 0.017 + 20 × 0.02 = $1.76.
+    expect(byMaterial.breakdown!.material).toBe('5.00');
+    expect(byReel.breakdown!.material).toBe('1.76');
+    expect(Number(byReel.calculatedPrice)).toBeLessThan(
+      Number(byMaterial.calculatedPrice),
+    );
+
+    const colours = [
+      {
+        colour: 'Elegoo PLA Matte (White)',
+        hex: '#ffffff',
+        grams: '80',
+        stockItemId: white.id,
+      },
+      {
+        colour: 'Elegoo Rapid PETG (Black)',
+        hex: '#000000',
+        grams: '20',
+        stockItemId: support.id,
+      },
+    ];
+    const saved = (await save(colours).expect(200)).body as AdminProduct;
+    expect(saved.colours.map((c) => c.stockItemId)).toEqual([
+      white.id,
+      support.id,
+    ]);
+    expect(saved.price).toBe(byReel.calculatedPrice);
+    // A filament that isn't on the shelf is refused.
+    await save([{ ...colours[0], stockItemId: studio.product.id }]).expect(400);
+  });
+
+  it('an order takes each colour from its reel, the supports from their own material', async () => {
+    const customer = await signedInAs(app, Role.CUSTOMER);
+    const order = await placeOrder(
+      app,
+      customer.cookie,
+      studio,
+      { size: 'standard', colour: 'red', quantity: 2, options: [] },
+      { paymentMethod: 'COD', delivery: false },
+    );
+    const staff = await signedInAs(app, Role.STAFF);
+    await moveOrder(app, staff.cookie, order.id, [
+      'CONFIRMED',
+      'IN_PRODUCTION',
+    ]);
+    const after = await shelf();
+    expect(after.find((i) => i.id === white.id)!.stockGrams).toBe(1000 - 160);
+    expect(after.find((i) => i.id === support.id)!.stockGrams).toBe(1000 - 40);
+    // Nothing went to a line named only after a colour.
+    expect(
+      after.filter(
+        (i) => i.material.id === studio.material.id && i.stockGrams < 0,
+      ),
+    ).toEqual([]);
+  });
+});

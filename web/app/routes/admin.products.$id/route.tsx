@@ -11,6 +11,7 @@ import type {
   PrintFilesTotal,
   ProductRealCost,
   ProfitKind,
+  StockOverview,
   UploadedFile,
 } from '@forgea/types';
 import {
@@ -34,31 +35,41 @@ import { ProductForm } from './product-form';
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const isNew = params.id === 'new';
-  const [product, categories, materials, groups, list, pricing, realCost] =
-    await Promise.all([
-      isNew
-        ? Promise.resolve(null)
-        : api.get<AdminProduct>(
-            `/products/manage/${encodeURIComponent(params.id)}`,
-          ),
-      api.get<CategoryView[]>('/categories/manage'),
-      api.get<MaterialView[]>('/materials'),
-      api.get<OptionGroupView[]>('/option-groups'),
-      allPages<AdminProductListItem>(
-        api,
-        '/products/manage?limit=100&sort=name&order=asc',
-      ),
-      // The shop's profit rule: only for whoever manages pricing (others get 403).
-      api.get<{ cost: { profit: { kind: ProfitKind; value: string } } }>(
-        '/pricing/settings',
-      ),
-      // What its pieces really cost: only for whoever runs production (others get 403).
-      isNew
-        ? Promise.resolve(null)
-        : api.get<ProductRealCost>(
-            `/print-jobs/products/${encodeURIComponent(params.id)}/cost`,
-          ),
-    ]);
+  const [
+    product,
+    categories,
+    materials,
+    groups,
+    list,
+    pricing,
+    realCost,
+    stock,
+  ] = await Promise.all([
+    isNew
+      ? Promise.resolve(null)
+      : api.get<AdminProduct>(
+          `/products/manage/${encodeURIComponent(params.id)}`,
+        ),
+    api.get<CategoryView[]>('/categories/manage'),
+    api.get<MaterialView[]>('/materials'),
+    api.get<OptionGroupView[]>('/option-groups'),
+    allPages<AdminProductListItem>(
+      api,
+      '/products/manage?limit=100&sort=name&order=asc',
+    ),
+    // The shop's profit rule: only for whoever manages pricing (others get 403).
+    api.get<{ cost: { profit: { kind: ProfitKind; value: string } } }>(
+      '/pricing/settings',
+    ),
+    // What its pieces really cost: only for whoever runs production (others get 403).
+    isNew
+      ? Promise.resolve(null)
+      : api.get<ProductRealCost>(
+          `/print-jobs/products/${encodeURIComponent(params.id)}/cost`,
+        ),
+    // The filaments on the shelf (others get 403 and no list).
+    api.get<StockOverview>('/stock'),
+  ]);
   if (product && !product.ok)
     throw new Response(product.message, { status: product.status });
   for (const r of [categories, materials, groups]) {
@@ -71,6 +82,19 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     groups: groups.ok ? groups.data : [],
     shopProfit: pricing.ok ? pricing.data.cost.profit : null,
     realCost: realCost?.ok ? realCost.data : null,
+    // The filaments on the shelf a colour may be printed from (none for someone who can't
+    // see the stock).
+    filaments: stock.ok
+      ? stock.data.items
+          .filter((i) => i.active && i.colour !== '')
+          .map((i) => ({
+            id: i.id,
+            material: i.material.code,
+            colour: i.colour,
+            swatchHex: i.swatchHex,
+            costPerGram: i.costPerGram,
+          }))
+      : [],
     others: list
       .filter((p) => p.id !== params.id)
       .map((p) => ({ id: p.id, name: p.name })),
@@ -107,6 +131,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
+      colours: jsonField(form, 'colours') ?? undefined,
       modelFileKey: text(form, 'modelFileKey'),
       printFileKeys: jsonField(form, 'printFileKeys') ?? undefined,
     });

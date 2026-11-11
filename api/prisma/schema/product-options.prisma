@@ -44,6 +44,10 @@ model OptionValue {
   /// Choosing this value prints in this material (its price per gram applies).
   materialId      String?     @db.Uuid
   material        Material?   @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  /// A colour the shop offers is printed from this filament on the shelf: an order that chose
+  /// it takes its grams there (that filament's material and price). Null = by name.
+  stockItemId     String?     @db.Uuid
+  stockItem       StockItem?  @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
   sortOrder       Int         @default(0)
   active          Boolean     @default(true)
   createdAt       DateTime    @default(now()) @db.Timestamptz(3)

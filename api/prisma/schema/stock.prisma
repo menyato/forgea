@@ -10,6 +10,9 @@ model StockItem {
   /// How the colour looks (#rrggbb, CHECK), chosen when the spools come in; null = the shop's
   /// swatch of that name, if any.
   hex           String?
+  /// What a gram of this filament costs (USD), from its own spools as bought; null = the
+  /// material's price. Above 0 (CHECK).
+  pricePerGram  Decimal? @db.Decimal(10, 4)
   /// Restock when what is left (after open orders) is at or below this.
   lowStockGrams Int
   /// What one spool holds: suggestions are in whole spools.
@@ -23,6 +26,10 @@ model StockItem {
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   movements StockMovement[]
+  /// Product colours printed from this filament.
+  productColours ProductColour[]
+  /// The shop's colours printed from this filament.
+  optionValues   OptionValue[]
   printJobs PrintJob[]
 
   @@unique([materialId, colour])

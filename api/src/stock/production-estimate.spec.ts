@@ -29,6 +29,7 @@ const catalog: Catalog = {
         materialId: 'pla',
         slicedFile: false,
         colours: [],
+        partColourGroup: null,
         sizes: [
           {
             label: '10 × 10 × 10 cm',
@@ -56,6 +57,7 @@ const catalog: Catalog = {
         materialId: 'pla',
         slicedFile: false,
         colours: [],
+        partColourGroup: null,
         sizes: [],
       },
     ],
@@ -68,6 +70,7 @@ const catalog: Catalog = {
         hoursMultiplier: '1',
         materialId: null,
         swatchHex: '#ff0000',
+        filament: null,
       },
     ],
     [
@@ -77,6 +80,7 @@ const catalog: Catalog = {
         hoursMultiplier: '1',
         materialId: 'petg',
         swatchHex: null,
+        filament: null,
       },
     ],
   ]),
@@ -149,9 +153,9 @@ describe('estimateItem', () => {
           {
             ...catalog.products.get('stand')!,
             colours: [
-              { colour: 'White', grams: '30', part: 'Body' },
-              { colour: 'Black', grams: '15', part: 'Ears' },
-              { colour: 'Grey', grams: '5', part: null },
+              { colour: 'White', grams: '30', part: 'Body', filament: null },
+              { colour: 'Black', grams: '15', part: 'Ears', filament: null },
+              { colour: 'Grey', grams: '5', part: null, filament: null },
             ],
           },
         ],
@@ -166,6 +170,7 @@ describe('estimateItem', () => {
             hoursMultiplier: '1',
             materialId: null,
             swatchHex: '#000000',
+            filament: null,
           },
         ],
       ]),
@@ -185,6 +190,98 @@ describe('estimateItem', () => {
       { colour: 'Black', gramsPerUnit: '15.00' },
       { colour: 'Grey', gramsPerUnit: '5.00' },
     ]);
+  });
+
+  it('takes a colour from the filament assigned to it, at its own price and material', () => {
+    const vase: Catalog = {
+      ...catalog,
+      products: new Map([
+        [
+          'vase2',
+          {
+            ...catalog.products.get('stand')!,
+            colours: [
+              {
+                colour: 'Black',
+                grams: '45',
+                part: 'Colour',
+                filament: {
+                  materialId: 'pla',
+                  colour: 'Elegoo PLA Matte (Black)',
+                  pricePerGram: '0.017',
+                },
+              },
+              {
+                colour: 'Black',
+                grams: '5',
+                part: null,
+                filament: {
+                  materialId: 'petg',
+                  colour: 'Elegoo Rapid PETG (Black)',
+                  pricePerGram: '0.02',
+                },
+              },
+            ],
+          },
+        ],
+      ]),
+    };
+    const e = estimateItem(vase, calculator, 'vase2', []);
+    // Each from its own reel; the supports' PETG from the PETG shelf.
+    expect(e?.colours).toEqual([
+      {
+        colour: 'Elegoo PLA Matte (Black)',
+        materialId: 'pla',
+        gramsPerUnit: '45.00',
+      },
+      {
+        colour: 'Elegoo Rapid PETG (Black)',
+        materialId: 'petg',
+        gramsPerUnit: '5.00',
+      },
+    ]);
+    // 45 × 0.017 + 5 × 0.02 = 0.865; +20% = 1.038; + 1 = 2.04 (the stand has no hours).
+    expect(e?.unitCost).toBe('2.04');
+    // The customer's own colour for the part: the product's material, in that colour.
+    const red = estimateItem(vase, calculator, 'vase2', [
+      { group: 'Colour', value: 'Red' },
+    ]);
+    expect(red?.colours?.[0]).toEqual({ colour: 'Red', gramsPerUnit: '45.00' });
+    // A colour the owner linked to a reel: the customer's choice comes off that reel.
+    const linked: Catalog = {
+      ...vase,
+      products: new Map([
+        [
+          'vase2',
+          { ...vase.products.get('vase2')!, partColourGroup: 'Shop colours' },
+        ],
+      ]),
+      values: new Map([
+        ...vase.values,
+        [
+          valueKey('Shop colours', 'Pink'),
+          {
+            gramsMultiplier: '1',
+            hoursMultiplier: '1',
+            materialId: null,
+            swatchHex: '#e8afcf',
+            filament: {
+              materialId: 'pla',
+              colour: 'eSUN HS PLA+ (Magenta)',
+              pricePerGram: '0.02',
+            },
+          },
+        ],
+      ]),
+    };
+    const pink = estimateItem(linked, calculator, 'vase2', [
+      { group: 'Colour', value: 'Pink' },
+    ]);
+    expect(pink?.colours?.[0]).toEqual({
+      colour: 'eSUN HS PLA+ (Magenta)',
+      materialId: 'pla',
+      gramsPerUnit: '45.00',
+    });
   });
 
   it('labels sizes the way orders store them', () => {

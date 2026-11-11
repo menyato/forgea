@@ -91,6 +91,7 @@ function toView(g: OptionGroupRow): OptionGroupView {
       hoursMultiplier: v.hoursMultiplier.toString(),
       extraPrice: v.extraPrice.toFixed(2),
       materialId: v.materialId,
+      stockItemId: v.stockItemId,
       sortOrder: v.sortOrder,
       active: v.active,
     })),

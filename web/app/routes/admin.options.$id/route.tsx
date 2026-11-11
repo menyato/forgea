@@ -2,6 +2,7 @@ import {
   type MaterialView,
   OptionKind,
   type OptionGroupView,
+  type StockOverview,
 } from '@forgea/types';
 import { SaveOptionGroupDto, SaveOptionValueDto } from '@forgea/validation';
 import { useCan } from '~/features/admin/access';
@@ -16,16 +17,30 @@ import { ValueForm } from './value-form';
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   // The API sends option groups as one list.
-  const [groups, materials] = await Promise.all([
+  const [groups, materials, stock] = await Promise.all([
     api.get<OptionGroupView[]>('/option-groups'),
     api.get<MaterialView[]>('/materials'),
+    // The filaments a colour may be printed from (none for someone who can't see the stock).
+    api.get<StockOverview>('/stock'),
   ]);
   if (!groups.ok) throw new Response(groups.message, { status: groups.status });
   if (!materials.ok)
     throw new Response(materials.message, { status: materials.status });
   const group = groups.data.find((g) => g.id === params.id);
   if (!group) throw new Response('No such option', { status: 404 });
-  return { group, materials: materials.data };
+  return {
+    group,
+    materials: materials.data,
+    filaments: stock.ok
+      ? stock.data.items
+          .filter((i) => i.active && i.colour !== '')
+          .map((i) => ({
+            id: i.id,
+            material: i.material.code,
+            colour: i.colour,
+          }))
+      : [],
+  };
 }
 
 /** group (the option itself) | value (one of its choices, new or existing) */
@@ -51,6 +66,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       hoursMultiplier: text(form, 'hoursMultiplier') ?? '1',
       extraPrice: text(form, 'extraPrice') ?? '0',
       materialId: text(form, 'materialId'),
+      stockItemId: text(form, 'stockItemId'),
       sortOrder: text(form, 'sortOrder') ?? 0,
       active: checked(form, 'active'),
     },
@@ -62,7 +78,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function EditOption({ loaderData }: Route.ComponentProps) {
-  const { group, materials } = loaderData;
+  const { group, materials, filaments } = loaderData;
   const editable = useCan()('catalog.manage');
   return (
     <>
@@ -88,10 +104,19 @@ export default function EditOption({ loaderData }: Route.ComponentProps) {
                 <p className="text-sm text-text-muted">No choices yet.</p>
               )}
               {group.values.map((v) => (
-                <ValueForm key={v.id} value={v} materials={materials} />
+                <ValueForm
+                  key={v.id}
+                  value={v}
+                  materials={materials}
+                  filaments={filaments}
+                />
               ))}
               {editable && (
-                <ValueForm key={`new-${group.id}`} materials={materials} />
+                <ValueForm
+                  key={`new-${group.id}`}
+                  materials={materials}
+                  filaments={filaments}
+                />
               )}
             </Panel>
           )}
