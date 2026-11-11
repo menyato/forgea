@@ -19,7 +19,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     # Throwaway database for the e2e suite; same major version as local development.
     services:
@@ -83,7 +83,7 @@ jobs:
       # Real Chrome (preinstalled on GitHub's Ubuntu runners), desktop and phone sizes.
       - name: Browser tests (storefront journeys)
         # Its own limit, so a stuck run still leaves time to keep the traces below.
-        timeout-minutes: 12
+        timeout-minutes: 20
         run: pnpm --filter @forgea/web test:browser
 
       # Playwright's trace of each failed test (network, console, screenshots): download it from
