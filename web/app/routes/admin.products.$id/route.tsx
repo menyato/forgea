@@ -1,3 +1,4 @@
+export { unlessAsking as shouldRevalidate } from '~/lib/revalidate';
 import type {
   AdminProduct,
   AdminProductListItem,
@@ -7,6 +8,7 @@ import type {
   OptionGroupView,
   Page,
   PricePreview,
+  PrintFilesTotal,
   ProductRealCost,
   ProfitKind,
   UploadedFile,
@@ -14,6 +16,7 @@ import type {
 import {
   ModelInfoDto,
   PricePreviewDto,
+  PrintFilesDto,
   SaveProductDto,
 } from '@forgea/validation';
 import { data, Form, redirect } from 'react-router';
@@ -78,11 +81,15 @@ export type UploadResult =
   | { uploaded: UploadedFile; error?: undefined }
   | { uploaded?: undefined; error: string };
 
+export type PrintFilesResult =
+  | { total: PrintFilesTotal; error?: undefined }
+  | { total?: undefined; error: string };
+
 export type ModelInfoResult =
   | { info: ModelFileInfo; error?: undefined }
   | { info?: undefined; error: string };
 
-/** upload-model | upload-image | model-info | preview | duplicate | save */
+/** upload-model | upload-image | model-info | print-files | preview | duplicate | save */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const form = await request.formData();
@@ -101,6 +108,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
       modelFileKey: text(form, 'modelFileKey'),
+      printFileKeys: jsonField(form, 'printFileKeys') ?? undefined,
     });
     if (!parsed.ok) return data({ preview: null }, { status: 400 });
     const r = await api.post<PricePreview>(
@@ -132,6 +140,27 @@ export async function action({ request, params, context }: Route.ActionArgs) {
     return r.ok
       ? data<ModelInfoResult>({ info: r.data })
       : data<ModelInfoResult>({ error: r.message }, { status: r.status });
+  }
+
+  // The product's sliced print files, read and added up by the API.
+  if (intent === 'print-files') {
+    const parsed = validateForm(PrintFilesDto, {
+      files: jsonField(form, 'files') ?? [],
+      materialId: text(form, 'materialId'),
+    });
+    if (!parsed.ok) {
+      return data<PrintFilesResult>(
+        { error: Object.values(parsed.errors)[0] ?? 'Check the files' },
+        { status: 400 },
+      );
+    }
+    const r = await api.post<PrintFilesTotal>(
+      '/products/print-files',
+      parsed.value,
+    );
+    return r.ok
+      ? data<PrintFilesResult>({ total: r.data })
+      : data<PrintFilesResult>({ error: r.message }, { status: r.status });
   }
 
   if (intent === 'upload-model' || intent === 'upload-image') {
@@ -175,6 +204,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       sizeZcm: text(form, 'sizeZcm'),
       sizes: jsonField(form, 'sizes') ?? [],
       colours: jsonField(form, 'colours') ?? [],
+      printFiles: jsonField(form, 'printFiles') ?? [],
       partColourGroupId: text(form, 'partColourGroupId'),
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
@@ -234,6 +264,7 @@ async function duplicate(api: ApiClient, id: string) {
         isDefault: s.isDefault,
       })),
       colours: p.colours,
+      printFiles: p.printFiles.map((f) => ({ key: f.fileKey, name: f.name })),
       ...(p.partColourGroupId
         ? { partColourGroupId: p.partColourGroupId }
         : {}),

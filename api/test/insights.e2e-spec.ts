@@ -10,6 +10,7 @@ import { PrismaService } from '../src/database/prisma.service.js';
 import { InsightsRepository } from '../src/insights/insights.repository.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
+import { studioDay } from '../src/common/studio-day.js';
 import { createApp } from './create-app.js';
 import {
   createStudio,
@@ -21,8 +22,8 @@ import {
 } from './studio-helpers.js';
 
 const DAY = 86_400_000;
-const day = (offset: number) =>
-  new Date(Date.now() + offset * DAY).toISOString().slice(0, 10);
+/** A day as the studio counts it (Beirut), like the API. */
+const day = (offset: number) => studioDay(new Date(Date.now() + offset * DAY));
 
 /** Money as cents, so a difference of two figures is exact. */
 const cents = (v: string) => Math.round(Number(v) * 100);

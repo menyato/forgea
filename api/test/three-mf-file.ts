@@ -74,13 +74,19 @@ export function bambuThreeMf({ sliced }: { sliced: boolean }): Buffer {
           filament_colour: ['#AA2222', '#B87333'],
           filament_type: ['PLA', 'PLA'],
           wall_loops: '2',
+          enable_prime_tower: '1',
+          printer_model: 'Bambu Lab X2D',
+          nozzle_diameter: ['0.4', '0.4'],
+          layer_height: '0.12',
+          sparse_infill_density: '15%',
+          print_settings_id: '0.12mm Fine @BBL X2D',
         }),
       },
       ...(sliced
         ? [
             {
               name: 'Metadata/slice_info.config',
-              text: '<?xml version="1.0"?><config><plate><metadata key="index" value="1"/><metadata key="prediction" value="5400"/><metadata key="weight" value="12.5"/><filament id="1" type="PLA" color="#AA2222" used_m="3" used_g="10.25"/><filament id="2" type="PLA" color="#B87333" used_m="1" used_g="2.25"/></plate></config>',
+              text: '<?xml version="1.0"?><config><plate><metadata key="index" value="1"/><metadata key="prediction" value="5400"/><metadata key="weight" value="12.5"/><metadata key="support_used" value="true"/><object identify_id="1" name="piece &lt;b&gt;" skipped="false" /><object identify_id="2" name="left out" skipped="true" /><filament id="1" type="PLA" color="#AA2222" used_m="3" used_g="10.25"/><filament id="2" type="PLA" color="#B87333" used_m="1" used_g="2.25"/></plate></config>',
             },
             {
               name: 'Metadata/plate_1.gcode',

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { DateRange } from '@forgea/types';
 import type { StockMovementListQuery } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
+import { studioDayPlus, studioDayStart } from '../common/studio-day.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { StockMovementKind } from '../generated/prisma/enums.js';
@@ -92,10 +93,13 @@ export interface OpenLine {
 }
 
 const DAY_MS = 86_400_000;
-/** A period's days as timestamps: from its first midnight (UTC) to the one after its last day. */
+/**
+ * A period's days as timestamps: from its first midnight to the one after its last day, by
+ * the studio's days (Beirut), the days invoices and payments are dated by.
+ */
 export const between = (range: DateRange) => ({
-  start: new Date(`${range.from}T00:00:00Z`),
-  end: new Date(Date.parse(`${range.to}T00:00:00Z`) + DAY_MS),
+  start: studioDayStart(range.from),
+  end: studioDayStart(studioDayPlus(range.to, 1)),
 });
 
 /** Filament stock lines and their movements; sums and groupings are done by the database. */

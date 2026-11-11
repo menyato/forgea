@@ -1,3 +1,4 @@
+import { bambuThreeMf } from '../../test/three-mf-file.js';
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { zipTextFiles } from '../common/zip-writer.js';
@@ -125,6 +126,29 @@ describe('readThreeMf', () => {
       [1, 'PLA', 10.25],
       [2, 'PETG', 2.25],
     ]);
+  });
+
+  it('keeps how the file was set up to print, as plain text', () => {
+    const { info } = readThreeMf(bambuThreeMf({ sliced: true }));
+    expect(info.setup).toEqual({
+      plates: 1,
+      supports: true,
+      primeTower: true,
+      printer: 'Bambu Lab X2D',
+      nozzleMm: 0.4,
+      layerHeightMm: 0.12,
+      infill: '15%',
+      profile: '0.12mm Fine @BBL X2D',
+      // A skipped object isn't printed; markup signs never come through.
+      objects: ['piece b'],
+    });
+    // Never sliced: no plates, and nothing made up.
+    expect(readThreeMf(bambuProject()).info.setup).toMatchObject({
+      plates: 0,
+      supports: false,
+      printer: null,
+      objects: [],
+    });
   });
 
   it('leaves out modifiers and negative parts', () => {

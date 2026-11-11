@@ -99,6 +99,45 @@ export class PrintFiles {
     };
   }
 
+  /**
+   * One of the sliced print files of an order line's product (a product shown assembled and
+   * printed from other files), as it was uploaded.
+   */
+  async productPrintFile(
+    orderId: string,
+    itemId: string,
+    fileId: string,
+  ): Promise<{ name: string; bytes: Uint8Array }> {
+    const file = await this.prisma.productPrintFile.findFirst({
+      where: {
+        id: fileId,
+        product: { orderItems: { some: { id: itemId, orderId } } },
+      },
+      select: {
+        fileKey: true,
+        name: true,
+        product: {
+          select: {
+            orderItems: {
+              where: { id: itemId },
+              select: { order: { select: { orderNumber: true } } },
+            },
+          },
+        },
+      },
+    });
+    const number = file?.product.orderItems[0]?.order.orderNumber;
+    if (!file || !number) throw new NotFoundException('No such print file');
+    const slug = file.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return {
+      name: `${number}-${slug || 'print'}.gcode.3mf`,
+      bytes: await this.uploads.read(file.fileKey),
+    };
+  }
+
   /** A personalised order line and the design it was ordered with. */
   private async line(orderId: string, itemId: string) {
     const item = await this.prisma.orderItem.findFirst({

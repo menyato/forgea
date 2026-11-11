@@ -18,12 +18,14 @@ import type {
   Page,
   Permission,
   PricePreview,
+  PrintFilesTotal,
   ProductDetail,
   ProductListItem,
 } from '@forgea/types';
 import {
   ModelInfoDto,
   PricePreviewDto,
+  PrintFilesDto,
   ProductListQuery,
   ProductPriceDto,
   SaveProductDto,
@@ -141,6 +143,14 @@ export class ProductsController {
   @Post('model-info')
   modelInfo(@Body() dto: ModelInfoDto): Promise<ModelFileInfo> {
     return this.modelFiles.info(dto);
+  }
+
+  /** A product's sliced print files, read and added up: grams per colour, time, set-up. */
+  @RequirePermission('catalog.manage')
+  @HttpCode(200)
+  @Post('print-files')
+  printFiles(@Body() dto: PrintFilesDto): Promise<PrintFilesTotal> {
+    return this.products.printFilesInfo(dto);
   }
 
   @RequirePermission('catalog.manage')

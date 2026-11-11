@@ -12,6 +12,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { ProductPreview } from './product-preview';
 import type { Route } from './+types/route';
 
 const FILTERS = [
@@ -45,7 +46,17 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 const category = (p: AdminProductListItem) => p.category ?? 'No category';
 
 const COLUMNS: ListColumn<AdminProductListItem>[] = [
-  { key: 'name', label: 'Product', sort: 'name', cell: (p) => p.name },
+  {
+    key: 'name',
+    label: 'Product',
+    sort: 'name',
+    cell: (p) => (
+      <span className="flex items-center gap-3">
+        <ProductPreview product={p} className="size-12 shrink-0" />
+        {p.name}
+      </span>
+    ),
+  },
   { key: 'category', label: 'Category', cell: (p) => p.category ?? '—' },
   { key: 'material', label: 'Material', cell: (p) => p.material },
   { key: 'model', label: '3D', cell: (p) => (p.hasModel ? 'Yes' : '—') },
@@ -129,6 +140,7 @@ export default function Products({ loaderData }: Route.ComponentProps) {
           title={(p) => p.name}
           card={(p) => (
             <>
+              <ProductPreview product={p} className="aspect-[4/3] w-full" />
               <span className="text-text-muted">
                 {p.category ?? 'No category'} · {p.material}
                 {p.hasModel && ' · 3D'}

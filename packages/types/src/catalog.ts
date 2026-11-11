@@ -153,6 +153,8 @@ export interface AdminProduct {
   partColourGroupId: string | null;
   /** Its grams and time are its sliced 3MF's own: purge, prime tower and supports included. */
   slicedFile: boolean;
+  /** Its sliced print files, when it is printed from other files than its model. */
+  printFiles: ProductPrintFileView[];
   /** Base price with default options, from the current pricing settings. */
   price: Money;
 }
@@ -206,6 +208,55 @@ export interface ModelFileInfo {
     /** The closest colour the shop sells (a swatch's label), when there is one. */
     suggested: string | null;
   }[];
+  setup: PrintSetup;
+}
+
+/** How a 3MF was set up to print, as its slicer says; each field only when the file has it. */
+export interface PrintSetup {
+  /** Sliced plates in the file (0: never sliced). */
+  plates: number;
+  supports: boolean;
+  primeTower: boolean;
+  /** "Bambu Lab X2D". */
+  printer: string | null;
+  nozzleMm: number | null;
+  layerHeightMm: number | null;
+  /** "15%". */
+  infill: string | null;
+  /** The print profile ("0.12mm Fine @BBL X2D"). */
+  profile: string | null;
+  /** The objects on its plates, by name. */
+  objects: string[];
+}
+
+/**
+ * A product's sliced print file (staff only): what the slicer says it takes, purge, prime tower
+ * and supports included, and how it was set up. A product shown assembled is printed from one
+ * or more of these; together they are its grams, time and colours.
+ */
+export interface ProductPrintFileView {
+  fileKey: string;
+  /** What the owner calls it ("Base", "Shade"). */
+  name: string;
+  grams: string;
+  printHours: string;
+  /** Each colour as the shop names it (else the file's #rrggbb), with its grams. */
+  colours: {
+    colour: string;
+    hex: string;
+    type: string | null;
+    grams: string;
+  }[];
+  setup: PrintSetup;
+}
+
+/** POST /products/print-files: the files read, and what they take together. */
+export interface PrintFilesTotal {
+  files: ProductPrintFileView[];
+  grams: string;
+  printHours: string;
+  /** Colours of the same name added up, in the order first met. */
+  colours: { colour: string; hex: string; grams: string }[];
 }
 
 /**
@@ -221,7 +272,12 @@ export interface PricePreview {
   wasteIncluded: boolean;
   breakdown: {
     material: Money;
+    /** Printer time: its wear and its electricity together. */
     printer: Money;
+    /** The printer's price spread over its life, and the electricity it draws (both add up
+     *  to `printer`); null when the hourly cost was typed in on the Pricing page. */
+    printerWear: Money | null;
+    electricity: Money | null;
     wasteAndFailures: Money;
     labour: Money;
     packaging: Money;
@@ -251,6 +307,9 @@ export interface AdminProductListItem {
   price: Money;
   active: boolean;
   hasModel: boolean;
+  /** Its 3D model, and the colour a one-colour model is first shown in: as the shop shows it. */
+  modelKey: string | null;
+  previewColor: string | null;
   updatedAt: string;
 }
 

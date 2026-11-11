@@ -2,6 +2,7 @@ import { OptionKind, ProfitKind } from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -28,6 +29,8 @@ import {
   PRICE_PER_GRAM_PATTERN,
   PRODUCT_COLOURS_MAX,
   PRODUCT_PART_NAME_MAX_LENGTH,
+  PRINT_FILE_NAME_MAX_LENGTH,
+  PRODUCT_PRINT_FILES_MAX,
   PRODUCT_IMAGES_MAX,
   SLUG_PATTERN,
   STORAGE_KEY_PATTERN,
@@ -258,6 +261,20 @@ export class ProductColourDto {
   part?: string;
 }
 
+/** A sliced print file of a product: the upload and what the owner calls it. */
+export class ProductPrintFileDto {
+  @Matches(/^clean\/[0-9a-f-]{36}\.3mf$/, {
+    message: 'Upload the sliced file again',
+  })
+  key!: string;
+
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Name the print file' })
+  @MaxLength(PRINT_FILE_NAME_MAX_LENGTH)
+  name!: string;
+}
+
 /** The owner's own price, in place of the calculated one (USD, above 0). */
 const PRICE_OVERRIDE_MESSAGE = { message: 'Enter your price, e.g. 25.00' };
 
@@ -380,6 +397,13 @@ export class SaveProductDto {
   @Type(() => ProductColourDto)
   colours: ProductColourDto[] = [];
 
+  /** Its sliced print files (their total is its grams, time and colours); none: its model. */
+  @IsArray()
+  @ArrayMaxSize(PRODUCT_PRINT_FILES_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => ProductPrintFileDto)
+  printFiles: ProductPrintFileDto[] = [];
+
   /** The colours customers recolour its named parts in: an option group with swatches. */
   @IsOptional()
   @IsUUID('all', { message: 'Choose the colours customers pick from' })
@@ -459,6 +483,29 @@ export class PricePreviewDto {
   @IsOptional()
   @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the model again' })
   modelFileKey?: string;
+
+  /** Its sliced print files: numbers that are their total add no purge waste either. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(PRODUCT_PRINT_FILES_MAX)
+  @Matches(STORAGE_KEY_PATTERN, {
+    each: true,
+    message: 'Upload the file again',
+  })
+  printFileKeys?: string[];
+}
+
+/** POST /products/print-files: read these sliced files and add them up (dashboard). */
+export class PrintFilesDto {
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Add a sliced print file' })
+  @ArrayMaxSize(PRODUCT_PRINT_FILES_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => ProductPrintFileDto)
+  files!: ProductPrintFileDto[];
+
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
 }
 
 /** POST /products/model-info: what a 3MF says, priced with a material (dashboard). */

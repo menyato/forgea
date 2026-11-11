@@ -35,6 +35,32 @@ export interface PrinterCosts {
  * electricity it draws ($600 over 6000 h = $0.10, + 150 W × $0.30/kWh = $0.045 → $0.15 an hour).
  */
 export function printerHourlyRate(p: PrinterCosts): string {
+  const { wear, power } = hourParts(p);
+  return wear.plus(power).round(2, Big.roundHalfUp).toFixed(2);
+}
+
+/**
+ * A printing cost shared between the printer wearing out and the electricity it draws, as the
+ * printer's details share an hour ($4.00 of printer time at $0.10 wear + $0.045 power an hour
+ * is $2.76 wear and $1.24 electricity). The two always add up to the cost given.
+ */
+export function splitPrinterCost(
+  p: PrinterCosts,
+  machineCost: DecimalInput,
+): { wear: string; electricity: string } {
+  const { wear, power } = hourParts(p);
+  const cost = toBig(machineCost, 'printer cost');
+  const hour = wear.plus(power);
+  const electricity = hour.eq(0)
+    ? new Big(0)
+    : cost.times(power).div(hour).round(2, Big.roundHalfUp);
+  return {
+    wear: cost.minus(electricity).toFixed(2),
+    electricity: electricity.toFixed(2),
+  };
+}
+
+function hourParts(p: PrinterCosts): { wear: Big; power: Big } {
   const life = toBig(p.lifeHours, 'printer life');
   if (life.lte(0)) throw new PricingError('printer life must be above 0 hours');
   const wear = requireNonNegative(
@@ -49,5 +75,5 @@ export function printerHourlyRate(p: PrinterCosts): string {
         'electricity price',
       ),
     );
-  return wear.plus(power).round(2, Big.roundHalfUp).toFixed(2);
+  return { wear, power };
 }

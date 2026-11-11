@@ -84,6 +84,7 @@ model Product {
   quotationLines QuotationLine[]
   sizes          ProductSize[]
   colours        ProductColour[]
+  printFiles     ProductPrintFile[]
   stockMovements StockMovement[]
   readyPieces    ReadyPiece[]
 
@@ -135,4 +136,28 @@ model ProductColour {
 
   @@unique([productId, colour])
   @@map("product_colours")
+}
+
+/// A sliced print file of a product (a Bambu Studio `.gcode.3mf`): the product may be shown
+/// assembled (its model) and printed from one or more of these. Each keeps what the slicer
+/// says it takes; together they are the product's grams, time and colours. Staff only: the
+/// shop never gets these files.
+model ProductPrintFile {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  productId  String  @db.Uuid
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Object key of the sliced 3MF (clean/<id>.3mf).
+  fileKey    String
+  /// What the owner calls it ("Base", "Shade"): 1–80 characters (CHECK).
+  name       String
+  /// The slicer's grams (purge, prime tower and supports included) and hours. Above 0 (CHECK).
+  grams      Decimal @db.Decimal(10, 2)
+  printHours Decimal @db.Decimal(8, 2)
+  /// Read from the file by the API: `{ colours: [{ colour, hex, type, grams }], setup }`
+  /// (PrintFileDetails). An object (CHECK).
+  details    Json
+  sortOrder  Int     @default(0)
+
+  @@unique([productId, fileKey])
+  @@map("product_print_files")
 }

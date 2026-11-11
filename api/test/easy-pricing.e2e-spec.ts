@@ -247,6 +247,9 @@ describe('Easy pricing (e2e)', () => {
       breakdown: {
         material: '5.00',
         printer: '5.00',
+        // The hourly cost was typed in (round pricing): no wear and electricity split.
+        printerWear: null,
+        electricity: null,
         wasteAndFailures: '2.00',
         labour: '0.50',
         packaging: '0.50',

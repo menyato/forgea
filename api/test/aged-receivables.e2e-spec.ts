@@ -4,11 +4,12 @@ import { Ledger } from '../src/accounting/ledger.service.js';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { AccountType, EntryType, Role } from '../src/generated/prisma/enums.js';
 import { signedInAs } from './commerce-helpers.js';
+import { studioDay } from '../src/common/studio-day.js';
 import { createApp } from './create-app.js';
 
 const DAY = 86_400_000;
 const dayOffset = (days: number) =>
-  new Date(new Date().toISOString().slice(0, 10)).getTime() + days * DAY;
+  new Date(studioDay()).getTime() + days * DAY;
 const isoDay = (days: number) =>
   new Date(dayOffset(days)).toISOString().slice(0, 10);
 

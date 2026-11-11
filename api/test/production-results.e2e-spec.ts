@@ -11,6 +11,7 @@ import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { CSRF, signedInAs, signedInCustomer } from './commerce-helpers.js';
+import { studioDay } from '../src/common/studio-day.js';
 import { createApp } from './create-app.js';
 import {
   createStudio,
@@ -312,7 +313,7 @@ describe('Production results and ready pieces (e2e)', () => {
   });
 
   it('the results show what was made, lost and left on the shelf', async () => {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = studioDay();
     const r = (
       await as(staff.cookie)
         .get(`/print-jobs/results?from=${day}&to=${day}`)

@@ -8,6 +8,7 @@ import {
   type PrinterCosts,
   PricingError,
   printerHourlyRate,
+  splitPrinterCost,
   type ProfitRule,
   type UnitCostInput,
   type UnitPriceBreakdown,
@@ -93,6 +94,17 @@ export class PricingService {
     profit?: ProfitRule | null,
   ): Promise<UnitPriceBreakdown> {
     return (await this.costCalculator()).price(input, profit);
+  }
+
+  /**
+   * A printer-time cost shared between wear and electricity, as the owner's printer details
+   * share an hour; null when the hourly cost was typed in instead of worked out from them.
+   */
+  async printerSplit(
+    machineCost: string,
+  ): Promise<{ wear: string; electricity: string } | null> {
+    const { printer } = await this.stored.current();
+    return printer ? splitPrinterCost(printer, machineCost) : null;
   }
 
   /** One calculator for pricing many items with a single settings read (e.g. a product list). */
