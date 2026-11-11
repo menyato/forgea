@@ -5,11 +5,13 @@ import { StockModule } from '../stock/stock.module.js';
 import { InsightsController } from './insights.controller.js';
 import { InsightsRepository } from './insights.repository.js';
 import { InsightsService } from './insights.service.js';
+import { OrderProductionController } from './order-production.controller.js';
+import { OrderProductionService } from './order-production.service.js';
 
 /** The business dashboard: profit, sales and what they used, by period. */
 @Module({
   imports: [DatabaseModule, AccountingModule, StockModule],
-  controllers: [InsightsController],
-  providers: [InsightsService, InsightsRepository],
+  controllers: [InsightsController, OrderProductionController],
+  providers: [InsightsService, InsightsRepository, OrderProductionService],
 })
 export class InsightsModule {}

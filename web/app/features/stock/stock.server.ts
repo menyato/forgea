@@ -7,6 +7,7 @@ import type {
 } from '@forgea/types';
 import {
   ReceiveSpoolsDto,
+  SaveMaterialDto,
   StockCountDto,
   StudioPrintDto,
 } from '@forgea/validation';
@@ -50,11 +51,47 @@ export async function shelfChoices(api: ApiClient, url: URL) {
   };
 }
 
+/**
+ * Spools received. For a material the shop doesn't have yet, the material is made first (named
+ * as typed, its code from its name, its cost per gram from these spools), then they go on its
+ * shelf; a refusal of the material shows as the form's own errors.
+ */
 export async function receiveSpools(api: ApiClient, form: FormData) {
+  let materialId = text(form, 'materialId');
+  if (materialId === 'new') {
+    const name = text(form, 'newMaterialName') ?? '';
+    let made: MaterialView | undefined;
+    const refused = await save(
+      SaveMaterialDto,
+      {
+        name,
+        code: name
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 20),
+        reelPrice: text(form, 'pricePerSpool'),
+        reelGrams: text(form, 'spoolGrams'),
+        densityGPerCm3: text(form, 'newMaterialDensity'),
+        // How fast it prints is the shop's usual until the owner sets it (Materials page).
+        gramsPerHour: '12',
+        stockGrams: 0,
+        lowStockThresholdGrams: 500,
+        active: true,
+      },
+      async (dto) => {
+        const r = await api.post<MaterialView>('/materials', dto);
+        if (r.ok) made = r.data;
+        return r;
+      },
+    );
+    if (!made) return refused;
+    materialId = made.id;
+  }
   return save(
     ReceiveSpoolsDto,
     {
-      materialId: text(form, 'materialId'),
+      materialId,
       colour: text(form, 'colour') ?? '',
       hex: text(form, 'hex'),
       spools: text(form, 'spools'),

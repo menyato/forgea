@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ORDER_STATUS_LABELS,
+  type OrderProduction,
   OrderStatus,
   type Page,
   PAYMENT_METHOD_LABELS,
@@ -22,16 +23,20 @@ import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
+import { OrderFigures } from './order-figures';
 import { ProductionPanel } from './production-panel';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [r, related, jobs] = await Promise.all([
+  const [r, related, jobs, production] = await Promise.all([
     api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
     relatedOf(api, 'order', params.id),
     // Only for staff who run production (others get a 403 and no panel).
     api.get<Page<PrintJobListItem>>(
       `/print-jobs?limit=100&orderId=${encodeURIComponent(params.id)}`,
+    ),
+    api.get<OrderProduction>(
+      `/orders/${encodeURIComponent(params.id)}/production`,
     ),
   ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
@@ -39,6 +44,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     order: r.data,
     related,
     jobs: jobs.ok ? jobs.data.items : null,
+    production: production.ok ? production.data : null,
     // A fresh one-time key per load (after a save too): a payment sent twice counts once.
     requestKey: randomUUID(),
   };
@@ -170,6 +176,13 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
             : undefined
         }
       />
+      {loaderData.production && (
+        <OrderFigures
+          order={o}
+          production={loaderData.production}
+          jobs={loaderData.jobs}
+        />
+      )}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="grid content-start gap-6">
           <Panel title="Items">
@@ -391,11 +404,13 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
             )}
           </Panel>
           {o.invoices && (
-            <InvoicesPanel
-              order={o}
-              invoices={o.invoices}
-              requestKey={loaderData.requestKey}
-            />
+            <div id="order-invoices">
+              <InvoicesPanel
+                order={o}
+                invoices={o.invoices}
+                requestKey={loaderData.requestKey}
+              />
+            </div>
           )}
           <Panel title="History">
             <ol className="grid gap-3 border-l border-border pl-4 text-sm">

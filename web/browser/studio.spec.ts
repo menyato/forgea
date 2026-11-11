@@ -131,7 +131,8 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await page.getByRole('link', { name: order }).first().click();
   // The order names the customer (in its details, and as a link to them).
   await expect(page.getByText(email).first()).toBeVisible();
-  await expect(page.getByText(/Twist vase in sand/)).toBeVisible();
+  // Among its items, and in what it takes to make.
+  await expect(page.getByText(/Twist vase in sand/).first()).toBeVisible();
 
   // A new quotation for someone the studio knows fills in their name and phone.
   await page.goto('/admin/quotations/new');

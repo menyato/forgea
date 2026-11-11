@@ -51,6 +51,16 @@ test('a customer sends a sliced Bambu Studio file, gets its exact price as a quo
   const admin = await studio.newPage();
   await admin.goto(`/admin/orders?q=${orderNumber}`);
   await admin.getByRole('link', { name: orderNumber }).click();
+  // The order in figures, each joined to where it comes from.
+  const figures = admin.getByRole('list', { name: 'This order in figures' });
+  await expect(figures.getByRole('link', { name: /Filament/ })).toContainText(
+    '12.5 g',
+  );
+  await expect(figures.getByText('Print time')).toBeVisible();
+  await expect(figures.getByRole('link', { name: /Profit/ })).toBeVisible();
+  await expect(
+    admin.getByRole('table', { name: 'Filament by line' }),
+  ).toContainText('g ');
   const download = admin.waitForEvent('download');
   await admin
     .getByRole('link', { name: 'Download print project (3MF)' })

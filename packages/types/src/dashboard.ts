@@ -155,6 +155,36 @@ export interface RequestEstimate {
  * customer), for the dashboard's "Related" links. A customer is named by email: people without
  * an account (leads, quotations sent to an address) are customers too.
  */
+/**
+ * GET /orders/:id/production: what an order takes to make. Filament and time are estimated
+ * from its products (their sliced files, sizes and the options bought), as stock is; `taken`
+ * is what stock really gave it. `money` (estimated with today's pricing) only for those who
+ * see the books, and only when every line can be costed.
+ */
+export interface OrderProduction {
+  lines: {
+    itemId: string;
+    name: string;
+    quantity: number;
+    /** For the whole line; null when it can't be estimated. */
+    grams: string | null;
+    printHours: string | null;
+    colours: { colour: string; grams: string }[];
+    cost: Money | null;
+  }[];
+  grams: string;
+  printHours: string;
+  /** Filament taken from stock for it (less what was returned), per reel. */
+  taken: { material: string; colour: string; grams: number }[];
+  money: {
+    /** The lines' total without tax. */
+    revenue: Money;
+    cost: Money;
+    profit: Money;
+    marginPercent: string | null;
+  } | null;
+}
+
 export interface RelatedRecord {
   kind: 'lead' | 'quotation' | 'order' | 'request' | 'customer';
   /** The record's id; for a customer, their email address. */

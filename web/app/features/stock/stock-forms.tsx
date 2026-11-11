@@ -6,6 +6,7 @@ import type {
 import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
+import { useCan } from '~/features/admin/access';
 import type { SaveResult } from '~/features/admin/staff.server';
 import {
   Chip,
@@ -17,6 +18,19 @@ import {
   usd,
 } from './stock-ui';
 
+/** The usual density of common filaments, by what their name starts with or holds. */
+const DENSITIES: readonly [RegExp, string][] = [
+  [/petg/i, '1.27'],
+  [/pla/i, '1.24'],
+  [/abs/i, '1.04'],
+  [/asa/i, '1.07'],
+  [/tpu/i, '1.21'],
+  [/nylon|\bpa\b/i, '1.14'],
+  [/\bpc\b|polycarbonate/i, '1.20'],
+];
+const filamentDensity = (name: string) =>
+  DENSITIES.find(([pattern]) => pattern.test(name))?.[1];
+
 /** A stock line to start from (opened from its page), or the first material. */
 export interface StartingLine {
   materialId: string;
@@ -24,6 +38,9 @@ export interface StartingLine {
 }
 
 const SPOOL_SIZES = [250, 500, 750, 1000, 2000, 3000, 5000];
+
+/** The Material list's last choice: a material the shop doesn't have yet, made with its spools. */
+const NEW_MATERIAL = 'new';
 
 export function ReceiveForm({
   materials,
@@ -41,10 +58,13 @@ export function ReceiveForm({
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
+  const can = useCan();
   const [materialId, setMaterialId] = useState(
-    start?.materialId ?? materials[0]?.id ?? '',
+    start?.materialId ?? materials[0]?.id ?? NEW_MATERIAL,
   );
   const material = materials.find((m) => m.id === materialId);
+  const [newName, setNewName] = useState('');
+  const [density, setDensity] = useState('1.24');
   const [colour, setColour] = useState(start?.colour ?? '');
   const [spools, setSpools] = useState('1');
   const [spoolGrams, setSpoolGrams] = useState(
@@ -81,7 +101,40 @@ export function ReceiveForm({
             {m.name} ({m.code})
           </option>
         ))}
+        {can('catalog.manage') && (
+          <option value={NEW_MATERIAL}>A new material…</option>
+        )}
       </SelectField>
+      {materialId === NEW_MATERIAL && (
+        <>
+          <Field
+            label="New material's name"
+            name="newMaterialName"
+            required
+            value={newName}
+            onChange={(e) => {
+              const name = e.currentTarget.value;
+              setNewName(name);
+              // The usual density of the filament named, as a start.
+              const known = filamentDensity(name);
+              if (known) setDensity(known);
+            }}
+            placeholder="e.g. PETG, PLA Silk"
+            error={errors['name'] ?? errors['code']}
+            hint="Made with these spools: their price becomes its cost per gram"
+          />
+          <Field
+            label="Density (g/cm³)"
+            name="newMaterialDensity"
+            inputMode="decimal"
+            required
+            value={density}
+            onChange={(e) => setDensity(e.currentTarget.value)}
+            error={errors['densityGPerCm3']}
+            hint="On the spool's label; PLA 1.24, PETG 1.27, ABS 1.04"
+          />
+        </>
+      )}
       <Field
         label="Spools"
         name="spools"
