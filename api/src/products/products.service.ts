@@ -12,13 +12,17 @@ import type {
   OptionSelection,
   Page,
   PricePreview,
+  PrintFilesTotal,
+  PrintSetup,
   ProductDetail,
   ProductListItem,
+  ProductPrintFileView,
   DesignMeasurement,
   TextDesignInput,
 } from '@forgea/types';
 import type {
   PricePreviewDto,
+  PrintFilesDto,
   ProductListQuery,
   SaveProductDto,
 } from '@forgea/validation';
@@ -188,6 +192,8 @@ export class ProductsService {
       ),
       active: p.active,
       hasModel: p.modelFileKey !== null,
+      modelKey: p.modelFileKey,
+      previewColor: this.summary(p).previewColor,
       updatedAt: p.updatedAt.toISOString(),
     }));
   }
@@ -214,7 +220,11 @@ export class ProductsService {
     await this.checkSetup(dto);
     return this.toAdmin(
       await this.withSample(
-        await this.products.create(dto, await this.slicedFile(dto)),
+        await this.products.create(
+          dto,
+          await this.slicedFile(dto),
+          await this.printFilesOf(dto),
+        ),
       ),
     );
   }
@@ -251,7 +261,12 @@ export class ProductsService {
     await this.checkSetup(dto);
     return this.toAdmin(
       await this.withSample(
-        await this.products.update(id, dto, await this.slicedFile(dto)),
+        await this.products.update(
+          id,
+          dto,
+          await this.slicedFile(dto),
+          await this.printFilesOf(dto),
+        ),
       ),
     );
   }
@@ -262,13 +277,29 @@ export class ProductsService {
     materialId: string;
     grams: string;
     printHours: string;
+    printFiles?: { key: string }[];
+    printFileKeys?: string[] | undefined;
   }): Promise<boolean> {
     return this.files.slicedNumbers(
       dto.modelFileKey,
       dto.materialId,
       dto.grams,
       dto.printHours,
+      dto.printFiles?.map((f) => f.key) ?? dto.printFileKeys ?? [],
     );
+  }
+
+  /** The product's print files as they are kept: read from the files, never from the page. */
+  private async printFilesOf(
+    dto: SaveProductDto,
+  ): Promise<ProductPrintFileView[]> {
+    if (dto.printFiles.length === 0) return [];
+    return (await this.files.printFiles(dto.printFiles, dto.materialId)).files;
+  }
+
+  /** The sliced print files read and added up, for the product being edited. */
+  printFilesInfo(dto: PrintFilesDto): Promise<PrintFilesTotal> {
+    return this.files.printFiles(dto.files, dto.materialId);
   }
 
   /**
@@ -302,6 +333,9 @@ export class ProductsService {
         throw new BadRequestException(error.message);
       throw error;
     }
+    const printerParts = mayPrice
+      ? await this.pricing.printerSplit(b.machineCost)
+      : null;
     // The owner's own price: what it sells at with nothing chosen (the base itself).
     return {
       unitPrice: dto.priceOverride
@@ -313,6 +347,8 @@ export class ProductsService {
         ? {
             material: b.materialCost,
             printer: b.machineCost,
+            printerWear: printerParts?.wear ?? null,
+            electricity: printerParts?.electricity ?? null,
             wasteAndFailures: new Prisma.Decimal(b.wasteCost)
               .plus(b.failureAllowance)
               .toFixed(2),
@@ -543,6 +579,7 @@ export class ProductsService {
       })),
       partColourGroupId: p.partColourGroupId,
       slicedFile: p.slicedFile,
+      printFiles: p.printFiles.map(printFileView),
       size: productSize(p),
       sizes: p.sizes.map((s) => ({
         id: s.id,
@@ -598,6 +635,28 @@ export class ProductsService {
       createdAt: p.createdAt.toISOString(),
     };
   }
+}
+
+/** A kept print file as the dashboard shows it (its details are the API's own snapshot). */
+function printFileView(f: {
+  fileKey: string;
+  name: string;
+  grams: { toFixed(digits: number): string };
+  printHours: { toFixed(digits: number): string };
+  details: unknown;
+}): ProductPrintFileView {
+  const details = f.details as {
+    colours: ProductPrintFileView['colours'];
+    setup: PrintSetup;
+  };
+  return {
+    fileKey: f.fileKey,
+    name: f.name,
+    grams: f.grams.toFixed(2),
+    printHours: f.printHours.toFixed(2),
+    colours: details.colours,
+    setup: details.setup,
+  };
 }
 
 /** The size grams and printHours are for, when it was measured. */

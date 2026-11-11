@@ -47,6 +47,7 @@ export const withConfiguration = {
   },
   sizes: { orderBy: { sortOrder: 'asc' } },
   colours: { orderBy: { sortOrder: 'asc' } },
+  printFiles: { orderBy: { sortOrder: 'asc' } },
   // Multi-colour products: the colours customers recolour named parts in.
   partColourGroup: {
     include: {

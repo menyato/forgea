@@ -66,6 +66,16 @@ quotation line and a customer's request from a sliced file add no purge waste on
 failure allowance, labour and packaging still apply. A 3MF never sliced is only a guess, so it
 prices nothing: the dashboard asks for the sliced file.
 
+## A product shown assembled, printed from several files
+
+The product's model is what customers see (the assembly). Its print files are the sliced
+`.gcode.3mf` plates it is really printed from: the dashboard reads each one (grams per colour,
+time, printer, nozzle, layer height, infill, supports, prime tower, objects) and adds them up.
+"Use the totals" makes that the product's grams, time and colours, so the price, the cost
+breakdown and the stock taken per colour all follow the slicer. The price panel splits printer
+time into wear (the printer's price over its life) and electricity (its watts at your price per
+kWh), both from the Pricing page, filled in once.
+
 ## Parts customers recolour (3MF products)
 
 A multi-colour product's colour rows may name a part ("Body", "Ears"). Customers then choose

@@ -112,7 +112,7 @@ export function InvoicesPanel({
       {can('invoices.create') && (canDeposit || !hasFinal) && (
         <fetcher.Form
           method="post"
-          className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3 sm:items-end"
+          className="grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-3 sm:items-end"
         >
           <SelectField
             label="Invoice"
@@ -150,7 +150,7 @@ export function InvoicesPanel({
       {open.length > 0 && can('payments.record') && (
         <fetcher.Form
           method="post"
-          className="grid gap-3 border-t border-border pt-4 sm:grid-cols-4 sm:items-end"
+          className="grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-4 sm:items-end"
         >
           <input type="hidden" name="intent" value="payment" />
           <input type="hidden" name="requestKey" value={requestKey} />

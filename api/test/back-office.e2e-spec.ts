@@ -519,13 +519,9 @@ describe('Back office (e2e)', () => {
       where: { orderNumber: placed.body.orderNumber },
     });
     const s = as(staff.cookie);
-    const yesterday = new Date(Date.now() - 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    const yesterday = studioDay(new Date(Date.now() - 86_400_000));
     const tomorrow = studioDay(new Date(Date.now() + 86_400_000));
-    const in14 = new Date(Date.now() + 14 * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    const in14 = studioDay(new Date(Date.now() + 14 * 86_400_000));
 
     // Dates are checked: not in the future, due on or after the invoice date.
     await s
@@ -799,9 +795,7 @@ describe('Back office (e2e)', () => {
     await a.get('/accounting/reports/aged-receivables').expect(200);
 
     // Lock up to yesterday: nothing more can be posted there, and the lock never moves back.
-    const yesterday = new Date(Date.now() - 86_400_000)
-      .toISOString()
-      .slice(0, 10);
+    const yesterday = studioDay(new Date(Date.now() - 86_400_000));
     const current = (await a.get('/accounting/settings')).body;
     if (!current.lockDate || current.lockDate < yesterday) {
       await a

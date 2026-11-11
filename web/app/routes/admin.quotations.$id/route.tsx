@@ -1,3 +1,4 @@
+export { unlessAsking as shouldRevalidate } from '~/lib/revalidate';
 import {
   type ProductListItem,
   type CheckoutResult,

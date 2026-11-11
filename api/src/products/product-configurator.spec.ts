@@ -81,6 +81,7 @@ function product(): ConfigurableProduct {
     partColourGroupId: null,
     partColourGroup: null,
     slicedFile: false,
+    printFiles: [],
     profitKind: null,
     profitValue: null,
     priceOverride: null,

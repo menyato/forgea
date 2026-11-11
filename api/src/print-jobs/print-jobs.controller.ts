@@ -27,6 +27,7 @@ import {
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import { CurrentUser, RequirePermission } from '../authorization/decorators.js';
+import { studioDay, studioDayPlus } from '../common/studio-day.js';
 import { PrintJobsService } from './print-jobs.service.js';
 import { PrintersService } from './printers.service.js';
 
@@ -49,10 +50,10 @@ export class PrintJobsController {
   /** What production made and lost over `from`–`to` (default: the last 30 days). */
   @Get('results')
   results(@Query() q: PeriodQuery): Promise<ProductionResults> {
-    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const today = studioDay();
     return this.jobs.results({
-      from: q.from ?? day(Date.now() - 29 * 86_400_000),
-      to: q.to ?? day(Date.now()),
+      from: q.from ?? studioDayPlus(today, -29),
+      to: q.to ?? today,
     });
   }
 

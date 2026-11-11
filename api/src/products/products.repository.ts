@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { ProductPrintFileView } from '@forgea/types';
 import type { ProductListQuery, SaveProductDto } from '@forgea/validation';
 import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
@@ -224,11 +225,13 @@ export class ProductsRepository {
   create(
     dto: SaveProductDto,
     slicedFile: boolean,
+    printFiles: readonly ProductPrintFileView[],
   ): Promise<ConfigurableProduct> {
     return this.prisma.product.create({
       data: {
         ...fields(dto),
         slicedFile,
+        printFiles: { create: printFiles.map(printFileRow) },
         ...optionRows(dto),
         sizes: { create: dto.sizes.map(sizeRow) },
         colours: { create: dto.colours.map(colourRow) },
@@ -242,8 +245,10 @@ export class ProductsRepository {
     id: string,
     dto: SaveProductDto,
     slicedFile: boolean,
+    printFiles: readonly ProductPrintFileView[],
   ): Promise<ConfigurableProduct> {
     return this.prisma.$transaction(async (tx) => {
+      await tx.productPrintFile.deleteMany({ where: { productId: id } });
       await tx.productOptionValue.deleteMany({ where: { productId: id } });
       await tx.productOptionGroup.deleteMany({ where: { productId: id } });
       await tx.productColour.deleteMany({ where: { productId: id } });
@@ -270,6 +275,7 @@ export class ProductsRepository {
           slicedFile,
           ...optionRows(dto),
           colours: { create: dto.colours.map(colourRow) },
+          printFiles: { create: printFiles.map(printFileRow) },
         },
         include: withConfiguration,
       });
@@ -316,6 +322,19 @@ const fields = (dto: SaveProductDto) => ({
   partColourGroupId: dto.colours.some((c) => c.part)
     ? (dto.partColourGroupId ?? null)
     : null,
+});
+
+const printFileRow = (f: ProductPrintFileView, sortOrder: number) => ({
+  fileKey: f.fileKey,
+  name: f.name,
+  grams: f.grams,
+  printHours: f.printHours,
+  // The API's own snapshot of the file: plain data.
+  details: {
+    colours: f.colours,
+    setup: { ...f.setup },
+  } as Prisma.InputJsonObject,
+  sortOrder,
 });
 
 const colourRow = (

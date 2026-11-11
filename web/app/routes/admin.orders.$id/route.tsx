@@ -243,6 +243,24 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                         </a>
                       </span>
                     )}
+                    {i.printFiles.length > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-2">
+                        {i.printFiles.map((f) => (
+                          <a
+                            key={f.id}
+                            href={`/admin/orders/${o.id}/print-file/${i.id}/${f.id}`}
+                            download
+                            title="A sliced print file of this product, ready for the printer"
+                            className={buttonClass(
+                              'secondary',
+                              'px-3 py-1 text-sm',
+                            )}
+                          >
+                            Sliced file: {f.name}
+                          </a>
+                        ))}
+                      </span>
+                    )}
                     {i.options.length > 0 && (
                       <span className="block text-sm text-text-muted">
                         {i.options

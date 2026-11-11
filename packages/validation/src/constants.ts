@@ -117,6 +117,9 @@ export const PRODUCT_SIZES_MAX = 10;
 export const PRODUCT_COLOURS_MAX = 16;
 /** What customers call a part they recolour ("Body", "Ears"). */
 export const PRODUCT_PART_NAME_MAX_LENGTH = 40;
+/** Sliced print files one product is printed from, and what each may be called. */
+export const PRODUCT_PRINT_FILES_MAX = 12;
+export const PRINT_FILE_NAME_MAX_LENGTH = 80;
 
 /** Filament stock: a colour as the shop names it, and the most grams one movement may move. */
 export const STOCK_COLOUR_MAX_LENGTH = 40;

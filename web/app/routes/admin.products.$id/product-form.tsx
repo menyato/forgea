@@ -16,6 +16,7 @@ import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { ColoursEditor } from './colours-editor';
 import { PricePanel } from './price-panel';
+import { type PrintFileRef, PrintFilesField } from './print-files-field';
 import { RealCostPanel } from './real-cost-panel';
 import { TextSettingsPanel } from './text-settings';
 import type { loader as productLoader } from './route';
@@ -98,6 +99,9 @@ export function ProductForm({
   const [partGroupId, setPartGroupId] = useState(
     product?.partColourGroupId ?? '',
   );
+  const [printFiles, setPrintFiles] = useState<PrintFileRef[]>(
+    (product?.printFiles ?? []).map((p) => ({ key: p.fileKey, name: p.name })),
+  );
   // The colours are the product's grams split up: their sum is its grams.
   const setColours = useCallback((next: ProductColourView[]) => {
     setColoursOnly(next);
@@ -138,6 +142,25 @@ export function ProductForm({
             name={name}
           />
         </Panel>
+        <Panel title="Print files">
+          <PrintFilesField
+            files={printFiles}
+            onFiles={setPrintFiles}
+            material={materials.find((m) => m.id === materialId)}
+            onUse={(total) => {
+              setHours(total.printHours);
+              // Colours keep the names customers see (by file colour).
+              setColours(
+                total.colours.map((c) => ({
+                  colour: c.colour.startsWith('#') ? '' : c.colour,
+                  hex: c.hex,
+                  grams: c.grams,
+                  part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                })),
+              );
+            }}
+          />
+        </Panel>
         <Panel title="Photos">
           <ImagesField keys={imageKeys} onChange={setImageKeys} />
         </Panel>
@@ -153,6 +176,11 @@ export function ProductForm({
         />
         <input type="hidden" name="options" value={JSON.stringify(options)} />
         <input type="hidden" name="colours" value={JSON.stringify(colours)} />
+        <input
+          type="hidden"
+          name="printFiles"
+          value={JSON.stringify(printFiles)}
+        />
         <input type="hidden" name="sizeXcm" value={measured.x} />
         <input type="hidden" name="sizeYcm" value={measured.y} />
         <input type="hidden" name="sizeZcm" value={measured.z} />
@@ -295,6 +323,7 @@ export function ProductForm({
             grams={grams}
             printHours={hours}
             modelFileKey={modelKey}
+            printFileKeys={printFiles.map((p) => p.key)}
             profit={profit}
             onProfit={setProfit}
             priceOverride={priceOverride}

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { pricePerGramFromReel, printerHourlyRate } from './setup-rates.js';
+import {
+  pricePerGramFromReel,
+  printerHourlyRate,
+  splitPrinterCost,
+} from './setup-rates.js';
 
 describe('pricePerGramFromReel', () => {
   it("is the reel's price over its weight, to four decimals", () => {
@@ -35,5 +39,28 @@ describe('printerHourlyRate', () => {
         electricityPerKwh: '0.3',
       }),
     ).toThrow(/above 0 hours/);
+  });
+});
+
+describe('splitPrinterCost', () => {
+  const printer = {
+    printerPrice: '600',
+    lifeHours: 6000,
+    watts: 150,
+    electricityPerKwh: '0.30',
+  };
+
+  it('shares printer time between wear and electricity, adding up to it', () => {
+    // An hour is $0.10 wear + $0.045 power: 31.03% of $4.00 is electricity.
+    expect(splitPrinterCost(printer, '4.00')).toEqual({
+      wear: '2.76',
+      electricity: '1.24',
+    });
+  });
+
+  it('is all wear for a printer that costs nothing to run or own', () => {
+    expect(
+      splitPrinterCost({ ...printer, printerPrice: 0, watts: 0 }, '4.00'),
+    ).toEqual({ wear: '4.00', electricity: '0.00' });
   });
 });

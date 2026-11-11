@@ -1,3 +1,4 @@
+import { unlessAsking } from '~/lib/revalidate';
 import { isPalette, paletteCss, type SiteTheme } from '@forgea/brand';
 import type { CartView, Profile, StoreSettings } from '@forgea/types';
 import {
@@ -75,12 +76,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
  * when something is sent: adding to the cart, signing in or out, saving a setting. Moving from
  * page to page keeps it, so a click costs one page's calls, not the shell's four as well.
  */
-export function shouldRevalidate({
-  formMethod,
-  defaultShouldRevalidate,
-}: ShouldRevalidateFunctionArgs) {
+export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  const { formMethod } = args;
+  // A post that only asks something (a price preview, a file read) changes nothing here.
   if (formMethod && formMethod.toUpperCase() !== 'GET')
-    return defaultShouldRevalidate;
+    return unlessAsking(args);
   return false;
 }
 

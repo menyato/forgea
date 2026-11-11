@@ -35,6 +35,22 @@ export class PrintFilesController {
     });
   }
 
+  /** One of the product's sliced print files, as uploaded, named after the order. */
+  @RequirePermission('orders.view')
+  @Get(':id/items/:itemId/print-files/:fileId')
+  async printFile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('fileId', ParseUUIDPipe) fileId: string,
+  ): Promise<StreamableFile> {
+    const file = await this.files.productPrintFile(id, itemId, fileId);
+    return new StreamableFile(file.bytes, {
+      type: 'model/3mf',
+      disposition: `attachment; filename="${file.name}"`,
+      length: file.bytes.byteLength,
+    });
+  }
+
   @RequirePermission('orders.view')
   @Get(':id/items/:itemId/print/:colour')
   async stl(

@@ -58,6 +58,8 @@ export {
   ModelInfoDto,
   PricePreviewDto,
   ProductColourDto,
+  ProductPrintFileDto,
+  PrintFilesDto,
   ProductOptionConfigDto,
   ProductPriceDto,
   ProductSizeDto,

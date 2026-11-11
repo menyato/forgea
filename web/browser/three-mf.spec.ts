@@ -153,7 +153,9 @@ test('a 3MF never sliced shows in 3D but asks for the sliced file before it pric
     .getByRole('button', { name: 'Read colours, grams and time from the file' })
     .click();
   await expect(page.getByText(/This 3MF isn.t sliced/)).toBeVisible();
-  await expect(page.getByText('Export plate sliced file')).toBeVisible();
+  await expect(
+    page.getByRole('alert').getByText('Export plate sliced file'),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Use these numbers' }),
   ).toHaveCount(0);

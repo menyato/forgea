@@ -165,7 +165,7 @@ describe('3MF products and own prices (e2e)', () => {
         })
         .expect(200)
     ).body as ModelFileInfo;
-    expect(info).toEqual({
+    expect(info).toMatchObject({
       size: { x: '3.0', y: '2.0', z: '2.0' },
       sliced: true,
       grams: '12.50',

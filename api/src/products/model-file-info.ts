@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { estimatePrint, PricingError } from '@forgea/pricing';
-import type { ModelFileInfo, PrintFile } from '@forgea/types';
+import type {
+  ModelFileInfo,
+  PrintFile,
+  PrintFilesTotal,
+  ProductPrintFileView,
+} from '@forgea/types';
 import type { ModelInfoDto } from '@forgea/validation';
 import { Prisma } from '../generated/prisma/client.js';
 import { UploadPurpose } from '../generated/prisma/enums.js';
@@ -73,15 +78,23 @@ export class ModelFileInfoService {
     materialId: string,
     grams: string,
     printHours: string,
+    /** Its sliced print files: then the numbers are theirs when they are their total. */
+    printFileKeys: readonly string[] = [],
   ): Promise<boolean> {
-    if (!key?.endsWith('.3mf')) return false;
+    const same = (file: { grams: string; printHours: string }) =>
+      new Prisma.Decimal(file.grams).minus(grams).abs().lte(0.05) &&
+      new Prisma.Decimal(file.printHours).minus(printHours).abs().lte(0.02);
     try {
+      if (printFileKeys.length > 0)
+        return same(
+          await this.printFiles(
+            printFileKeys.map((k) => ({ key: k, name: 'A print file' })),
+            materialId,
+          ),
+        );
+      if (!key?.endsWith('.3mf')) return false;
       const info = await this.measure(key, materialId, 100);
-      return (
-        info.sliced &&
-        new Prisma.Decimal(info.grams).minus(grams).abs().lte(0.05) &&
-        new Prisma.Decimal(info.printHours).minus(printHours).abs().lte(0.02)
-      );
+      return info.sliced && same(info);
     } catch (error) {
       if (error instanceof BadRequestException) return false;
       throw error;
@@ -155,6 +168,65 @@ export class ModelFileInfoService {
         .toFixed(2),
       printHours,
       colours: colours.map((c) => ({ ...c, grams: c.grams.toFixed(2) })),
+      setup: file.setup,
+    };
+  }
+
+  /**
+   * A product's sliced print files, read and added up: each one's grams per colour, time and
+   * set-up, and what they take together (colours of the same name summed). Every file must be
+   * an accepted product upload and sliced: only the slicer knows its purge, tower and supports.
+   */
+  async printFiles(
+    files: readonly { key: string; name: string }[],
+    materialId: string,
+  ): Promise<PrintFilesTotal> {
+    const keys = files.map((f) => f.key);
+    if (new Set(keys).size !== keys.length)
+      throw new BadRequestException('A print file is listed twice');
+    await this.uploads.requireClean(keys, UploadPurpose.PRODUCT_MODEL);
+    const views: ProductPrintFileView[] = [];
+    for (const f of files) {
+      const info = await this.measure(f.key, materialId, 100);
+      if (!info.sliced)
+        throw new BadRequestException(
+          `${f.name} is not sliced. In Bambu Studio, slice it and choose File → Export → Export plate sliced file, then upload that .gcode.3mf`,
+        );
+      views.push({
+        fileKey: f.key,
+        name: f.name,
+        grams: info.grams,
+        printHours: info.printHours,
+        colours: info.colours.map((c) => ({
+          colour: c.suggested ?? c.hex,
+          hex: c.hex,
+          type: c.type,
+          grams: c.grams,
+        })),
+        setup: info.setup,
+      });
+    }
+    const byColour = new Map<string, { hex: string; grams: Prisma.Decimal }>();
+    for (const c of views.flatMap((v) => v.colours)) {
+      const sum = byColour.get(c.colour);
+      if (sum) sum.grams = sum.grams.plus(c.grams);
+      else
+        byColour.set(c.colour, {
+          hex: c.hex,
+          grams: new Prisma.Decimal(c.grams),
+        });
+    }
+    const total = (pick: (v: ProductPrintFileView) => string) =>
+      views.reduce((n, v) => n.plus(pick(v)), new Prisma.Decimal(0)).toFixed(2);
+    return {
+      files: views,
+      grams: total((v) => v.grams),
+      printHours: total((v) => v.printHours),
+      colours: [...byColour].map(([colour, c]) => ({
+        colour,
+        hex: c.hex,
+        grams: c.grams.toFixed(2),
+      })),
     };
   }
 

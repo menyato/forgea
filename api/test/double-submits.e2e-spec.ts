@@ -11,6 +11,7 @@ import {
   signedInAs,
   signedInCustomer,
 } from './commerce-helpers.js';
+import { studioDay } from '../src/common/studio-day.js';
 import { createApp } from './create-app.js';
 
 /** Two tabs, a double click, a retried request: what is recorded, is recorded once. */
@@ -147,7 +148,7 @@ describe('Double submits (e2e)', () => {
           invoiceId: invoice.id,
           amount: half,
           method: 'BANK',
-          date: new Date().toISOString().slice(0, 10),
+          date: studioDay(),
           requestKey,
         });
     const results = await Promise.all([pay(), pay()]);

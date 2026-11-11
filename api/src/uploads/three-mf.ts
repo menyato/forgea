@@ -34,6 +34,28 @@ export interface ThreeMfInfo {
   }[];
   /** The slicer's print time over all plates; null when the file was never sliced. */
   printSeconds: number | null;
+  /** How the file was set up to print: what the slicer's settings and plates say. */
+  setup: ThreeMfSetup;
+}
+
+/** A 3MF's print set-up, each field only when the file says it. */
+interface ThreeMfSetup {
+  /** Sliced plates in the file (0 when it was never sliced). */
+  plates: number;
+  /** A plate prints supports. */
+  supports: boolean;
+  /** A prime tower is printed (multi-colour purging). */
+  primeTower: boolean;
+  /** "Bambu Lab X2D". */
+  printer: string | null;
+  nozzleMm: number | null;
+  layerHeightMm: number | null;
+  /** "15%". */
+  infill: string | null;
+  /** The print profile's name ("0.08mm High Quality @BBL X2D"). */
+  profile: string | null;
+  /** The objects on its plates, by name (the first few). */
+  objects: string[];
 }
 
 export interface ThreeMfModel {
@@ -41,6 +63,16 @@ export interface ThreeMfModel {
   parts: { slot: number; hex: string; positions: Float32Array }[];
   info: ThreeMfInfo;
 }
+
+/** Set-up text kept from a file: short, and only a few object names. */
+const SETUP_TEXT_MAX = 80;
+const SETUP_OBJECTS_MAX = 24;
+/** A file's own words, as plain text the owner reads: no control characters or markup signs. */
+const setupText = (value: string) =>
+  value
+    .replace(/[\u0000-\u001f\u007f<>]/g, '')
+    .trim()
+    .slice(0, SETUP_TEXT_MAX);
 
 const LIMITS = {
   maxEntries: 10_000,
@@ -291,6 +323,17 @@ export function readThreeMf(data: Uint8Array): ThreeMfModel {
           : null,
       })),
       printSeconds: sliced.seconds,
+      setup: {
+        plates: sliced.plates,
+        supports: sliced.supports,
+        primeTower: settings.primeTower && slots.length > 1,
+        printer: settings.printer,
+        nozzleMm: settings.nozzleMm,
+        layerHeightMm: settings.layerHeightMm,
+        infill: settings.infill,
+        profile: settings.profile,
+        objects: sliced.objects,
+      },
     },
   };
 }
@@ -559,11 +602,26 @@ function projectSettings(entries: Map<string, ZipEntry>): {
   colours: string[];
   types: string[];
   walls: number;
+  primeTower: boolean;
+  printer: string | null;
+  nozzleMm: number | null;
+  layerHeightMm: number | null;
+  infill: string | null;
+  profile: string | null;
 } {
+  const none = {
+    colours: [],
+    types: [],
+    walls: NaN,
+    primeTower: false,
+    printer: null,
+    nozzleMm: null,
+    layerHeightMm: null,
+    infill: null,
+    profile: null,
+  };
   const entry = entries.get('Metadata/project_settings.config');
-  if (!entry || entry.size > 64 * 1024 * 1024) {
-    return { colours: [], types: [], walls: NaN };
-  }
+  if (!entry || entry.size > 64 * 1024 * 1024) return none;
   try {
     const json = JSON.parse(entry.read().toString('utf8')) as Record<
       string,
@@ -573,13 +631,33 @@ function projectSettings(entries: Map<string, ZipEntry>): {
       Array.isArray(json[key])
         ? (json[key] as unknown[]).map((v) => String(v))
         : [];
+    // Settings are text the owner reads: short, printable, never trusted as anything else.
+    const text = (key: string) => {
+      const v = json[key];
+      const one: unknown = Array.isArray(v) ? v[0] : v;
+      const clean =
+        typeof one === 'string' || typeof one === 'number'
+          ? setupText(String(one))
+          : '';
+      return clean === '' ? null : clean;
+    };
+    const positive = (key: string) => {
+      const n = Number(text(key));
+      return Number.isFinite(n) && n > 0 && n < 100 ? round(n, 2) : null;
+    };
     return {
       colours: list('filament_colour'),
       types: list('filament_type'),
       walls: Number(json['wall_loops']),
+      primeTower: text('enable_prime_tower') === '1',
+      printer: text('printer_model'),
+      nozzleMm: positive('nozzle_diameter'),
+      layerHeightMm: positive('layer_height'),
+      infill: text('sparse_infill_density'),
+      profile: text('print_settings_id'),
     };
   } catch {
-    return { colours: [], types: [], walls: NaN };
+    return none;
   }
 }
 
@@ -589,17 +667,39 @@ function sliceInfo(entries: Map<string, ZipEntry>): {
   grams: Map<number, number>;
   hex: Map<number, string>;
   type: Map<number, string>;
+  plates: number;
+  supports: boolean;
+  objects: string[];
 } {
   const grams = new Map<number, number>();
   const hex = new Map<number, string>();
   const type = new Map<number, string>();
+  const objects: string[] = [];
   const entry = entries.get('Metadata/slice_info.config');
   if (!entry || entry.size > 16 * 1024 * 1024) {
-    return { seconds: null, grams, hex, type };
+    return {
+      seconds: null,
+      grams,
+      hex,
+      type,
+      plates: 0,
+      supports: false,
+      objects,
+    };
   }
   const xml = entry.read().toString('utf8');
   let seconds: number | null = null;
+  let plates = 0;
+  let supports = false;
   for (const plate of xml.matchAll(/<plate\b[^>]*>([\s\S]*?)<\/plate>/g)) {
+    plates += 1;
+    if (metadata(plate[1]!, 'support_used') === 'true') supports = true;
+    for (const o of plate[1]!.matchAll(/<object\b[^>]*>/g)) {
+      const a = attributes(o[0]);
+      const name = setupText(a['name'] ?? '');
+      if (name && a['skipped'] !== 'true' && objects.length < SETUP_OBJECTS_MAX)
+        objects.push(name);
+    }
     const prediction = Number(metadata(plate[1]!, 'prediction'));
     if (Number.isFinite(prediction) && prediction > 0) {
       seconds = (seconds ?? 0) + prediction;
@@ -614,7 +714,7 @@ function sliceInfo(entries: Map<string, ZipEntry>): {
       if (a['type']) type.set(slot, a['type']);
     }
   }
-  return { seconds, grams, hex, type };
+  return { seconds, grams, hex, type, plates, supports, objects };
 }
 
 function rootModelPath(entries: Map<string, ZipEntry>): string {

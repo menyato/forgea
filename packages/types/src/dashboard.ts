@@ -38,6 +38,8 @@ export interface StaffOrder {
       (DesignSummary & { itemId: string; files: { colour: string }[] }) | null;
     /** The product's 3MF print project can be downloaded (a catalog product with one). */
     printProject: boolean;
+    /** Its product's sliced print files, each downloadable from the order. */
+    printFiles: { id: string; name: string }[];
   }[];
   /** The labelled lines the customer saw (subtotal, rush fee, discounts, delivery…). */
   priceBreakdown: { label: string; amount: Money }[];
