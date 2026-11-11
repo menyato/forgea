@@ -71,6 +71,8 @@ export interface StockRow {
   name: string;
   colour: string;
   hex: string | null;
+  /** The filament's own cost per gram; null = its material's. */
+  ownPricePerGram: string | null;
   active: boolean;
   lowStockGrams: number;
   spoolGrams: number;
@@ -171,6 +173,7 @@ export class StockRepository {
     const since90 = new Date(end - 90 * DAY_MS);
     return this.prisma.$queryRaw<StockRow[]>`
       SELECT i.id, i."materialId", m.code, m.name, i.colour, i.hex, i.active,
+             i."pricePerGram"::text AS "ownPricePerGram",
              i."lowStockGrams", i."spoolGrams", i."leadTimeDays", i."coverDays",
              m."pricePerGram"::text AS "pricePerGram",
              coalesce(sum(s.grams), 0)::int AS stock,
@@ -396,6 +399,19 @@ export class StockRepository {
 
   findItem(id: string) {
     return this.prisma.stockItem.findUnique({ where: { id } });
+  }
+
+  /** What a gram of this filament costs, from the spools just received. */
+  async setFilamentPrice(
+    tx: Prisma.TransactionClient,
+    materialId: string,
+    colour: string,
+    pricePerGram: string,
+  ): Promise<void> {
+    await tx.stockItem.updateMany({
+      where: { materialId, colour },
+      data: { pricePerGram },
+    });
   }
 
   /** How a material's colour looks (picked when its spools come in or are weighed). */

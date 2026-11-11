@@ -132,6 +132,11 @@ model ProductColour {
   hex       String
   /// Above 0 (CHECK).
   grams     Decimal @db.Decimal(10, 2)
+  /// The filament on the shelf this colour is printed from (its material, name and price):
+  /// stock takes its grams there and its cost uses that filament's price. Null = the product's
+  /// material in the colour named.
+  stockItemId String?    @db.Uuid
+  stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
   sortOrder Int     @default(0)
 
   @@unique([productId, colour])

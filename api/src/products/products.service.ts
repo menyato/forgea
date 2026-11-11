@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PricingError } from '@forgea/pricing';
+import { averagePricePerGram, PricingError } from '@forgea/pricing';
 import type {
   AdminProduct,
   AdminProductListItem,
@@ -17,6 +17,8 @@ import type {
   ProductDetail,
   ProductListItem,
   ProductPrintFileView,
+  QuotableProduct,
+  QuotableSize,
   DesignMeasurement,
   TextDesignInput,
 } from '@forgea/types';
@@ -26,6 +28,7 @@ import type {
   ProductListQuery,
   SaveProductDto,
 } from '@forgea/validation';
+import { formatSizeCm, PRODUCT_SIZE_GROUP_ID } from '@forgea/types';
 import { toPage } from '../common/pagination/keyset.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -289,12 +292,84 @@ export class ProductsService {
     );
   }
 
+  /** The filaments a product's colours are printed from; refuses one that isn't on the shelf. */
+  private async filamentPrices(
+    colours: readonly { stockItemId?: string | undefined }[],
+  ): Promise<Map<string, { pricePerGram: string }>> {
+    const ids = [
+      ...new Set(
+        colours.flatMap((c) => (c.stockItemId ? [c.stockItemId] : [])),
+      ),
+    ];
+    if (ids.length === 0) return new Map();
+    const found = await this.products.filaments(ids);
+    if (found.size !== ids.length)
+      throw new BadRequestException(
+        "Choose each colour's filament from the stock again",
+      );
+    return found;
+  }
+
   /** The product's print files as they are kept: read from the files, never from the page. */
   private async printFilesOf(
     dto: SaveProductDto,
   ): Promise<ProductPrintFileView[]> {
     if (dto.printFiles.length === 0) return [];
     return (await this.files.printFiles(dto.printFiles, dto.materialId)).files;
+  }
+
+  /**
+   * Every product a quotation line may be made from, hidden ones too: a piece made for one
+   * client is priced and ordered like any other without being in the shop.
+   */
+  async quotable(): Promise<QuotableProduct[]> {
+    const [all, calculator] = await Promise.all([
+      this.products.all(),
+      this.pricing.costCalculator(),
+    ]);
+    return all
+      .filter((p) => p.textStyle === null)
+      .map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        price: this.configurator.unitPrice(
+          calculator,
+          p,
+          this.configurator.starting(p),
+        ),
+        active: p.active,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** A product's real sizes with their prices, for a quotation line (hidden products too). */
+  async quotableSizes(slug: string): Promise<QuotableSize[]> {
+    const p = await this.products.findBySlug(slug);
+    if (!p) throw new NotFoundException('Product not found');
+    const calculator = await this.pricing.costCalculator();
+    return p.sizes.map((size) => ({
+      id: size.id,
+      label: formatSizeCm({
+        x: size.sizeXcm.toString(),
+        y: size.sizeYcm.toString(),
+        z: size.sizeZcm.toString(),
+      }),
+      x: size.sizeXcm.toString(),
+      y: size.sizeYcm.toString(),
+      z: size.sizeZcm.toString(),
+      unitPrice: this.configurator.unitPrice(
+        calculator,
+        p,
+        this.configurator.configure(p, [
+          { groupId: PRODUCT_SIZE_GROUP_ID, valueId: size.id },
+          // Its other required options at their starting choices.
+          ...this.configurator
+            .starting(p)
+            .selections.filter((x) => x.groupId !== PRODUCT_SIZE_GROUP_ID),
+        ]),
+      ),
+    }));
   }
 
   /** The sliced print files read and added up, for the product being edited. */
@@ -317,13 +392,24 @@ export class ProductsService {
         ? { kind: dto.profitKind, value: dto.profitValue }
         : null;
     const wasteIncluded = await this.slicedFile(dto);
+    // Colours printed from filaments on the shelf cost what those filaments cost.
+    const filaments = await this.filamentPrices(dto.colours ?? []);
+    const pricePerGram = averagePricePerGram(
+      material.pricePerGram.toString(),
+      (dto.colours ?? []).map((c) => ({
+        grams: c.grams,
+        pricePerGram: c.stockItemId
+          ? (filaments.get(c.stockItemId)?.pricePerGram ?? null)
+          : null,
+      })),
+    );
     let b;
     try {
       b = (await this.pricing.costCalculator()).price(
         {
           grams: dto.grams,
           printHours: dto.printHours,
-          pricePerGram: material.pricePerGram.toString(),
+          pricePerGram,
           wasteIncluded,
         },
         profit,
@@ -458,6 +544,7 @@ export class ProductsService {
       }
     }
     await this.checkParts(dto);
+    await this.filamentPrices(dto.colours);
     if (dto.modelFileKey) {
       await this.uploads.requireClean(
         [dto.modelFileKey],
@@ -545,7 +632,11 @@ export class ProductsService {
         `"${clash.part}" is already an option of this product: name the part differently`,
       );
     const offered = new Set(group.values.map((v) => v.label.toLowerCase()));
-    const outside = parts.find((c) => !offered.has(c.colour.toLowerCase()));
+    // A part printed from a filament on the shelf goes by that filament's name: customers
+    // then start at the first colour offered.
+    const outside = parts.find(
+      (c) => !c.stockItemId && !offered.has(c.colour.toLowerCase()),
+    );
     if (outside)
       throw new BadRequestException(
         `${outside.part} starts in ${outside.colour}, which isn't one of the colours customers pick from`,
@@ -576,6 +667,7 @@ export class ProductsService {
         hex: c.hex,
         grams: c.grams.toString(),
         part: c.part,
+        stockItemId: c.stockItemId,
       })),
       partColourGroupId: p.partColourGroupId,
       slicedFile: p.slicedFile,

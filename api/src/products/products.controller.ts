@@ -21,6 +21,8 @@ import type {
   PrintFilesTotal,
   ProductDetail,
   ProductListItem,
+  QuotableProduct,
+  QuotableSize,
 } from '@forgea/types';
 import {
   ModelInfoDto,
@@ -93,6 +95,19 @@ export class ProductsController {
   @Put('plate')
   setPlate(@Body() dto: SetHomePlateDto): Promise<HomePlate> {
     return this.products.setPlate(dto.productIds);
+  }
+
+  /** Products for a quotation line, hidden ones too (Dashboard → Quotations). */
+  @RequirePermission('quotations.view')
+  @Get('quotable')
+  quotable(): Promise<QuotableProduct[]> {
+    return this.products.quotable();
+  }
+
+  @RequirePermission('quotations.view')
+  @Get('quotable/:slug/sizes')
+  quotableSizes(@Param('slug') slug: string): Promise<QuotableSize[]> {
+    return this.products.quotableSizes(slug);
   }
 
   @Public()

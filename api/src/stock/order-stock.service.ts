@@ -84,14 +84,19 @@ export class OrderStock {
             .ceil()
             .toNumber();
           if (grams <= 0) continue;
+          // A colour printed from a filament of another material (PETG supports) comes from
+          // that material's shelf.
+          const materialId =
+            ('materialId' in part ? part.materialId : undefined) ??
+            e.materialId;
           movements.push({
-            materialId: e.materialId,
+            materialId,
             colour: part.colour,
             kind: StockMovementKind.ORDER,
             grams: -grams,
             orderItemId: item.id,
             // Its cost per gram today, so later price changes leave this cost as it was.
-            costPerGram: catalog.pricePerGram.get(e.materialId) ?? null,
+            costPerGram: catalog.pricePerGram.get(materialId) ?? null,
             note: `Order ${order.orderNumber}`,
             createdById: actorId,
           });

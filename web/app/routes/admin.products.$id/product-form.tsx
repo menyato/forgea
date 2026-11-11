@@ -14,7 +14,7 @@ import {
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
-import { ColoursEditor } from './colours-editor';
+import { ColoursEditor, type Filament } from './colours-editor';
 import { PricePanel } from './price-panel';
 import { type PrintFileRef, PrintFilesField } from './print-files-field';
 import { RealCostPanel } from './real-cost-panel';
@@ -51,6 +51,7 @@ export function ProductForm({
   others,
   shopProfit,
   realCost,
+  filaments,
 }: {
   product: AdminProduct | null;
   /** The shop's profit rule; null when the editor may not manage pricing. */
@@ -62,6 +63,8 @@ export function ProductForm({
   categories: readonly CategoryView[];
   materials: readonly MaterialView[];
   groups: readonly OptionGroupView[];
+  /** The filaments on the shelf a colour may be printed from. */
+  filaments: readonly Filament[];
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
@@ -136,6 +139,8 @@ export function ProductForm({
                 next.map((c) => ({
                   ...c,
                   part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                  stockItemId:
+                    colours.find((o) => o.hex === c.hex)?.stockItemId ?? null,
                 })),
               )
             }
@@ -156,6 +161,8 @@ export function ProductForm({
                   hex: c.hex,
                   grams: c.grams,
                   part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                  stockItemId:
+                    colours.find((o) => o.hex === c.hex)?.stockItemId ?? null,
                 })),
               );
             }}
@@ -304,6 +311,7 @@ export function ProductForm({
             onChange={setColours}
             partGroupId={partGroupId}
             onPartGroupId={setPartGroupId}
+            filaments={filaments}
             groups={groups}
             errors={errors}
           />
@@ -324,6 +332,7 @@ export function ProductForm({
             printHours={hours}
             modelFileKey={modelKey}
             printFileKeys={printFiles.map((p) => p.key)}
+            colours={colours}
             profit={profit}
             onProfit={setProfit}
             priceOverride={priceOverride}

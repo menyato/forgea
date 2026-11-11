@@ -144,3 +144,32 @@ export function overriddenUnitPrice(
     .minus(toBig(calculatedBase, 'calculated price'));
   return money(price.lt(0) ? new Big(0) : price);
 }
+
+/**
+ * What a gram costs over several filaments: each one's grams at its own price (null = the
+ * material's `base` price), averaged by weight. Without colours, or with none weighing
+ * anything, the base price itself. Six decimals, so grams × price loses nothing.
+ */
+export function averagePricePerGram(
+  base: DecimalInput,
+  colours: readonly {
+    grams: DecimalInput;
+    pricePerGram: DecimalInput | null;
+  }[],
+): string {
+  const basePrice = toBig(base, 'pricePerGram');
+  let grams = new Big(0);
+  let cost = new Big(0);
+  for (const c of colours) {
+    const g = toBig(c.grams, 'grams');
+    grams = grams.plus(g);
+    cost = cost.plus(
+      g.times(
+        c.pricePerGram === null
+          ? basePrice
+          : toBig(c.pricePerGram, 'pricePerGram'),
+      ),
+    );
+  }
+  return (grams.gt(0) ? cost.div(grams) : basePrice).round(6).toString();
+}

@@ -134,7 +134,9 @@ export class StockService {
         colour: r.colour,
         swatchHex: r.hex ?? swatches.get(r.colour) ?? null,
         hex: r.hex,
-        costPerGram: new Prisma.Decimal(r.pricePerGram).toFixed(4),
+        costPerGram: new Prisma.Decimal(
+          r.ownPricePerGram ?? r.pricePerGram,
+        ).toFixed(4),
         active: r.active,
         stockGrams: r.stock,
         committedGrams,
@@ -226,6 +228,14 @@ export class StockService {
       ]);
       if (dto.hex && dto.colour)
         await this.stock.setColourHex(tx, material.id, dto.colour, dto.hex);
+      // The filament itself costs what these spools cost, whatever the material's price.
+      if (new Prisma.Decimal(costPerGram).gt(0))
+        await this.stock.setFilamentPrice(
+          tx,
+          material.id,
+          dto.colour,
+          costPerGram,
+        );
     });
   }
 

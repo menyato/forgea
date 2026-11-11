@@ -38,6 +38,8 @@ export interface OptionValueView {
   extraPrice: Money;
   /** Choosing this value prints in this material. */
   materialId: string | null;
+  /** A colour printed from this filament on the shelf: orders take its grams there. */
+  stockItemId: string | null;
   sortOrder: number;
   active: boolean;
 }
@@ -168,6 +170,11 @@ export interface ProductColourView {
   grams: string;
   /** What customers call this part when they choose its colour; null = always `colour`. */
   part: string | null;
+  /**
+   * The filament on the shelf it is printed from (a stock line: its material, name and price);
+   * null = the product's material in the colour named.
+   */
+  stockItemId: string | null;
 }
 
 /**
@@ -311,6 +318,30 @@ export interface AdminProductListItem {
   modelKey: string | null;
   previewColor: string | null;
   updatedAt: string;
+}
+
+/**
+ * GET /products/quotable: a product a quotation line may be made from, launched in the shop or
+ * not (a piece made for one client), with what it sells at.
+ */
+export interface QuotableProduct {
+  id: string;
+  slug: string;
+  name: string;
+  price: Money;
+  /** False: hidden from the shop; only the studio can put it on a quotation. */
+  active: boolean;
+}
+
+/** GET /products/quotable/:slug/sizes: one of its real sizes, with its price. */
+export interface QuotableSize {
+  id: string;
+  /** "18 × 12 × 9 cm". */
+  label: string;
+  x: string;
+  y: string;
+  z: string;
+  unitPrice: Money;
 }
 
 /** A file accepted by POST /uploads: reference it by `key` (never by URL). */

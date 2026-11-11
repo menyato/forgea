@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  averagePricePerGram,
   configuredUnitPrice,
   type OptionEffect,
   overriddenUnitPrice,
@@ -46,7 +47,18 @@ export const withConfiguration = {
     orderBy: [{ value: { sortOrder: 'asc' } }, { value: { label: 'asc' } }],
   },
   sizes: { orderBy: { sortOrder: 'asc' } },
-  colours: { orderBy: { sortOrder: 'asc' } },
+  colours: {
+    orderBy: { sortOrder: 'asc' },
+    // The filament each colour is printed from, for its price.
+    include: {
+      stockItem: {
+        select: {
+          pricePerGram: true,
+          material: { select: { pricePerGram: true } },
+        },
+      },
+    },
+  },
   printFiles: { orderBy: { sortOrder: 'asc' } },
   // Multi-colour products: the colours customers recolour named parts in.
   partColourGroup: {
@@ -256,7 +268,7 @@ export class ProductConfigurator {
         grams: configuration.base?.grams ?? product.grams.toString(),
         printHours:
           configuration.base?.printHours ?? product.printHours.toString(),
-        pricePerGram: product.material.pricePerGram.toString(),
+        pricePerGram: filamentPricePerGram(product),
         wasteIncluded: product.slicedFile,
       },
       configuration.effects,
@@ -429,6 +441,7 @@ export function withPriceOverride(
     | 'profitKind'
     | 'profitValue'
     | 'slicedFile'
+    | 'colours'
   >,
   calculated: string,
 ): string {
@@ -438,7 +451,7 @@ export function withPriceOverride(
     {
       grams: product.grams.toString(),
       printHours: product.printHours.toString(),
-      pricePerGram: product.material.pricePerGram.toString(),
+      pricePerGram: filamentPricePerGram(product),
       wasteIncluded: product.slicedFile,
     },
     [],
@@ -448,6 +461,26 @@ export function withPriceOverride(
     product.priceOverride.toString(),
     base,
     calculated,
+  );
+}
+
+/**
+ * What a gram of the product's filament costs: its material's price, or, when its colours are
+ * printed from filaments on the shelf, each colour's grams at that filament's own price (its
+ * spools as bought, else its material's), averaged over the product's grams.
+ */
+function filamentPricePerGram(
+  product: Pick<ConfigurableProduct, 'material' | 'colours'>,
+): string {
+  return averagePricePerGram(
+    product.material.pricePerGram.toString(),
+    product.colours.map((c) => ({
+      grams: c.grams.toString(),
+      pricePerGram:
+        c.stockItem?.pricePerGram?.toString() ??
+        c.stockItem?.material.pricePerGram.toString() ??
+        null,
+    })),
   );
 }
 

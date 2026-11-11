@@ -187,6 +187,11 @@ export class SaveOptionValueDto extends SortedActive {
   @IsOptional()
   @IsUUID()
   materialId?: string;
+
+  /** A colour printed from this filament on the shelf: orders take its grams there. */
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the filament again' })
+  stockItemId?: string;
 }
 
 /** How a product offers one option group. */
@@ -250,6 +255,11 @@ export class ProductColourDto {
 
   @Matches(POSITIVE_DECIMAL, { message: 'Enter the grams of this colour' })
   grams!: string;
+
+  /** The filament on the shelf it is printed from: stock and cost follow that filament. */
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the filament again' })
+  stockItemId?: string;
 
   /** What customers call this part ("Body"), when they choose its colour; `colour` starts it. */
   @IsOptional()
@@ -484,6 +494,14 @@ export class PricePreviewDto {
   @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the model again' })
   modelFileKey?: string;
 
+  /** Its colours' grams and filaments: each filament's own price then counts in the cost. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(PRODUCT_COLOURS_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => PreviewColourDto)
+  colours?: PreviewColourDto[];
+
   /** Its sliced print files: numbers that are their total add no purge waste either. */
   @IsOptional()
   @IsArray()
@@ -506,6 +524,16 @@ export class PrintFilesDto {
 
   @IsUUID('all', { message: 'Choose a material' })
   materialId!: string;
+}
+
+/** One colour of a product being priced: its grams and the filament it is printed from. */
+export class PreviewColourDto {
+  @Matches(POSITIVE_DECIMAL, { message: 'Enter the grams of this colour' })
+  grams!: string;
+
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose the filament again' })
+  stockItemId?: string;
 }
 
 /** POST /products/model-info: what a 3MF says, priced with a material (dashboard). */

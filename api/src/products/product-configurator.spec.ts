@@ -42,6 +42,7 @@ function value(id: string, groupId: string, label: string, extra = {}) {
       extraPrice: D(0),
       materialId: null,
       material: null,
+      stockItemId: null,
       sortOrder: 0,
       active: true,
       createdAt: now,
@@ -375,6 +376,8 @@ describe('ProductConfigurator', () => {
       hex,
       grams: D(grams),
       part,
+      stockItemId: null,
+      stockItem: null,
       sortOrder: 0,
     });
     const parted = (): ConfigurableProduct => ({
@@ -439,6 +442,31 @@ describe('ProductConfigurator', () => {
       ).toThrow(
         new BadRequestException('This colour is not available for the Body'),
       );
+    });
+
+    it("costs each colour at its own filament's price", () => {
+      const p = parted();
+      // The body's 6 g from a reel bought at $0.20 a gram; the rest at the material's $0.10.
+      p.colours[0] = {
+        ...p.colours[0]!,
+        stockItemId: 'reel',
+        stockItem: {
+          pricePerGram: D('0.20'),
+          material: { pricePerGram: D('0.10') },
+        },
+      };
+      // 6 × 0.20 + 4 × 0.10 = $1.60 for its 10 g.
+      expect(
+        configurator.unitPrice(calculator, p, configurator.starting(p)),
+      ).toBe('1.60');
+      // A filament without a price of its own costs what its material costs.
+      p.colours[0]!.stockItem = {
+        pricePerGram: null,
+        material: { pricePerGram: D('0.30') },
+      };
+      expect(
+        configurator.unitPrice(calculator, p, configurator.starting(p)),
+      ).toBe('2.20');
     });
 
     it('offers no parts once the colour group is switched off', () => {

@@ -67,15 +67,38 @@ export class ProductionEstimator {
             where: { id: { in: productIds } },
             include: {
               sizes: { orderBy: { sortOrder: 'asc' } },
-              colours: { orderBy: { sortOrder: 'asc' } },
+              colours: {
+                orderBy: { sortOrder: 'asc' },
+                include: {
+                  stockItem: {
+                    select: {
+                      materialId: true,
+                      colour: true,
+                      pricePerGram: true,
+                      material: { select: { pricePerGram: true } },
+                    },
+                  },
+                },
+              },
               category: { select: { name: true } },
+              partColourGroup: { select: { name: true } },
             },
           })
         : [],
       groups.length
         ? this.prisma.optionValue.findMany({
             where: { group: { name: { in: groups }, kind: OptionKind.CHOICE } },
-            include: { group: { select: { name: true } } },
+            include: {
+              group: { select: { name: true } },
+              stockItem: {
+                select: {
+                  materialId: true,
+                  colour: true,
+                  pricePerGram: true,
+                  material: { select: { pricePerGram: true } },
+                },
+              },
+            },
           })
         : [],
       this.prisma.material.findMany({
@@ -99,7 +122,9 @@ export class ProductionEstimator {
               colour: c.colour,
               grams: c.grams.toString(),
               part: c.part,
+              filament: filamentOf(c.stockItem),
             })),
+            partColourGroup: p.partColourGroup?.name ?? null,
             sizes: p.sizes.map((s) => ({
               label: sizeLabel(s),
               grams: s.grams.toString(),
@@ -117,6 +142,7 @@ export class ProductionEstimator {
             hoursMultiplier: v.hoursMultiplier.toString(),
             materialId: v.materialId,
             swatchHex: v.swatchHex,
+            filament: filamentOf(v.stockItem),
           },
         ]),
       ),
@@ -139,6 +165,26 @@ export class ProductionEstimator {
               ),
     };
   }
+}
+
+/** A filament on the shelf as estimates use it: what a gram costs is its own price, else its material's. */
+function filamentOf(
+  item: {
+    materialId: string;
+    colour: string;
+    pricePerGram: { toString(): string } | null;
+    material: { pricePerGram: { toString(): string } };
+  } | null,
+) {
+  return item
+    ? {
+        materialId: item.materialId,
+        colour: item.colour,
+        pricePerGram: (
+          item.pricePerGram ?? item.material.pricePerGram
+        ).toString(),
+      }
+    : null;
 }
 
 /**

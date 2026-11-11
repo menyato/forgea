@@ -64,8 +64,16 @@ test('a product shown assembled and printed from sliced files: their totals pric
   await expect(page.getByLabel('Material (g)')).toHaveValue('25.0');
   await expect(page.getByLabel('Print time (h)')).toHaveValue('3.00');
   await expect(page.getByLabel('Grams of colour 1')).toHaveValue('20.50');
-  await page.getByLabel(/Colour 1 \(file colour #aa2222\)/).fill('Black');
-  await page.getByLabel(/Colour 2 \(file colour #b87333\)/).fill('Copper silk');
+  await page
+    .getByLabel(/Colour 1 \(file colour #aa2222\)/)
+    .fill(`Shade ${tag}`);
+  // The second colour is printed from a reel on the shelf: it takes that reel's name, and
+  // its cost and stock follow that reel.
+  const reel = page.getByLabel('Filament colour 2 is printed from');
+  await reel.selectOption({ index: 1 });
+  await expect(
+    page.getByLabel(/Colour 2 \(file colour #b87333\)/),
+  ).not.toHaveValue('');
   // The price is the slicer's: no purge waste added on top.
   await expect(
     page.getByText(/purge, tower and supports are in the sliced grams/),
@@ -77,6 +85,9 @@ test('a product shown assembled and printed from sliced files: their totals pric
     'lamp 2 shade',
   );
   await expect(page.getByText(/In all:/)).toContainText('25.00 g');
+  await expect(
+    page.getByLabel('Filament colour 2 is printed from'),
+  ).not.toHaveValue('');
 
   // The dashboard's list and kanban show the product as the shop does: its model.
   for (const view of ['list', 'kanban']) {

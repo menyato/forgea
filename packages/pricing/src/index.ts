@@ -35,6 +35,7 @@ export {
 export {
   configureUnit,
   configuredUnitCost,
+  averagePricePerGram,
   configuredUnitPrice,
   type ConfiguredUnit,
   type OptionEffect,

@@ -173,6 +173,28 @@ export class ProductsRepository {
     });
   }
 
+  /** The filaments named, each with what a gram of it costs (its own price, else its material's). */
+  async filaments(
+    ids: readonly string[],
+  ): Promise<Map<string, { pricePerGram: string }>> {
+    const rows = await this.prisma.stockItem.findMany({
+      where: { id: { in: [...ids] } },
+      select: {
+        id: true,
+        pricePerGram: true,
+        material: { select: { pricePerGram: true } },
+      },
+    });
+    return new Map(
+      rows.map((f) => [
+        f.id,
+        {
+          pricePerGram: (f.pricePerGram ?? f.material.pricePerGram).toString(),
+        },
+      ]),
+    );
+  }
+
   /** A group parts are recoloured from: its switched-on colours that have a swatch. */
   partColours(groupId: string) {
     return this.prisma.optionGroup.findFirst({
@@ -345,6 +367,7 @@ const colourRow = (
   hex: c.hex,
   grams: c.grams,
   part: c.part || null,
+  stockItemId: c.stockItemId ?? null,
   sortOrder,
 });
 

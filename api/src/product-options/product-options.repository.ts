@@ -87,6 +87,7 @@ const valueFields = (dto: SaveOptionValueDto) => ({
   hoursMultiplier: dto.hoursMultiplier,
   extraPrice: dto.extraPrice,
   materialId: dto.materialId ?? null,
+  stockItemId: dto.stockItemId ?? null,
   sortOrder: dto.sortOrder,
   active: dto.active,
 });

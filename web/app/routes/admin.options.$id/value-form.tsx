@@ -10,9 +10,12 @@ import type { SaveResult } from '~/features/admin/staff.server';
 export function ValueForm({
   value,
   materials,
+  filaments,
 }: {
   value?: OptionValueView;
   materials: readonly MaterialView[];
+  /** The filaments on the shelf a colour may be printed from. */
+  filaments: readonly { id: string; material: string; colour: string }[];
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
@@ -93,6 +96,22 @@ export function ValueForm({
           </option>
         ))}
       </SelectField>
+      {filaments.length > 0 && (
+        <SelectField
+          label="Printed from filament"
+          name="stockItemId"
+          defaultValue={value?.stockItemId ?? ''}
+          error={errors['stockItemId']}
+          hint="For a colour: orders that choose it take their grams from this reel"
+        >
+          <option value="">By the colour&apos;s name</option>
+          {filaments.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.material} · {f.colour}
+            </option>
+          ))}
+        </SelectField>
+      )}
       <Field
         label="Order"
         name="sortOrder"

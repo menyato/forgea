@@ -1,4 +1,5 @@
 import {
+  averagePricePerGram,
   configuredUnitCost,
   type OptionEffect,
   PricingError,
@@ -20,7 +21,18 @@ interface CatalogProduct {
    * Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. A named
    * part prints in the colour the order chose for it ("Body: Copper"), else in `colour`.
    */
-  colours: { colour: string; grams: string; part: string | null }[];
+  colours: {
+    colour: string;
+    grams: string;
+    part: string | null;
+    /**
+     * The filament on the shelf it is printed from: its material, its name there and what a
+     * gram of it costs. Null = the product's material in the colour named.
+     */
+    filament: Filament | null;
+  }[];
+  /** The option group its parts are recoloured from (the choices' filaments are there). */
+  partColourGroup: string | null;
   /** Measurements as the order stores them ("18 × 12 × 9 cm"), in the product's order. */
   sizes: {
     label: string;
@@ -37,6 +49,15 @@ interface CatalogValue {
   materialId: string | null;
   /** Values with a swatch are colours: the filament's colour. */
   swatchHex: string | null;
+  /** The filament on the shelf this colour is printed from, when the owner linked one. */
+  filament: Filament | null;
+}
+
+/** A filament on the shelf: its material, its name there and what a gram of it costs. */
+interface Filament {
+  materialId: string;
+  colour: string;
+  pricePerGram: string;
 }
 
 export interface Catalog {
@@ -56,8 +77,11 @@ export interface ItemEstimate {
   materialId: string;
   /** The chosen colour (a value with a swatch); "" when none. */
   colour: string;
-  /** A multi-colour piece (personalised text, a 3MF product): the grams each colour takes. */
-  colours?: { colour: string; gramsPerUnit: string }[];
+  /**
+   * A multi-colour piece (personalised text, a 3MF product): the grams each colour takes, and
+   * its material when the colour is printed from a filament of another one (PETG supports).
+   */
+  colours?: { colour: string; gramsPerUnit: string; materialId?: string }[];
 }
 
 export const valueKey = (group: string, value: string) =>
@@ -96,6 +120,8 @@ export function estimateItem(
   const effects: OptionEffect[] = [];
   let materialId = product.materialId;
   let colour = '';
+  // The one colour chosen for a one-colour product, when it is printed from a filament.
+  let colourFilament: Filament | null = null;
   // Parts recoloured by the customer: their choice is the part's filament, not an option.
   const parts = new Set(
     product.colours.flatMap((c) => (c.part ? [c.part] : [])),
@@ -105,7 +131,10 @@ export function estimateItem(
     const v = catalog.values.get(valueKey(o.group, o.value));
     if (!v) continue;
     if (v.materialId) materialId = v.materialId;
-    if (v.swatchHex !== null && colour === '') colour = o.value;
+    if (v.swatchHex !== null && colour === '') {
+      colour = o.value;
+      colourFilament = v.filament;
+    }
     effects.push({
       label: `${o.group}: ${o.value}`,
       gramsMultiplier: v.gramsMultiplier,
@@ -116,8 +145,38 @@ export function estimateItem(
         : null,
     });
   }
-  const pricePerGram = catalog.pricePerGram.get(product.materialId);
-  if (pricePerGram === undefined) return null;
+  const materialPrice = catalog.pricePerGram.get(product.materialId);
+  if (materialPrice === undefined) return null;
+  // A part the customer recoloured prints in the colour chosen; any other colour in the
+  // filament assigned to it, at that filament's own price.
+  const chosen = (c: CatalogProduct['colours'][number]) =>
+    (c.part && options.find((o) => o.group === c.part)?.value) || null;
+  // Where a colour row prints: the customer's colour (in its own filament when the owner
+  // linked one), else the filament assigned to the row, else the row's colour by name.
+  const reelOf = (
+    c: CatalogProduct['colours'][number],
+  ): { colour: string; filament: Filament | null } => {
+    const picked = chosen(c);
+    if (picked) {
+      const filament = product.partColourGroup
+        ? (catalog.values.get(valueKey(product.partColourGroup, picked))
+            ?.filament ?? null)
+        : null;
+      return { colour: filament?.colour ?? picked, filament };
+    }
+    if (c.filament) return { colour: c.filament.colour, filament: c.filament };
+    return { colour: c.colour, filament: null };
+  };
+  const pricePerGram = averagePricePerGram(
+    materialPrice,
+    product.colours.length > 0
+      ? product.colours.map((c) => ({
+          grams: c.grams,
+          pricePerGram: reelOf(c).filament?.pricePerGram ?? null,
+        }))
+      : // One colour, chosen as an option: its filament's price for all of it.
+        [{ grams: '1', pricePerGram: colourFilament?.pricePerGram ?? null }],
+  );
   try {
     const { cost, grams, hours } = configuredUnitCost(
       calculator,
@@ -134,20 +193,29 @@ export function estimateItem(
     // A one-colour file sold with a shop colour option prints in the colour chosen there.
     const single = product.colours.length === 1 && colour !== '';
     const colours = splitByColour(
-      product.colours.map((c) => ({
-        colour:
-          (c.part && options.find((o) => o.group === c.part)?.value) ||
-          (single && !c.part ? colour : c.colour),
-        grams: c.grams,
-      })),
+      product.colours.map((c) => {
+        const reel = reelOf(c);
+        if (reel.filament)
+          return {
+            colour: reel.colour,
+            grams: c.grams,
+            materialId: reel.filament.materialId,
+          };
+        return {
+          colour: single && !c.part && !chosen(c) ? colour : reel.colour,
+          grams: c.grams,
+        };
+      }),
       grams,
     );
+    // A one-colour product in a colour printed from a filament: that filament's shelf.
+    const oneReel = !colours && colourFilament ? colourFilament : null;
     return {
       unitCost: cost,
       gramsPerUnit: grams,
       hoursPerUnit: hours,
-      materialId,
-      colour: colours?.[0]?.colour ?? colour,
+      materialId: oneReel?.materialId ?? materialId,
+      colour: colours?.[0]?.colour ?? oneReel?.colour ?? colour,
       ...(colours ? { colours } : {}),
     };
   } catch (error) {
@@ -158,17 +226,28 @@ export function estimateItem(
 
 /** `grams` shared out in proportion to a product's colours; null for a one-colour product. */
 function splitByColour(
-  colours: readonly { colour: string; grams: string }[],
+  colours: readonly { colour: string; grams: string; materialId?: string }[],
   grams: string,
-): { colour: string; gramsPerUnit: string }[] | null {
+): { colour: string; gramsPerUnit: string; materialId?: string }[] | null {
   const total = colours.reduce((n, c) => n + Number(c.grams), 0);
   if (colours.length === 0 || total <= 0) return null;
-  // Two parts chosen in the same colour come from one reel.
-  const byColour = new Map<string, number>();
-  for (const c of colours)
-    byColour.set(c.colour, (byColour.get(c.colour) ?? 0) + Number(c.grams));
-  return [...byColour].map(([colour, g]) => ({
-    colour,
+  // Two parts chosen in the same colour (of the same material) come from one reel.
+  const reels = new Map<
+    string,
+    { colour: string; materialId?: string; grams: number }
+  >();
+  for (const c of colours) {
+    const key = `${c.materialId ?? ''}\u0000${c.colour}`;
+    const reel = reels.get(key) ?? {
+      colour: c.colour,
+      ...(c.materialId ? { materialId: c.materialId } : {}),
+      grams: 0,
+    };
+    reel.grams += Number(c.grams);
+    reels.set(key, reel);
+  }
+  return [...reels.values()].map(({ grams: g, ...reel }) => ({
+    ...reel,
     gramsPerUnit: ((Number(grams) * g) / total).toFixed(2),
   }));
 }

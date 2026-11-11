@@ -22,6 +22,7 @@ export function PricePanel({
   printHours,
   modelFileKey,
   printFileKeys,
+  colours,
   profit,
   onProfit,
   priceOverride,
@@ -36,6 +37,8 @@ export function PricePanel({
   modelFileKey: string | null;
   /** Its sliced print files: numbers that are their total hold the slicer's waste too. */
   printFileKeys: readonly string[];
+  /** Its colours' grams and filaments: each filament's own price counts in the cost. */
+  colours: readonly { grams: string; stockItemId: string | null }[];
   profit: ProfitValue;
   onProfit: (next: ProfitValue) => void;
   /** The owner's own price ('' = the calculated one). */
@@ -58,6 +61,16 @@ export function PricePanel({
     ...(modelFileKey ? { modelFileKey } : {}),
     ...(printFileKeys.length > 0
       ? { printFileKeys: JSON.stringify(printFileKeys) }
+      : {}),
+    ...(colours.some((c) => c.stockItemId)
+      ? {
+          colours: JSON.stringify(
+            colours.map((c) => ({
+              grams: c.grams,
+              ...(c.stockItemId ? { stockItemId: c.stockItemId } : {}),
+            })),
+          ),
+        }
       : {}),
     ...rule,
     ...(priceOverride ? { priceOverride } : {}),
