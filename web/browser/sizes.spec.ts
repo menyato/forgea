@@ -23,7 +23,10 @@ test('a product is sold in real sizes: measured from its model, shown in cm, pri
     .getByRole('button', { name: 'Upload', exact: true })
     .first()
     .click();
-  await expect(page.getByText(/Size 30 × 30 × 30 mm/)).toBeVisible();
+  // Uploaded, loaded in 3D, then measured: as long as the other 3D views are given.
+  await expect(page.getByText(/Size 30 × 30 × 30 mm/)).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The model's size, grams and hours in one click; then three sizes from them.
   await page.getByRole('button', { name: 'Use these numbers' }).click();

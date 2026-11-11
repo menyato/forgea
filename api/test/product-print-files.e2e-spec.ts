@@ -1,6 +1,7 @@
 import type {
   AdminProduct,
   AdminProductListItem,
+  OrderProduction,
   Page,
   PricePreview,
   PrintFilesTotal,
@@ -260,6 +261,45 @@ describe('Products with sliced print files (e2e)', () => {
       ['Red', -41],
       ['Copper silk', -9],
     ]);
+
+    // The order in figures: its filament by colour and time for whoever sees orders; what it
+    // costs and earns only for those who see the books.
+    const figures = (
+      await as(staff.cookie).get(`/orders/${order.id}/production`).expect(200)
+    ).body as OrderProduction;
+    expect(figures).toMatchObject({
+      grams: '50.0',
+      printHours: '6.00',
+      money: null,
+      lines: [
+        {
+          quantity: 2,
+          grams: '50.0',
+          cost: null,
+          colours: [
+            { colour: 'Red', grams: '41.0' },
+            { colour: 'Copper silk', grams: '9.0' },
+          ],
+        },
+      ],
+    });
+    expect(
+      [...figures.taken]
+        .sort((x, y) => y.grams - x.grams)
+        .map((t) => [t.colour, t.grams]),
+    ).toEqual([
+      ['Red', 41],
+      ['Copper silk', 9],
+    ]);
+    const books = (
+      await as(admin.cookie).get(`/orders/${order.id}/production`).expect(200)
+    ).body as OrderProduction;
+    expect(books.money).not.toBeNull();
+    expect(
+      (Number(books.money!.revenue) - Number(books.money!.cost)).toFixed(2),
+    ).toBe(books.money!.profit);
+    expect(books.lines[0]!.cost).toBe(books.money!.cost);
+    await as(customer.cookie).get(`/orders/${order.id}/production`).expect(403);
 
     const view = (await as(staff.cookie).get(`/orders/${order.id}`).expect(200))
       .body as StaffOrder;

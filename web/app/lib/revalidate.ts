@@ -15,12 +15,21 @@ const ASKS = new Set([
   'upload-image',
 ]);
 
-/** A route's `shouldRevalidate`: the default, except after a post that changes nothing. */
+/**
+ * A route's `shouldRevalidate`: the default, except after a post that changes nothing, sent
+ * from a page that is staying where it is. While the page is moving somewhere else (a save
+ * that opens the new record), the loaders must run: the router finishes that move with them.
+ */
 export function unlessAsking({
   formData,
+  currentUrl,
+  nextUrl,
   defaultShouldRevalidate,
 }: ShouldRevalidateFunctionArgs): boolean {
   const intent = formData?.get('intent');
-  if (typeof intent === 'string' && ASKS.has(intent)) return false;
+  const staying =
+    currentUrl.pathname === nextUrl.pathname &&
+    currentUrl.search === nextUrl.search;
+  if (staying && typeof intent === 'string' && ASKS.has(intent)) return false;
   return defaultShouldRevalidate;
 }
