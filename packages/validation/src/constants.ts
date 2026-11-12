@@ -121,6 +121,9 @@ export const PRODUCT_PART_NAME_MAX_LENGTH = 40;
 export const PRODUCT_PRINT_FILES_MAX = 12;
 export const PRINT_FILE_NAME_MAX_LENGTH = 80;
 
+/** Lines on one vendor's bill of filament. */
+export const VENDOR_PURCHASE_LINES_MAX = 40;
+
 /** Filament stock: a colour as the shop names it, and the most grams one movement may move. */
 export const STOCK_COLOUR_MAX_LENGTH = 40;
 export const STOCK_GRAMS_MAX = 1_000_000;

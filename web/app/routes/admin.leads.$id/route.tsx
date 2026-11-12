@@ -17,6 +17,7 @@ import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
 import { fromStudioInput, studioInput } from '~/lib/studio-time';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -242,6 +243,9 @@ export default function LeadPage({ loaderData }: Route.ComponentProps) {
             <LoseForm reasons={reasons} />
           )}
         </div>
+      </div>
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="lead" id={l.id} what={'this lead'} />
       </div>
     </>
   );

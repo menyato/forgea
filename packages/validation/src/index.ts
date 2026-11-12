@@ -111,6 +111,7 @@ export {
   RecordStockMovementDto,
   SaveStockItemDto,
   StockCountDto,
+  VendorPurchaseDto,
   StockMovementListQuery,
   StudioPrintDto,
   TakeReadyPiecesDto,

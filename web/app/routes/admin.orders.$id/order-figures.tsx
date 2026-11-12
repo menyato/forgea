@@ -26,6 +26,14 @@ export function OrderFigures({
     production.lines.flatMap((l) => l.colours.map((c) => c.colour)),
   ).size;
   const taken = production.taken.reduce((n, t) => n + t.grams, 0);
+  // Lines measured by their print runs, rather than estimated from a product.
+  const measured = production.lines.filter((l) => l.measured).length;
+  const basis =
+    measured === 0
+      ? 'estimated'
+      : measured === production.lines.length
+        ? 'from its print runs'
+        : 'estimated and measured';
   const open = (order.invoices ?? []).filter(
     (i) => i.state === 'POSTED' && Number(i.residual) > 0,
   );
@@ -53,7 +61,7 @@ export function OrderFigures({
           {
             label: 'Cost to make',
             value: <Money amount={production.money.cost} />,
-            hint: 'estimated',
+            hint: basis,
             to: '#order-filament',
           },
           {
@@ -61,8 +69,8 @@ export function OrderFigures({
             value: <Money amount={production.money.profit} />,
             hint:
               production.money.marginPercent === null
-                ? 'estimated'
-                : `${production.money.marginPercent}% of the sale, estimated`,
+                ? basis
+                : `${production.money.marginPercent}% of the sale, ${basis}`,
             to: '/admin/insights',
           },
         ]
@@ -105,10 +113,15 @@ export function OrderFigures({
                 <tr key={l.itemId} className="border-t border-border align-top">
                   <td className="py-1.5 pr-3">
                     {l.quantity} × {l.name}
+                    {l.measured && (
+                      <span className="block text-xs text-text-muted">
+                        as printed
+                      </span>
+                    )}
                   </td>
                   <td className="py-1.5 pr-3">
                     {l.grams === null
-                      ? 'No estimate'
+                      ? 'Not estimated or printed yet'
                       : l.colours
                           .map(
                             (c) => `${c.grams} g ${c.colour || 'any colour'}`,

@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { pricePerGramFromReel } from '@forgea/pricing';
+import {
+  pricePerGramFromReel,
+  PricingError,
+  shareDiscount,
+} from '@forgea/pricing';
 import type {
   ChosenOption,
   DateRange,
@@ -20,6 +24,7 @@ import type {
   RecordStockMovementDto,
   SaveStockItemDto,
   StockCountDto,
+  VendorPurchaseDto,
   StockMovementListQuery,
   StudioPrintDto,
 } from '@forgea/validation';
@@ -351,6 +356,83 @@ export class StockService {
         });
     });
     return { grams, cost };
+  }
+
+  /**
+   * A vendor's bill: every line's reels go on the shelf at what they really cost (the bill's
+   * discount shared by price), each reel keeping its own price per gram and look; paid from the
+   * cash box or a transfer, the bill is booked once as a purchase. All or nothing.
+   */
+  async vendorPurchase(
+    dto: VendorPurchaseDto,
+    actorId: string,
+  ): Promise<{ total: string; reels: number }> {
+    const materials = new Map<string, { id: string; code: string }>();
+    for (const id of new Set(dto.lines.map((l) => l.materialId))) {
+      const m = await this.stock.material(id);
+      if (!m) throw new NotFoundException('Material not found');
+      materials.set(id, m);
+    }
+    let net: string[];
+    try {
+      net = shareDiscount(
+        dto.lines.map((l) =>
+          new Prisma.Decimal(l.pricePerSpool).times(l.spools).toFixed(2),
+        ),
+        dto.discount,
+      );
+    } catch (error) {
+      if (error instanceof PricingError)
+        throw new BadRequestException(error.message);
+      throw error;
+    }
+    const total = net.reduce((n, x) => n.plus(x), new Prisma.Decimal(0));
+    const bill = `${dto.vendor}${dto.reference ? ` ${dto.reference}` : ''}`;
+    await this.stock.transaction(async (tx) => {
+      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.vendor-purchase')))
+        return;
+      const entry =
+        dto.paidFrom && total.gt(0)
+          ? await this.purchases.book(tx, {
+              paidFrom: dto.paidFrom,
+              amount: total,
+              label: `Filament: ${bill}`,
+              actorId,
+            })
+          : null;
+      for (const [i, line] of dto.lines.entries()) {
+        const material = materials.get(line.materialId)!;
+        const grams = line.spools * line.spoolGrams;
+        const cost = new Prisma.Decimal(net[i]!);
+        const costPerGram = cost.div(grams).toDecimalPlaces(4).toFixed(4);
+        await this.stock.record(tx, [
+          {
+            materialId: material.id,
+            colour: line.colour,
+            kind: StockMovementKind.RECEIVED,
+            grams,
+            cost: cost.toFixed(2),
+            costPerGram,
+            journalEntryId: entry?.id ?? null,
+            note: `${line.spools} × ${material.code} ${line.colour} (${line.spoolGrams} g) · ${bill}`,
+            createdById: actorId,
+          },
+        ]);
+        if (line.hex)
+          await this.stock.setColourHex(tx, material.id, line.colour, line.hex);
+        if (cost.gt(0))
+          await this.stock.setFilamentPrice(
+            tx,
+            material.id,
+            line.colour,
+            costPerGram,
+          );
+      }
+    });
+    return {
+      total: total.toFixed(2),
+      reels: dto.lines.reduce((n, l) => n + l.spools, 0),
+    };
   }
 
   /** The spools weighed: the difference from what the shelf should hold is recorded. */

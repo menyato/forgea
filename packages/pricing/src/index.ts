@@ -16,6 +16,7 @@ export {
 export {
   pricePerGramFromReel,
   printerHourlyRate,
+  shareDiscount,
   splitPrinterCost,
   type PrinterCosts,
 } from './setup-rates.js';
