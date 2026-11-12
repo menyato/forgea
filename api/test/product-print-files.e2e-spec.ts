@@ -301,6 +301,49 @@ describe('Products with sliced print files (e2e)', () => {
     expect(books.lines[0]!.cost).toBe(books.money!.cost);
     await as(customer.cookie).get(`/orders/${order.id}/production`).expect(403);
 
+    // Its one print run finished with the slicer's total (both colours, 50 g): the order took
+    // all of it already, so nothing more comes off any reel.
+    const [run] = (
+      (
+        await as(staff.cookie)
+          .get(`/print-jobs?orderId=${order.id}`)
+          .expect(200)
+      ).body as { items: { id: string }[] }
+    ).items;
+    const red = await prisma.stockItem.findFirstOrThrow({
+      where: { materialId: studio.material.id, colour: 'Red' },
+    });
+    const printer = (
+      await as(admin.cookie)
+        .post('/printers', {
+          name: `Run ${order.orderNumber}`,
+          watts: 150,
+          active: true,
+        })
+        .expect(201)
+    ).body.id as string;
+    await http()
+      .patch(`/print-jobs/${run!.id}`)
+      .set(CSRF)
+      .set('Cookie', staff.cookie)
+      .send({ printerId: printer, stockItemId: red.id })
+      .expect(200);
+    for (const step of [
+      { status: 'PRINTING' },
+      { status: 'DONE', actualGrams: '50', actualHours: '6' },
+    ])
+      await http()
+        .patch(`/print-jobs/${run!.id}`)
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send(step)
+        .expect(200);
+    expect(
+      await prisma.stockMovement.count({
+        where: { printJobId: run!.id, kind: 'PRINTED' },
+      }),
+    ).toBe(0);
+
     const view = (await as(staff.cookie).get(`/orders/${order.id}`).expect(200))
       .body as StaffOrder;
     expect(view.items[0]!.printFiles.map((f) => f.name)).toEqual([
