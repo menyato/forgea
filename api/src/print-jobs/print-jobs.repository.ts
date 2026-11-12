@@ -225,20 +225,11 @@ export class PrintJobsRepository {
       const reel = job.stockItem;
       if (reel && data.status === PrintJobStatus.DONE && job.actualGrams) {
         // What the order took when it went into production, for this line (0 for a job that
-        // isn't an order's line): only the difference moves now.
+        // isn't an order's line): only the difference moves now. The line's only run printed
+        // all its colours, so it is weighed against all the line took (from every reel); runs
+        // split one per reel each against their own reel.
         const taken = job.orderItemId
-          ? -(
-              (
-                await tx.stockMovement.aggregate({
-                  where: {
-                    orderItemId: job.orderItemId,
-                    kind: StockMovementKind.ORDER,
-                    stockItemId: reel.id,
-                  },
-                  _sum: { grams: true },
-                })
-              )._sum.grams ?? 0
-            )
+          ? await this.takenFor(tx, job.orderItemId, job.id, reel.id)
           : 0;
         const used = Math.ceil(Number(job.actualGrams));
         // Several jobs for one line share its estimate: each counts its own share.
@@ -361,6 +352,36 @@ export class PrintJobsRepository {
         replacesJobId: job.id,
       },
     });
+  }
+
+  /**
+   * Grams an order line took from stock when it went into production, as a run of it sees
+   * them: all of them for the line's only run (a multi-colour piece printed at once), else
+   * those of the run's own reel.
+   */
+  private async takenFor(
+    tx: Prisma.TransactionClient,
+    orderItemId: string,
+    jobId: string,
+    reelId: string,
+  ): Promise<number> {
+    const others = await tx.printJob.count({
+      where: {
+        orderItemId,
+        id: { not: jobId },
+        // A cancelled run printed nothing, and a failed one counts its own loss apart.
+        status: { notIn: [PrintJobStatus.CANCELLED, PrintJobStatus.FAILED] },
+      },
+    });
+    const sum = await tx.stockMovement.aggregate({
+      where: {
+        orderItemId,
+        kind: StockMovementKind.ORDER,
+        ...(others === 0 ? {} : { stockItemId: reelId }),
+      },
+      _sum: { grams: true },
+    });
+    return -(sum._sum.grams ?? 0);
   }
 
   /**
