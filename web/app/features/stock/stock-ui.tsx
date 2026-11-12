@@ -39,6 +39,7 @@ export const STOCK_TIME = new Intl.DateTimeFormat('en-GB', {
 /** The four things the team records, each its own page; `?line=` pre-fills a stock line. */
 export const STOCK_ACTIONS = [
   { path: '/admin/stock/receive', label: 'Spools received' },
+  { path: '/admin/stock/purchase', label: 'Vendor bill' },
   { path: '/admin/stock/print', label: 'Printed for the studio' },
   { path: '/admin/stock/failed', label: 'Failed print' },
   { path: '/admin/stock/weigh', label: 'Weigh the spools' },

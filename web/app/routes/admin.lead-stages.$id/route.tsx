@@ -5,6 +5,7 @@ import { save } from '~/features/admin/staff.server';
 import { StageForm } from '~/features/pipeline/pipeline-forms';
 import { stageValues } from '~/features/pipeline/pipeline-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -35,6 +36,9 @@ export default function LeadStage({ loaderData }: Route.ComponentProps) {
       />
       {/* A new stage, a new form (the pager moves between stages). */}
       <StageForm key={stage.id} stage={stage} />
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="leadStage" id={stage.id} what={'this stage'} />
+      </div>
     </>
   );
 }

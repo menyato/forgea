@@ -13,7 +13,7 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
   - `pricing` — pure pricing engine (Phase 2).
   - `validation` — class-validator DTO classes shared by api and web (Phase 4).
 - `marketing/` — not in git: brand kit (`brand-kit/BRAND-GUIDE.md`, primary logo `logo/primary/forgea-logo_dark.svg`), Instagram reels/posts, motion pieces. Social/video colours match the `copper` palette in `packages/brand`.
-- `docs/` — ROADMAP, LOCAL_SETUP, SECURITY, BACK_OFFICE, CATALOG_IMPORT.
+- `docs/` — ROADMAP, OPERATIONS (the owner's walkthrough), LOCAL_SETUP, SECURITY, BACK_OFFICE, CATALOG_IMPORT.
 - `Dockerfile` (targets `api`, `web`, `migrate`), `deploy/` (the servers' Compose stack, Caddy, deploy and backup scripts, env templates), `infra/` (server setup), `.github/workflows/` (CI; branches `development` → `staging` → `production`, the last two deploy to their environment).
 
 ## Rules
@@ -62,6 +62,10 @@ E-commerce platform for a 3D-printing and electronics design studio. pnpm monore
 - Form posts that only ask something (`preview`, `model-info`, `print-files`, uploads) don't re-run loaders (`unlessAsking` in `~/lib/revalidate`), unless the page is moving to another address.
 - Filaments are kept as bought: a stock line (material + the reel's name, its look and `pricePerGram` from its own spools) is one filament. A product colour may be printed from one (`ProductColour.stockItemId`, "Printed from" in the colours editor: the row takes the reel's name), and a shop colour too (`OptionValue.stockItemId`, Options page): cost uses each colour's grams at its reel's price (`averagePricePerGram`), and orders take the grams from that reel, of whatever material it is (PETG supports on a PLA piece). Without a reel, by the colour's name in the product's material, as before.
 - Quotation lines pick from `GET /products/quotable` (every product, hidden ones marked "not in the shop"), so a piece made for one client is quoted and ordered without being launched.
+- Vendor bills (`/admin/stock/purchase`, `POST /stock/purchases`): one supplier bill, its lines shelved at their share of the discount (`shareDiscount`), each reel keeping its own price, the bill booked once through `Purchases`.
+- Deleting records goes through `DeletionsService` (`DELETE /products|categories|materials|option-groups|option-groups/values|stock/items|printers|leads|lost-reasons|lead-stages/:id`, each with its permission): refused (409, saying what uses it) while history depends on the record; the database's foreign keys back it up. The page's `DeleteRecord` posts to `/admin/delete`. Orders, quotations and custom requests are cancelled, never deleted (their status history is append-only).
+- An order's figures measure a line no product estimates by its finished print runs (`measured`).
+- docs/OPERATIONS.md is the owner's day-to-day walkthrough: keep it current when a workflow changes.
 - Dashboard pages show breadcrumbs (`AdminHeader`'s `trail`: a detail page names its list); a crumb returns to that list as it was left (tab, filters), remembered in the browser only.
 - The home page bed shows products by `plateOrder` (1 = centre … 5), set in Dashboard → Home page bed (`PUT /products/plate`); with none set, the newest products with a model stand in. Model files are preloaded in the home route's `meta`, and printing starts only once every model has loaded.
 - The catalog moves between installations as one JSON file (docs/CATALOG_IMPORT.md); the importer reuses the catalog services and DTOs. The seed (`api/scripts/seed.ts`) loads `prisma/example-catalog.ts` through it.

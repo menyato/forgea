@@ -11,6 +11,7 @@ import { checked, save, text } from '~/features/admin/staff.server';
 import { GroupForm, kindLabel } from '~/features/admin-options/group-form';
 import { groupValues } from '~/features/admin-options/group-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 import { ValueForm } from './value-form';
 
@@ -122,6 +123,9 @@ export default function EditOption({ loaderData }: Route.ComponentProps) {
           )}
         </div>
       </ViewOnly>
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="optionGroup" id={group.id} what={'this option'} />
+      </div>
     </>
   );
 }

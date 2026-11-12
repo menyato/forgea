@@ -3,17 +3,30 @@ import type { OrderProduction } from '@forgea/types';
 import { splitTaxIncluded } from '../accounting/ledger-math.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { StockMovementKind } from '../generated/prisma/enums.js';
+import {
+  PrintJobStatus,
+  StockMovementKind,
+} from '../generated/prisma/enums.js';
 import { ProductionEstimator } from '../stock/production-estimator.js';
 import { InsightsRepository } from './insights.repository.js';
 
 const D = (v: Prisma.Decimal | string | number) => new Prisma.Decimal(v);
 
+/** What stock gave an order: its lines going into production and its print runs. */
+const TAKEN_KINDS = [
+  StockMovementKind.ORDER,
+  StockMovementKind.RETURNED,
+  StockMovementKind.PRINTED,
+  StockMovementKind.FAILED_PRINT,
+];
+
 /**
  * What one order takes to make, for its page's summary: the filament each line needs by
- * colour and its print time (estimated from the products, their sliced files and the options
- * bought, as stock is), what stock really gave it, and what it costs and earns. Cost and
- * profit are estimates from today's pricing settings, shown only to those who see the books.
+ * colour and its print time, what stock really gave it, and what it costs and earns. A line
+ * from a product is estimated from it (its sliced files and the options bought), as stock is;
+ * a line without one (free text, an in-house piece) is measured by its finished print runs:
+ * the grams and hours they really took and their recorded cost. Cost and profit only for those
+ * who see the books; unknown when a line has neither.
  */
 @Injectable()
 export class OrderProductionService {
@@ -46,18 +59,35 @@ export class OrderProductionService {
       },
     });
     if (!order) throw new NotFoundException('Order not found');
-    const [{ estimate }, taken, taxRate] = await Promise.all([
+    const [{ estimate }, taken, runs, taxRate] = await Promise.all([
       this.estimator.for(order.items),
       this.prisma.stockMovement.findMany({
         where: {
-          orderItem: { orderId },
-          kind: { in: [StockMovementKind.ORDER, StockMovementKind.RETURNED] },
+          kind: { in: TAKEN_KINDS },
+          OR: [{ orderItem: { orderId } }, { printJob: { orderId } }],
         },
         select: {
           grams: true,
           stockItem: {
             select: { colour: true, material: { select: { code: true } } },
           },
+        },
+      }),
+      // Finished runs measure a line no product estimates.
+      this.prisma.printJob.findMany({
+        where: {
+          orderId,
+          orderItemId: { not: null },
+          status: { in: [PrintJobStatus.DONE, PrintJobStatus.FAILED] },
+        },
+        select: {
+          orderItemId: true,
+          actualGrams: true,
+          actualHours: true,
+          materialCost: true,
+          electricityCost: true,
+          wearCost: true,
+          stockItem: { select: { colour: true } },
         },
       }),
       withMoney ? this.insights.salesTaxRate() : null,
@@ -68,11 +98,37 @@ export class OrderProductionService {
     let cost: Prisma.Decimal | null = D(0);
     let revenue = D(0);
     const lines = order.items.map((item) => {
-      const e = estimate(item);
       const lineRevenue = splitTaxIncluded(item.lineTotal, taxRate).base;
       revenue = revenue.plus(lineRevenue);
-      if (!e) {
-        // A line that can't be estimated leaves the order's cost unknown, not understated.
+      const e = estimate(item);
+      if (e) {
+        const lineGrams = D(e.gramsPerUnit).times(item.quantity);
+        const lineHours = D(e.hoursPerUnit).times(item.quantity);
+        const lineCost = D(e.unitCost).times(item.quantity);
+        grams = grams.plus(lineGrams);
+        hours = hours.plus(lineHours);
+        cost = cost?.plus(lineCost) ?? null;
+        return {
+          itemId: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          grams: lineGrams.toFixed(1),
+          printHours: lineHours.toFixed(2),
+          colours: (
+            e.colours ?? [{ colour: e.colour, gramsPerUnit: e.gramsPerUnit }]
+          ).map((c) => ({
+            colour: c.colour,
+            grams: D(c.gramsPerUnit).times(item.quantity).toFixed(1),
+          })),
+          cost: withMoney ? lineCost.toFixed(2) : null,
+          measured: false,
+        };
+      }
+      const done = runs.filter(
+        (r) => r.orderItemId === item.id && r.actualGrams !== null,
+      );
+      if (done.length === 0) {
+        // Neither estimated nor printed yet: the order's cost is unknown, not understated.
         cost = null;
         return {
           itemId: item.id,
@@ -82,11 +138,24 @@ export class OrderProductionService {
           printHours: null,
           colours: [],
           cost: null,
+          measured: false,
         };
       }
-      const lineGrams = D(e.gramsPerUnit).times(item.quantity);
-      const lineHours = D(e.hoursPerUnit).times(item.quantity);
-      const lineCost = D(e.unitCost).times(item.quantity);
+      const byReel = new Map<string, Prisma.Decimal>();
+      let lineGrams = D(0);
+      let lineHours = D(0);
+      let lineCost = D(0);
+      for (const r of done) {
+        const g = D(r.actualGrams!);
+        lineGrams = lineGrams.plus(g);
+        lineHours = lineHours.plus(r.actualHours ?? 0);
+        lineCost = lineCost
+          .plus(r.materialCost ?? 0)
+          .plus(r.electricityCost ?? 0)
+          .plus(r.wearCost ?? 0);
+        const reel = r.stockItem?.colour ?? '';
+        byReel.set(reel, (byReel.get(reel) ?? D(0)).plus(g));
+      }
       grams = grams.plus(lineGrams);
       hours = hours.plus(lineHours);
       cost = cost?.plus(lineCost) ?? null;
@@ -96,17 +165,16 @@ export class OrderProductionService {
         quantity: item.quantity,
         grams: lineGrams.toFixed(1),
         printHours: lineHours.toFixed(2),
-        colours: (
-          e.colours ?? [{ colour: e.colour, gramsPerUnit: e.gramsPerUnit }]
-        ).map((c) => ({
-          colour: c.colour,
-          grams: D(c.gramsPerUnit).times(item.quantity).toFixed(1),
+        colours: [...byReel].map(([colour, g]) => ({
+          colour,
+          grams: g.toFixed(1),
         })),
         cost: withMoney ? lineCost.toFixed(2) : null,
+        measured: true,
       };
     });
 
-    // What stock gave the order, per reel: taken when it went into production, less returns.
+    // What stock gave the order, per reel (less what was returned).
     const reels = new Map<
       string,
       { material: string; colour: string; grams: number }

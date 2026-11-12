@@ -38,6 +38,7 @@ import {
   Swatch,
 } from '~/features/stock/stock-ui';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 /** The line's latest movements shown here; the rest are on the movements list. */
@@ -173,6 +174,9 @@ export default function StockLine({ loaderData }: Route.ComponentProps) {
             </ViewOnly>
           </Panel>
         </div>
+      </div>
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="stockItem" id={i.id} what={'this filament line'} />
       </div>
     </>
   );

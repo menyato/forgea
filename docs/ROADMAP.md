@@ -14,7 +14,9 @@
 | 10 | Design system: final logo, palette and fonts | Done — logo (option 0, build plate) and palette (copper) chosen 2026-10-26; fonts League Spartan + Inter kept 2026-10-28. The owner can change colours in Dashboard → Theme |
 | 11 | **Back office: CRM, sales and accounting** (replaces the Odoo bridge — see below) | Done 2026-10-28 — leads pipeline, quotations (customer accepts online), double-entry books with automatic invoices and payments, reports. VAT is set up but off until the owner decides |
 | 12 | Tests and CI | Running since Phase 1: unit, API e2e (real Postgres), browser (Playwright, real Chrome), knip, audit; every deploy runs them first |
-| 13 | Deployment | Written 2026-10-28 (Docker, Hostinger VPS, Cloudflare, GitHub Actions); runs once the servers and the repository exist |
+| 13 | Deployment | Done — live on forgea-lab.com since 2026-11-07 (Hostinger VPS, Cloudflare, GitHub Actions: development → staging → production, a backup before every production deploy, nightly backups) |
+| 14 | Team permissions and saved themes (see below) | Done 2026-10-30 |
+| 15 | **3D print files and production costs** (see below) | Done 2026-11-12 |
 
 ## Phase 7 — 3D experience (main selling point)
 
@@ -118,8 +120,7 @@ production side by side with Docker Compose (owner's choice 2026-10-28), Cloudfl
 Actions tests, builds the images and deploys: `development` (daily work, tests only) → `staging` → `production`, each branch deploying to its environment.
 Replaces the earlier Google Cloud plan (why: docs/SECURITY.md, first section).
 
-Written, not yet run: Docker is not installed on the development machine yet, so the images
-and the stack are verified the first time CI builds them and the first deploy runs.
+Live since 2026-11-07: production and staging run on the VPS, deployed by CI from their branches.
 
 ## Phase 14 — Team permissions and saved themes
 
@@ -167,3 +168,34 @@ as editable data, per-person grants and denials, checked on every request) witho
   get invoices on My orders, cancel an order before the studio starts, and Order again; the
   dashboard opens on "Needs attention". The deploy gate script was ignored by git and is now
   tracked.
+
+## Phase 15 — 3D print files and production costs
+
+Done 2026-11-08 to 2026-11-12, in steps the owner approved one by one.
+
+- **Bambu Studio 3MF:** products, quotation lines and customers' custom requests read 3MF files
+  in a worker (colours, grams per colour, time, plates, printer, nozzle, layers, infill,
+  supports, prime tower). Only a sliced file prices anything: its grams already hold the purge,
+  tower and supports, so no purge waste is added on top. A sliced file in a custom request is
+  quoted at once.
+- **A product shown assembled, printed from sliced files:** its model is the look; its print
+  files add up to its grams, time and colours.
+- **Customers recolour parts:** each colour of a file can be the customer's to choose, priced
+  by that colour's add-on, recoloured live in 3D.
+- **Own price:** the owner may set a product's price; options still move it.
+- **Filaments as bought:** each reel keeps its name, colour and price per gram; a product's
+  colour, and a colour the shop offers, may be printed from one, so cost and stock follow that
+  reel, of any material. Vendor bills (several reels, a discount, booked once) and "A new
+  material…" from the spools form.
+- **Costs set once:** printer wear and electricity shown apart in a product's price.
+- **The dashboard:** products in 3D in the list and kanban; an order opens with its figures
+  (filament, time, cost to make, profit, invoices) and what it takes to make, estimated from
+  products or measured by its print runs; a quotation can sell a product not in the shop.
+- **Deleting records** (products, categories, materials, options, filament lines, printers,
+  leads, lost reasons, stages), refused while history uses them; orders, quotations and
+  custom requests are cancelled, never deleted.
+- **Report days** follow the studio's day (Beirut), like documents.
+
+Still open (owner's choice): the catalog file does not carry print files; Zero Trust in front
+of staging; enforcing the content security policy; Dependabot updates; order search indexes
+(not needed at today's size).

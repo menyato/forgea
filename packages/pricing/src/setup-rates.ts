@@ -77,3 +77,30 @@ function hourParts(p: PrinterCosts): { wear: Big; power: Big } {
     );
   return { wear, power };
 }
+
+/**
+ * A bill's discount shared across its lines by their price, to the cent: each line's net
+ * amount (what it really cost), the last line taking the rounding so they add up to the bill.
+ */
+export function shareDiscount(
+  lineTotals: readonly DecimalInput[],
+  discount: DecimalInput,
+): string[] {
+  const totals = lineTotals.map((t) =>
+    requireNonNegative(toBig(t, 'line total'), 'line total'),
+  );
+  const gross = totals.reduce((n, t) => n.plus(t), new Big(0));
+  const off = requireNonNegative(toBig(discount, 'discount'), 'discount');
+  if (off.gt(gross))
+    throw new PricingError('The discount is more than the bill');
+  const net = gross.minus(off);
+  let given = new Big(0);
+  return totals.map((t, i) => {
+    if (i === totals.length - 1) return net.minus(given).toFixed(2);
+    const share = gross.eq(0)
+      ? new Big(0)
+      : t.times(net).div(gross).round(2, Big.roundHalfUp);
+    given = given.plus(share);
+    return share.toFixed(2);
+  });
+}

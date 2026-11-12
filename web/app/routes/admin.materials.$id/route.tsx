@@ -6,6 +6,7 @@ import { save } from '~/features/admin/staff.server';
 import { MaterialForm } from '~/features/admin-materials/material-form';
 import { materialValues } from '~/features/admin-materials/material-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -39,6 +40,9 @@ export default function EditMaterial({ loaderData }: Route.ComponentProps) {
       <ViewOnly editable={editable}>
         <MaterialForm key={material.id} material={material} />
       </ViewOnly>
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="material" id={material.id} what={'this material'} />
+      </div>
     </>
   );
 }

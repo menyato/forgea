@@ -188,6 +188,9 @@ export const PAGES: readonly {
     group: 'Catalog',
   },
   { path: '/admin/stock/receive', access: 'stock.manage' },
+  { path: '/admin/stock/purchase', access: 'stock.manage' },
+  // The Delete button on record pages: the API checks each record's own permission.
+  { path: '/admin/delete', access: 'team' },
   { path: '/admin/stock/print', access: 'stock.manage' },
   { path: '/admin/stock/failed', access: 'stock.manage' },
   { path: '/admin/stock/weigh', access: 'stock.manage' },

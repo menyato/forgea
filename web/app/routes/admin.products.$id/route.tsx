@@ -29,6 +29,7 @@ import { jsonField, validateForm } from '~/lib/forms.server';
 import type { ApiClient } from '~/lib/api-client.server';
 import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 import { ProductForm } from './product-form';
 
@@ -328,6 +329,11 @@ export default function EditProduct({ loaderData }: Route.ComponentProps) {
       <ViewOnly editable={editable}>
         <ProductForm key={product?.id ?? 'new'} {...loaderData} />
       </ViewOnly>
+      {product && (
+        <div className="mt-8 border-t border-border pt-4">
+          <DeleteRecord kind="product" id={product.id} what={'this product'} />
+        </div>
+      )}
     </>
   );
 }

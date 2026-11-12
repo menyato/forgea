@@ -5,6 +5,7 @@ import { save } from '~/features/admin/staff.server';
 import { ReasonForm } from '~/features/pipeline/pipeline-forms';
 import { reasonValues } from '~/features/pipeline/pipeline-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -36,6 +37,9 @@ export default function LostReason({ loaderData }: Route.ComponentProps) {
         trail={[{ label: 'Lost reasons', to: '/admin/lost-reasons' }]}
       />
       <ReasonForm key={reason.id} reason={reason} />
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="lostReason" id={reason.id} what={'this reason'} />
+      </div>
     </>
   );
 }

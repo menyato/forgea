@@ -171,6 +171,11 @@ export interface OrderProduction {
     printHours: string | null;
     colours: { colour: string; grams: string }[];
     cost: Money | null;
+    /**
+     * True: no product estimates it, so these are what its finished print runs really took
+     * (grams by reel, hours, recorded cost). False: estimated from its product.
+     */
+    measured: boolean;
   }[];
   grams: string;
   printHours: string;

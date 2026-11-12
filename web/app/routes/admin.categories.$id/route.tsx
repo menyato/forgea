@@ -6,6 +6,7 @@ import { save } from '~/features/admin/staff.server';
 import { CategoryForm } from '~/features/admin-categories/category-form';
 import { categoryValues } from '~/features/admin-categories/category-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -45,6 +46,9 @@ export default function EditCategory({ loaderData }: Route.ComponentProps) {
       <ViewOnly editable={editable}>
         <CategoryForm key={category.id} category={category} />
       </ViewOnly>
+      <div className="mt-8 border-t border-border pt-4">
+        <DeleteRecord kind="category" id={category.id} what={'this category'} />
+      </div>
     </>
   );
 }

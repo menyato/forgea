@@ -6,6 +6,7 @@ import { save } from '~/features/admin/staff.server';
 import { PrinterForm } from '~/features/production/printer-form';
 import { printerValues } from '~/features/production/printer-values.server';
 import { apiContext } from '~/lib/request.server';
+import { DeleteRecord } from '~/features/admin/delete-record';
 import type { Route } from './+types/route';
 
 /** One printer, or a new one at /admin/printers/new. */
@@ -55,6 +56,11 @@ export default function Printer({ loaderData }: Route.ComponentProps) {
         trail={[{ label: 'Printers', to: '/admin/printers' }]}
       />
       <PrinterForm key={printer?.id ?? 'new'} printer={printer} />
+      {printer && (
+        <div className="mt-8 border-t border-border pt-4">
+          <DeleteRecord kind="printer" id={printer.id} what={'this printer'} />
+        </div>
+      )}
     </>
   );
 }

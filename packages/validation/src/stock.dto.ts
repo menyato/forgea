@@ -7,6 +7,7 @@ import {
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -18,8 +19,10 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
   NotEquals,
   Validate,
+  ValidateNested,
   type ValidationArguments,
   ValidatorConstraint,
   type ValidatorConstraintInterface,
@@ -27,6 +30,7 @@ import {
 import {
   HEX_COLOR_PATTERN,
   MONEY_PATTERN,
+  VENDOR_PURCHASE_LINES_MAX,
   ORDER_NUMBER_PATTERN,
   STOCK_COLOUR_MAX_LENGTH,
   STOCK_GRAMS_MAX,
@@ -181,6 +185,80 @@ export class ReceiveSpoolsDto {
   @IsString()
   @MaxLength(200, note)
   note?: string;
+}
+
+/** One line of a vendor's bill: reels of one filament (a material in one colour as sold). */
+export class VendorPurchaseLineDto {
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  /** The reel's name as bought ("Elegoo PLA Matte (White)"): its own line on the shelf. */
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Name the colour as bought' })
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour!: string;
+
+  @IsOptional()
+  @Matches(HEX_COLOR_PATTERN, { message: 'Pick the colour' })
+  hex?: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'Enter how many spools' })
+  @Min(1, { message: 'Enter how many spools' })
+  @Max(200)
+  spools!: number;
+
+  @Type(() => Number)
+  @IsInt(grams)
+  @Min(50, grams)
+  @Max(20_000, grams)
+  spoolGrams!: number;
+
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the price of one spool, e.g. 19.50',
+  })
+  pricePerSpool!: string;
+}
+
+/**
+ * A vendor's bill of filament, as it reads: its lines (reels as bought, each at its price), a
+ * discount on the whole bill, where it was paid from. Every reel goes on the shelf at what it
+ * really cost (the discount shared by price), and the bill is booked once.
+ */
+export class VendorPurchaseDto {
+  /** The form's one-time key: sent twice, it is recorded once. */
+  @IsOptional()
+  @IsUUID()
+  requestKey?: string;
+
+  @Trim()
+  @IsString()
+  @MinLength(2, { message: 'Enter the vendor' })
+  @MaxLength(80)
+  vendor!: string;
+
+  /** Their invoice or order number. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(60)
+  reference?: string;
+
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Add a line' })
+  @ArrayMaxSize(VENDOR_PURCHASE_LINES_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => VendorPurchaseLineDto)
+  lines!: VendorPurchaseLineDto[];
+
+  /** Taken off the whole bill (USD), shared across its lines by their price. */
+  @Matches(MONEY_PATTERN, { message: 'Enter the discount, e.g. 9.00' })
+  discount: string = '0';
+
+  @IsOptional()
+  @IsIn(PURCHASE_PAID_FROM)
+  paidFrom?: PurchasePaidFrom;
 }
 
 /**

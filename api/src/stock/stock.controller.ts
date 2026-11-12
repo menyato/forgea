@@ -22,6 +22,7 @@ import {
   RecordStockMovementDto,
   SaveStockItemDto,
   StockCountDto,
+  VendorPurchaseDto,
   StockMovementListQuery,
   StudioPrintDto,
 } from '@forgea/validation';
@@ -95,6 +96,22 @@ export class StockController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     return this.stock.receive(dto, user.id);
+  }
+
+  /** A vendor's bill of filament: its lines on the shelf at their real cost, booked once. */
+  @RequirePermission('stock.manage')
+  @Audit({
+    action: 'stock.vendor-purchase',
+    targetType: 'Material',
+    targetId: 'stock',
+  })
+  @HttpCode(200)
+  @Post('purchases')
+  vendorPurchase(
+    @Body() dto: VendorPurchaseDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ total: string; reels: number }> {
+    return this.stock.vendorPurchase(dto, user.id);
   }
 
   /** The products the studio can print for itself, with one's grams and cost. */
