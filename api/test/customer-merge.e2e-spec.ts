@@ -117,4 +117,32 @@ describe('Merging customers (e2e)', () => {
     ).expect(403);
     expect(await prisma.user.count({ where: { id: a.user.id } })).toBe(1);
   });
+
+  it("an admin corrects a customer account's name and phone, never a team account's", async () => {
+    const c = await signedInAs(app, Role.CUSTOMER);
+    const staff = await signedInAs(app, Role.STAFF);
+    const put = (body: object, cookie = admin.cookie) =>
+      request(app.getHttpServer())
+        .put('/customers/details')
+        .set(CSRF)
+        .set('Cookie', cookie)
+        .send(body);
+    await put({
+      email: c.user.email,
+      name: 'Labs Print',
+      phone: '70 123 456',
+    }).expect(204);
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: c.user.id } }),
+    ).toMatchObject({ name: 'Labs Print' });
+    await put({
+      email: staff.user.email,
+      name: 'X',
+      phone: '70 123 456',
+    }).expect(404);
+    await put(
+      { email: c.user.email, name: 'X', phone: '70 123 456' },
+      staff.cookie,
+    ).expect(403);
+  });
 });

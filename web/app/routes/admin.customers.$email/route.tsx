@@ -3,7 +3,7 @@ import {
   type CustomerDetail,
   ORDER_STATUS_LABELS,
 } from '@forgea/types';
-import { MergeCustomersDto } from '@forgea/validation';
+import { CustomerDetailsDto, MergeCustomersDto } from '@forgea/validation';
 import { type ReactNode, useId } from 'react';
 import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -12,7 +12,7 @@ import { Field } from '~/components/ui/field';
 import { useIsAdmin } from '~/features/admin/access';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
-import { AdminHeader, Panel } from '~/features/admin/admin-ui';
+import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { accountText } from '~/features/customers/account-text';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -41,6 +41,16 @@ export async function loader({ params, context }: Route.LoaderArgs) {
  */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
+  if (form.get('intent') === 'details')
+    return save(
+      CustomerDetailsDto,
+      {
+        email: params.email,
+        name: text(form, 'name'),
+        phone: text(form, 'phone'),
+      },
+      (dto) => context.get(apiContext).put('/customers/details', dto),
+    );
   if (form.get('confirm') !== 'on')
     return data<SaveResult>(
       { error: 'Tick the box to confirm the merge' },
@@ -248,8 +258,67 @@ export default function Customer({ loaderData }: Route.ComponentProps) {
           })}
         />
       </div>
+      {c.account && (
+        <CustomerDetails
+          key={`${c.name}|${c.phone}`}
+          name={c.name}
+          phone={c.phone}
+        />
+      )}
       {c.account && <MergeCustomer email={c.email} />}
     </>
+  );
+}
+
+/** Admins correct the name and phone of an account the studio made (or a customer's typo). */
+function CustomerDetails({
+  name,
+  phone,
+}: {
+  name: string | null;
+  phone: string | null;
+}) {
+  const fetcher = useFetcher<SaveResult>();
+  const errors = fetcher.data?.errors ?? {};
+  if (!useIsAdmin()) return null;
+  return (
+    <div className="mt-8 border-t border-border pt-4">
+      <Panel title="Name and phone">
+        <fetcher.Form
+          method="post"
+          className="grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-2"
+        >
+          <input type="hidden" name="intent" value="details" />
+          <Field
+            label="Name"
+            name="name"
+            autoComplete="off"
+            required
+            defaultValue={name ?? ''}
+            error={errors['name']}
+          />
+          <Field
+            label="Phone"
+            name="phone"
+            type="tel"
+            autoComplete="off"
+            required
+            defaultValue={phone ?? ''}
+            error={errors['phone']}
+          />
+          <div className="flex items-center gap-3 sm:col-span-2">
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={fetcher.state !== 'idle'}
+            >
+              Save
+            </Button>
+            <SaveStatus state={fetcher.state} result={fetcher.data} />
+          </div>
+        </fetcher.Form>
+      </Panel>
+    </div>
   );
 }
 

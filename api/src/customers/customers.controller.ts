@@ -1,10 +1,19 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import type {
   CustomerDetail,
   CustomerList,
   CustomerSummary,
 } from '@forgea/types';
 import {
+  CustomerDetailsDto,
   CustomerEmailQuery,
   CustomerListQuery,
   MergeCustomersDto,
@@ -43,6 +52,15 @@ export class CustomersController {
   @Get('one')
   detail(@Query() query: CustomerEmailQuery): Promise<CustomerDetail> {
     return this.customers.detail(query.email);
+  }
+
+  /** A customer account's name and phone (admin only). */
+  @AdminOnly()
+  @Audit({ action: 'customer.details', targetType: 'User' })
+  @HttpCode(204)
+  @Put('details')
+  details(@Body() dto: CustomerDetailsDto): Promise<void> {
+    return this.merges.details(dto.email, dto.name, dto.phone);
   }
 
   /** One customer into another (admin only): the first account is removed. */
