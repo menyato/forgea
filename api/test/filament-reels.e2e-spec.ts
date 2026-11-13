@@ -3,6 +3,7 @@ import type {
   PricePreview,
   StockItemView,
   StockOverview,
+  StockPrintable,
 } from '@forgea/types';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
@@ -180,5 +181,87 @@ describe('Filament reels: own price, assigned to colours (e2e)', () => {
         (i) => i.material.id === studio.material.id && i.stockGrams < 0,
       ),
     ).toEqual([]);
+  });
+
+  it('printed for the studio, a piece takes each colour from its reel, as an order does', async () => {
+    const before = await shelf();
+    const grams = (id: string) => before.find((i) => i.id === id)!.stockGrams;
+    await as(admin.cookie)
+      .post('/stock/studio-prints', {
+        productId: studio.product.id,
+        quantity: 1,
+      })
+      .expect(200);
+    const after = await shelf();
+    expect(after.find((i) => i.id === white.id)!.stockGrams).toBe(
+      grams(white.id) - 80,
+    );
+    expect(after.find((i) => i.id === support.id)!.stockGrams).toBe(
+      grams(support.id) - 20,
+    );
+  });
+
+  it('a piece whose colour customers choose is printed for the studio in the colour picked, from its reel', async () => {
+    await as(admin.cookie)
+      .post('/stock/receipts', {
+        materialId: studio.material.id,
+        colour: 'Elegoo PLA+ (Beige)',
+        hex: '#e8dbb7',
+        spools: 1,
+        spoolGrams: 1000,
+        pricePerSpool: '17.00',
+        updateCost: false,
+      })
+      .expect(204);
+    const beige = (await shelf()).find(
+      (i) =>
+        i.material.id === studio.material.id &&
+        i.colour === 'Elegoo PLA+ (Beige)',
+    )!;
+    const group = await prisma.optionGroup.create({
+      data: {
+        name: `Stand colours ${studio.tag}`,
+        values: {
+          create: [
+            {
+              label: 'Beige',
+              swatchHex: '#e8dbb7',
+              stockItemId: beige.id,
+              sortOrder: 1,
+            },
+            { label: 'Pink', swatchHex: '#e4207c', sortOrder: 2 },
+          ],
+        },
+      },
+    });
+    const product = await prisma.product.update({
+      where: { id: studio.product.id },
+      data: {
+        partColourGroupId: group.id,
+        colours: {
+          deleteMany: {},
+          create: [
+            { colour: 'Pink', hex: '#e4207c', grams: '100', part: 'Stand' },
+          ],
+        },
+      },
+    });
+    const printable = (
+      (await as(admin.cookie).get('/stock/printables').expect(200))
+        .body as StockPrintable[]
+    ).find((p) => p.id === product.id)!;
+    expect(printable.colours.map((c) => c.label)).toEqual(['Beige', 'Pink']);
+
+    await as(admin.cookie)
+      .post('/stock/studio-prints', {
+        productId: product.id,
+        colour: 'Beige',
+        quantity: 1,
+        toShelf: true,
+      })
+      .expect(200);
+    expect((await shelf()).find((i) => i.id === beige.id)!.stockGrams).toBe(
+      1000 - 100,
+    );
   });
 });

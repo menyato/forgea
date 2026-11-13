@@ -61,33 +61,43 @@ export class ProductionEstimator {
         lines.flatMap((l) => chosenOptions(l.options).map((o) => o.group)),
       ),
     ];
-    const [products, values, materials, calculator] = await Promise.all([
-      productIds.length
-        ? this.prisma.product.findMany({
-            where: { id: { in: productIds } },
-            include: {
-              sizes: { orderBy: { sortOrder: 'asc' } },
-              colours: {
-                orderBy: { sortOrder: 'asc' },
-                include: {
-                  stockItem: {
-                    select: {
-                      materialId: true,
-                      colour: true,
-                      pricePerGram: true,
-                      material: { select: { pricePerGram: true } },
-                    },
+    const products = await (productIds.length
+      ? this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          include: {
+            sizes: { orderBy: { sortOrder: 'asc' } },
+            colours: {
+              orderBy: { sortOrder: 'asc' },
+              include: {
+                stockItem: {
+                  select: {
+                    materialId: true,
+                    colour: true,
+                    pricePerGram: true,
+                    material: { select: { pricePerGram: true } },
                   },
                 },
               },
-              category: { select: { name: true } },
-              partColourGroup: { select: { name: true } },
             },
-          })
-        : [],
-      groups.length
+            category: { select: { name: true } },
+            partColourGroup: { select: { name: true } },
+          },
+        })
+      : []);
+    // A part's colour is chosen under the part's name; its filament is in the product's part
+    // colour group, so those groups' values are loaded too.
+    const names = [
+      ...new Set([
+        ...groups,
+        ...products.flatMap((p) =>
+          p.partColourGroup ? [p.partColourGroup.name] : [],
+        ),
+      ]),
+    ];
+    const [values, materials, calculator] = await Promise.all([
+      names.length
         ? this.prisma.optionValue.findMany({
-            where: { group: { name: { in: groups }, kind: OptionKind.CHOICE } },
+            where: { group: { name: { in: names }, kind: OptionKind.CHOICE } },
             include: {
               group: { select: { name: true } },
               stockItem: {
