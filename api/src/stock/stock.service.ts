@@ -296,7 +296,12 @@ export class StockService {
     if (dto.size && !sizes.includes(dto.size))
       throw new BadRequestException('Choose one of its sizes');
     const options: ChosenOption[] = [
-      ...(colour ? [{ group: colour.group, value: colour.label }] : []),
+      // A recoloured piece: every part the customer would choose is printed in that colour.
+      ...(colour
+        ? colour.parts.length > 0
+          ? colour.parts.map((part) => ({ group: part, value: colour.label }))
+          : [{ group: colour.group, value: colour.label }]
+        : []),
       ...(dto.size ? [{ group: 'Size', value: dto.size }] : []),
     ];
     const line = { productId: product.id, options };
@@ -320,30 +325,43 @@ export class StockService {
       .times(dto.quantity)
       .times(share)
       .toFixed(2);
-    const perGram = catalog.pricePerGram.get(e.materialId);
-    await this.stock.transaction(async (tx) => {
-      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print')))
-        return;
-      await this.stock.record(tx, [
+    // As orders do: each colour from its own reel (a part's chosen filament, PETG supports
+    // from the PETG shelf), its share of the grams and of the cost.
+    const parts = e.colours ?? [
+      { colour: colour?.label ?? e.colour, gramsPerUnit: e.gramsPerUnit },
+    ];
+    const total = parts.reduce((n, p) => n + Number(p.gramsPerUnit), 0);
+    const note =
+      dto.note ||
+      (failed && dto.progressPercent !== undefined
+        ? `Failed at ${dto.progressPercent}%`
+        : null);
+    const movements = parts.flatMap((part) => {
+      const share = total > 0 ? Number(part.gramsPerUnit) / total : 1;
+      const partGrams = Math.max(1, Math.ceil(grams * share));
+      const materialId =
+        ('materialId' in part ? part.materialId : undefined) ?? e.materialId;
+      return [
         {
-          materialId: e.materialId,
-          colour: colour?.label ?? '',
+          materialId,
+          colour: part.colour,
           kind: failed
             ? StockMovementKind.FAILED_PRINT
             : StockMovementKind.USED,
-          grams: -grams,
-          cost,
-          costPerGram: perGram ?? null,
+          grams: -partGrams,
+          cost: new Prisma.Decimal(cost).times(share).toFixed(2),
+          costPerGram: catalog.pricePerGram.get(materialId) ?? null,
           productId: product.id,
           quantity: dto.quantity,
-          note:
-            dto.note ||
-            (failed && dto.progressPercent !== undefined
-              ? `Failed at ${dto.progressPercent}%`
-              : null),
+          note,
           createdById: actorId,
         },
-      ]);
+      ];
+    });
+    await this.stock.transaction(async (tx) => {
+      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print')))
+        return;
+      await this.stock.record(tx, movements);
       // Printed to sell: the pieces wait on the shelf, at what they cost to make.
       if (!failed && dto.toShelf)
         await this.pieces.add(tx, {
@@ -507,7 +525,10 @@ export class StockService {
   }
 }
 
-/** A product's colours with the option group they come from (personalised: its text colours). */
+/**
+ * A product's colours with the option group they come from: personalised, its text colours; with
+ * parts customers recolour, the colours those parts are chosen in (`parts`: the parts' names).
+ */
 function coloursOf(p: {
   optionValues: {
     value: { label: string; swatchHex: string | null; group: { name: string } };
@@ -516,17 +537,39 @@ function coloursOf(p: {
     name: string;
     values: { label: string; swatchHex: string | null }[];
   } | null;
-}): { label: string; swatchHex: string | null; group: string }[] {
-  const all = p.textColourGroup
-    ? p.textColourGroup.values.map((v) => ({
-        ...v,
-        group: p.textColourGroup!.name,
-      }))
-    : p.optionValues.map(({ value: v }) => ({
-        label: v.label,
-        swatchHex: v.swatchHex,
-        group: v.group.name,
-      }));
+  colours: { part: string | null }[];
+  partColourGroup: {
+    name: string;
+    values: { label: string; swatchHex: string | null }[];
+  } | null;
+}): {
+  label: string;
+  swatchHex: string | null;
+  group: string;
+  parts: string[];
+}[] {
+  const parts = [
+    ...new Set(p.colours.flatMap((c) => (c.part ? [c.part] : []))),
+  ];
+  const all =
+    parts.length > 0 && p.partColourGroup
+      ? p.partColourGroup.values.map((v) => ({
+          ...v,
+          group: p.partColourGroup!.name,
+          parts,
+        }))
+      : p.textColourGroup
+        ? p.textColourGroup.values.map((v) => ({
+            ...v,
+            group: p.textColourGroup!.name,
+            parts: [],
+          }))
+        : p.optionValues.map(({ value: v }) => ({
+            label: v.label,
+            swatchHex: v.swatchHex,
+            group: v.group.name,
+            parts: [],
+          }));
   const seen = new Set<string>();
   return all.filter((c) => !seen.has(c.label) && seen.add(c.label));
 }
