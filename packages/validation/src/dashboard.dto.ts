@@ -87,24 +87,13 @@ export class UpdatePricingSettingsDto {
   })
   profitValue!: string;
 
-  /** The printer as bought: all four, or none (then machineRatePerHour is typed directly). */
+  /**
+   * The printer prices are worked out from: its own price, life and watts (Printers) with
+   * `electricityPerKwh`. Empty: machineRatePerHour is typed directly.
+   */
   @IsOptional()
-  @Matches(MONEY_PATTERN, money)
-  printerPrice?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'Enter whole hours, e.g. 5000' })
-  @Min(1)
-  @Max(1_000_000)
-  printerLifeHours?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'Enter whole watts, e.g. 150' })
-  @Min(0)
-  @Max(100_000)
-  printerWatts?: number;
+  @IsUUID('all', { message: 'Choose a printer' })
+  pricingPrinterId?: string;
 
   @IsOptional()
   @Matches(/^\d{1,4}(\.\d{1,4})?$/, {

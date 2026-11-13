@@ -22,6 +22,8 @@ class FakeSettingsRepository extends PricingSettingsRepository {
       bulkDiscountTiers: [{ minQuantity: 10, percent: '5' }],
     },
     printer: null,
+    pricingPrinterId: null,
+    electricityPerKwh: null,
   };
 
   current(): Promise<PricingSettingsSnapshot> {
@@ -31,6 +33,10 @@ class FakeSettingsRepository extends PricingSettingsRepository {
   save(settings: PricingSettingsSnapshot): Promise<void> {
     this.snapshot = settings;
     return Promise.resolve();
+  }
+
+  printer(): Promise<null> {
+    return Promise.resolve(null);
   }
 }
 

@@ -38,10 +38,24 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 
 const grams = (g: number) => `${g.toLocaleString('en-US')} g`;
 
+/** The orders list's filter that holds each status. */
+const ORDER_FILTER: Record<OrderStatus, string> = {
+  PENDING: 'confirm',
+  AWAITING_DEPOSIT: 'confirm',
+  CONFIRMED: 'production',
+  IN_PRODUCTION: 'production',
+  READY: 'delivery',
+  OUT_FOR_DELIVERY: 'delivery',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
+};
+
 export default function Business({ loaderData }: Route.ComponentProps) {
   const { insights: i, today, error } = loaderData;
   const now = i.current;
   const was = i.before;
+  const period = `from=${i.range.from}&to=${i.range.to}`;
+  const reports = `/admin/accounting/reports?${period}`;
   return (
     <>
       <AdminHeader
@@ -62,6 +76,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <FigureTile
             label="Revenue (taxes excluded)"
+            to={reports}
             value={<Money amount={now.revenue} />}
             current={now.revenue}
             previous={was.revenue}
@@ -76,6 +91,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           <FigureTile
             label="Production cost"
             estimated
+            to={`/admin/production/results?${period}`}
             value={<Money amount={now.productionCost} />}
             current={now.productionCost}
             previous={was.productionCost}
@@ -96,6 +112,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           <FigureTile
             label="Gross profit"
             estimated
+            to="#sellers"
             value={<Money amount={now.grossProfit} />}
             current={now.grossProfit}
             previous={was.grossProfit}
@@ -107,6 +124,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           />
           <FigureTile
             label="Net profit (books)"
+            to={reports}
             value={<Money amount={now.netProfit} />}
             current={now.netProfit}
             previous={was.netProfit}
@@ -129,6 +147,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           />
           <FigureTile
             label="Expenses recorded"
+            to={reports}
             value={<Money amount={now.expenses} />}
             current={now.expenses}
             previous={was.expenses}
@@ -137,6 +156,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           />
           <FigureTile
             label="Cash collected"
+            to="/admin/accounting?view=list&filter=paid"
             value={<Money amount={now.cashCollected} />}
             current={now.cashCollected}
             previous={was.cashCollected}
@@ -144,6 +164,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           />
           <FigureTile
             label="Still owed by customers"
+            to="/admin/accounting?view=list&filter=unpaid"
             value={<Money amount={now.owed} />}
             current={now.owed}
             previous={was.owed}
@@ -159,6 +180,7 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           />
           <FigureTile
             label="Orders"
+            to="/admin/orders?view=list&filter=confirm,production,delivery,delivered"
             value={now.orders}
             current={now.orders}
             previous={was.orders}
@@ -187,7 +209,12 @@ export default function Business({ loaderData }: Route.ComponentProps) {
             <ul className="grid gap-1 text-sm">
               {i.expenses.map((e) => (
                 <li key={e.code} className="flex justify-between gap-4">
-                  <span>{e.name}</span>
+                  <Link
+                    to={`/admin/accounting/books?q=${encodeURIComponent(e.code)}`}
+                    className="hover:underline"
+                  >
+                    {e.name}
+                  </Link>
                   <Money amount={e.amount} />
                 </li>
               ))}
@@ -291,6 +318,9 @@ export default function Business({ loaderData }: Route.ComponentProps) {
                 rows={i.categories.map((c) => ({
                   key: c.name ?? '',
                   label: c.name ?? 'No category',
+                  to: c.name
+                    ? `/admin/categories?q=${encodeURIComponent(c.name)}`
+                    : undefined,
                   value: Number(c.revenue),
                   text: <Money amount={c.revenue} />,
                 }))}
@@ -335,13 +365,17 @@ export default function Business({ loaderData }: Route.ComponentProps) {
                 .map((s: OrderStatus) => ({
                   key: s,
                   label: ORDER_STATUS_LABELS[s].title,
+                  to: `/admin/orders?view=list&filter=${ORDER_FILTER[s]}`,
                   value: i.orders.byStatus[s] ?? 0,
                   text: String(i.orders.byStatus[s] ?? 0),
                 }))}
               empty="No orders in this period."
             />
             <dl className="grid gap-1 text-sm">
-              <Fact label="Cancelled">
+              <Fact
+                label="Cancelled"
+                to="/admin/orders?view=list&filter=cancelled"
+              >
                 {i.orders.cancelled} of {i.orders.placed}
                 {i.orders.cancellationPercent !== null &&
                   ` (${i.orders.cancellationPercent}%)`}
@@ -378,30 +412,54 @@ export default function Business({ loaderData }: Route.ComponentProps) {
           <Panel title="Custom requests and quotations">
             <Funnel
               steps={[
-                { label: 'Custom requests sent', value: i.requests.submitted },
-                { label: 'Quoted', value: i.requests.quoted },
+                {
+                  label: 'Custom requests sent',
+                  value: i.requests.submitted,
+                  to: '/admin/requests?view=list&filter=new,quoted,accepted,closed',
+                },
+                {
+                  label: 'Quoted',
+                  value: i.requests.quoted,
+                  to: '/admin/requests?view=list&filter=quoted',
+                },
                 {
                   label: 'Accepted (became orders)',
                   value: i.requests.accepted,
+                  to: '/admin/requests?view=list&filter=accepted',
                 },
               ]}
             />
             <Funnel
               steps={[
-                { label: 'Quotations written', value: i.quotations.created },
-                { label: 'Sent to the customer', value: i.quotations.sent },
+                {
+                  label: 'Quotations written',
+                  value: i.quotations.created,
+                  to: '/admin/quotations?view=list',
+                },
+                {
+                  label: 'Sent to the customer',
+                  value: i.quotations.sent,
+                  to: '/admin/quotations?view=list',
+                },
                 {
                   label: 'Confirmed (became orders)',
                   value: i.quotations.confirmed,
+                  to: '/admin/orders?view=list&filter=confirm,production,delivery,delivered',
                 },
               ]}
             />
           </Panel>
           <Panel title="Leads">
             <dl className="grid gap-1 text-sm">
-              <Fact label="New leads">{i.leads.created}</Fact>
-              <Fact label="Won">{i.leads.won}</Fact>
-              <Fact label="Lost">{i.leads.lost}</Fact>
+              <Fact label="New leads" to="/admin/leads?view=list&filter=open">
+                {i.leads.created}
+              </Fact>
+              <Fact label="Won" to="/admin/leads?view=list&filter=won">
+                {i.leads.won}
+              </Fact>
+              <Fact label="Lost" to="/admin/leads?view=list&filter=lost">
+                {i.leads.lost}
+              </Fact>
             </dl>
             {i.leads.lostReasons.length > 0 && (
               <>
@@ -459,10 +517,17 @@ export default function Business({ loaderData }: Route.ComponentProps) {
                       className="border-t border-border"
                     >
                       <td className="py-2 pr-4">
-                        {m.code}{' '}
-                        {m.colour || (
-                          <span className="text-text-muted">(any colour)</span>
-                        )}
+                        <Link
+                          to={`/admin/stock/movements?q=${encodeURIComponent(`${m.code} ${m.colour}`.trim())}&${period}`}
+                          className="hover:underline"
+                        >
+                          {m.code}{' '}
+                          {m.colour || (
+                            <span className="text-text-muted">
+                              (any colour)
+                            </span>
+                          )}
+                        </Link>
                       </td>
                       <td className="py-2 pr-4 text-right tabular-nums">
                         {grams(m.usedGrams)}
@@ -496,10 +561,26 @@ export default function Business({ loaderData }: Route.ComponentProps) {
   );
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+function Fact({
+  label,
+  to,
+  children,
+}: {
+  label: string;
+  to?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-text-muted">{label}</dt>
+      <dt className="text-text-muted">
+        {to ? (
+          <Link to={to} className="hover:text-text hover:underline">
+            {label}
+          </Link>
+        ) : (
+          label
+        )}
+      </dt>
       <dd className="tabular-nums">{children}</dd>
     </div>
   );
@@ -510,7 +591,14 @@ function Bars({
   rows,
   empty = 'Nothing yet.',
 }: {
-  rows: { key: string; label: string; value: number; text: ReactNode }[];
+  rows: {
+    key: string;
+    label: string;
+    value: number;
+    text: ReactNode;
+    /** Where the row's records are. */
+    to?: string | undefined;
+  }[];
   empty?: string;
 }) {
   if (rows.length === 0)
@@ -521,7 +609,13 @@ function Bars({
       {rows.map((r) => (
         <li key={r.key} className="grid gap-1">
           <div className="flex justify-between gap-4">
-            <span className="min-w-0 truncate">{r.label}</span>
+            {r.to ? (
+              <Link to={r.to} className="min-w-0 truncate hover:underline">
+                {r.label}
+              </Link>
+            ) : (
+              <span className="min-w-0 truncate">{r.label}</span>
+            )}
             <span className="tabular-nums">{r.text}</span>
           </div>
           <div
@@ -572,13 +666,23 @@ function Split({
 }
 
 /** Steps of a funnel, each with its share of the first. */
-function Funnel({ steps }: { steps: { label: string; value: number }[] }) {
+function Funnel({
+  steps,
+}: {
+  steps: { label: string; value: number; to?: string }[];
+}) {
   const first = steps[0]?.value ?? 0;
   return (
     <ol className="grid gap-1 text-sm">
       {steps.map((s, n) => (
         <li key={s.label} className="flex justify-between gap-4">
-          <span>{s.label}</span>
+          {s.to ? (
+            <Link to={s.to} className="hover:underline">
+              {s.label}
+            </Link>
+          ) : (
+            <span>{s.label}</span>
+          )}
           <span className="tabular-nums">
             {s.value}
             {n > 0 && first > 0 && (

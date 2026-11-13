@@ -1,17 +1,29 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
 import type {
   CustomerDetail,
   CustomerList,
   CustomerSummary,
 } from '@forgea/types';
-import { CustomerEmailQuery, CustomerListQuery } from '@forgea/validation';
-import { RequirePermission } from '../authorization/decorators.js';
+import {
+  CustomerEmailQuery,
+  CustomerListQuery,
+  MergeCustomersDto,
+} from '@forgea/validation';
+import { Audit } from '../audit-log/audit.interceptor.js';
+import { AdminOnly, RequirePermission } from '../authorization/decorators.js';
+import {
+  CustomerMergeService,
+  type CustomerMergeResult,
+} from './customer-merge.service.js';
 import { CustomersService } from './customers.service.js';
 
 /** The dashboard's Customers: people with or without an account, and what they did. */
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly customers: CustomersService) {}
+  constructor(
+    private readonly customers: CustomersService,
+    private readonly merges: CustomerMergeService,
+  ) {}
 
   @RequirePermission('customers.view')
   @Get()
@@ -31,5 +43,14 @@ export class CustomersController {
   @Get('one')
   detail(@Query() query: CustomerEmailQuery): Promise<CustomerDetail> {
     return this.customers.detail(query.email);
+  }
+
+  /** One customer into another (admin only): the first account is removed. */
+  @AdminOnly()
+  @Audit({ action: 'customer.merge', targetType: 'User', resultKey: 'into' })
+  @HttpCode(200)
+  @Post('merge')
+  merge(@Body() dto: MergeCustomersDto): Promise<CustomerMergeResult> {
+    return this.merges.merge(dto.from, dto.into);
   }
 }

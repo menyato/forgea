@@ -3,9 +3,14 @@ import {
   type CustomerDetail,
   ORDER_STATUS_LABELS,
 } from '@forgea/types';
-import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { MergeCustomersDto } from '@forgea/validation';
+import { type ReactNode, useId } from 'react';
+import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
+import { Button } from '~/components/ui/button';
+import { Field } from '~/components/ui/field';
+import { useIsAdmin } from '~/features/admin/access';
+import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { AdminHeader, Panel } from '~/features/admin/admin-ui';
 import { accountText } from '~/features/customers/account-text';
@@ -28,6 +33,33 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     );
   if (!r.ok) throw new Response(r.message, { status: r.status });
   return { customer: r.data };
+}
+
+/**
+ * Merges this customer into another (admin only; the API refuses anyone else): everything they
+ * have becomes the other's and this account is removed; the page opens the kept customer.
+ */
+export async function action({ request, params, context }: Route.ActionArgs) {
+  const form = await request.formData();
+  if (form.get('confirm') !== 'on')
+    return data<SaveResult>(
+      { error: 'Tick the box to confirm the merge' },
+      { status: 400 },
+    );
+  let into: string | undefined;
+  const result = await save(
+    MergeCustomersDto,
+    { from: params.email, into: text(form, 'into') },
+    async (dto) => {
+      const r = await context
+        .get(apiContext)
+        .post<{ into: string }>('/customers/merge', dto);
+      if (r.ok) into = r.data.into;
+      return r;
+    },
+  );
+  if (into) throw redirect(`/admin/customers/${encodeURIComponent(into)}`);
+  return result;
 }
 
 /** Day and time, in the studio's own time zone (Beirut). */
@@ -216,6 +248,62 @@ export default function Customer({ loaderData }: Route.ComponentProps) {
           })}
         />
       </div>
+      {c.account && <MergeCustomer email={c.email} />}
     </>
+  );
+}
+
+/** Admins merge a duplicate (a second walk-in account) into the customer to keep. */
+function MergeCustomer({ email }: { email: string }) {
+  const fetcher = useFetcher<SaveResult>();
+  const confirmId = useId();
+  if (!useIsAdmin()) return null;
+  return (
+    <div className="mt-8 border-t border-border pt-4">
+      <Panel title="Merge into another customer">
+        <p className="max-w-2xl text-sm text-text-muted">
+          For a duplicate: this customer&apos;s orders, quotations, requests,
+          leads, invoices and payments become the other customer&apos;s, with
+          their history, and {email} is removed. It can&apos;t be undone.
+        </p>
+        <fetcher.Form method="post" className="grid max-w-xl grid-cols-1 gap-3">
+          <Field
+            label="Keep this customer (their email)"
+            name="into"
+            type="email"
+            autoComplete="off"
+            required
+            error={fetcher.data?.errors?.['into']}
+          />
+          <label
+            htmlFor={confirmId}
+            className="flex items-center gap-2 text-sm"
+          >
+            <input
+              id={confirmId}
+              type="checkbox"
+              name="confirm"
+              autoComplete="off"
+              required
+            />
+            Yes, move everything and remove {email}
+          </label>
+          <div>
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={fetcher.state !== 'idle'}
+            >
+              Merge
+            </Button>
+          </div>
+          {fetcher.data?.error && (
+            <p role="alert" className="text-sm text-danger">
+              {fetcher.data.error}
+            </p>
+          )}
+        </fetcher.Form>
+      </Panel>
+    </div>
   );
 }

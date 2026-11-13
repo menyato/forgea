@@ -46,7 +46,7 @@ export class PricingService {
         'Two bulk discounts start at the same quantity',
       );
     }
-    const printer = printerOf(dto);
+    const printer = await this.printerOf(dto);
     const next: PricingSettingsSnapshot = {
       cost: {
         // With the printer's details, its hourly cost is worked out from them.
@@ -60,6 +60,8 @@ export class PricingService {
         profit: { kind: dto.profitKind, value: dto.profitValue },
       },
       printer,
+      pricingPrinterId: dto.pricingPrinterId ?? null,
+      electricityPerKwh: dto.electricityPerKwh ?? null,
       order: {
         rushFeePercent: dto.rushFeePercent,
         deliveryFee: dto.deliveryFee,
@@ -124,26 +126,30 @@ export class PricingService {
       bulkDiscounts ? order : { ...order, bulkDiscountTiers: [] },
     ).quote(lines, options);
   }
-}
 
-/** The printer's four details, all or none ("fill in all four, or clear them"). */
-function printerOf(dto: UpdatePricingSettingsDto): PrinterCosts | null {
-  const parts = [
-    dto.printerPrice,
-    dto.printerLifeHours,
-    dto.printerWatts,
-    dto.electricityPerKwh,
-  ];
-  if (parts.every((p) => p === undefined)) return null;
-  if (parts.some((p) => p === undefined)) {
-    throw new BadRequestException(
-      'Fill in all four printer details (price, life, watts, electricity), or clear them to type the hourly cost yourself',
-    );
+  /**
+   * The pricing printer's details, from the printer itself: it needs its price and the hours it
+   * lasts (entered on its own page) and the studio's electricity.
+   */
+  private async printerOf(
+    dto: UpdatePricingSettingsDto,
+  ): Promise<PrinterCosts | null> {
+    if (!dto.pricingPrinterId) return null;
+    const p = await this.stored.printer(dto.pricingPrinterId);
+    if (!p) throw new BadRequestException('Choose a printer');
+    if (p.priceUsd === null || p.lifeHours === null)
+      throw new BadRequestException(
+        "Fill in that printer's price and the hours it lasts on its page first (Printers), or type the hourly cost yourself",
+      );
+    if (!dto.electricityPerKwh)
+      throw new BadRequestException(
+        'Enter what a kWh of electricity costs, to price the printer’s power',
+      );
+    return {
+      printerPrice: p.priceUsd,
+      lifeHours: p.lifeHours,
+      watts: p.watts,
+      electricityPerKwh: dto.electricityPerKwh,
+    };
   }
-  return {
-    printerPrice: dto.printerPrice!,
-    lifeHours: dto.printerLifeHours!,
-    watts: dto.printerWatts!,
-    electricityPerKwh: dto.electricityPerKwh!,
-  };
 }

@@ -593,6 +593,22 @@ export class CustomerEmailQuery {
   email!: string;
 }
 
+/**
+ * POST /customers/merge: everything the first customer has (orders, quotations, requests,
+ * invoices, payments) goes to the second, and the first account is removed.
+ */
+export class MergeCustomersDto {
+  @NormalizeEmail()
+  @IsEmail({}, { message: 'Enter a valid email address' })
+  @MaxLength(EMAIL_MAX_LENGTH)
+  from!: string;
+
+  @NormalizeEmail()
+  @IsEmail({}, { message: 'Choose the customer to keep' })
+  @MaxLength(EMAIL_MAX_LENGTH)
+  into!: string;
+}
+
 /** How many backups the server keeps (older ones are deleted after each new one). */
 export class BackupKeepDto {
   @Type(() => Number)

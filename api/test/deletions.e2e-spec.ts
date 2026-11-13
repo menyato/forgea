@@ -25,6 +25,8 @@ describe('Deleting records, refused while history uses them (e2e)', () => {
   const tag = () => randomUUID().slice(0, 8);
   const del = (url: string, cookie = admin.cookie) =>
     request(app.getHttpServer()).delete(url).set(CSRF).set('Cookie', cookie);
+  const ask = (url: string, cookie = admin.cookie) =>
+    request(app.getHttpServer()).get(url).set('Cookie', cookie);
 
   beforeAll(async () => {
     app = await createApp();
@@ -81,6 +83,27 @@ describe('Deleting records, refused while history uses them (e2e)', () => {
         },
       },
     });
+    // Asked first, nothing is deleted: the ordered one is kept by its order line, the spare
+    // goes with its size.
+    const kept = await ask(`/products/${studio.product.id}/deletion`).expect(
+      200,
+    );
+    expect(kept.body).toMatchObject({
+      id: studio.product.id,
+      deletable: false,
+      blockedBy: [{ count: 1, what: 'order lines' }],
+      instead: expect.stringMatching(/Visible in the shop/),
+    });
+    const going = await ask(`/products/${spare.id}/deletion`).expect(200);
+    expect(going.body).toMatchObject({
+      name: 'Spare',
+      deletable: true,
+      blockedBy: [],
+      removes: [{ count: 1, what: 'sizes' }],
+      instead: null,
+    });
+    expect(await prisma.product.count({ where: { id: spare.id } })).toBe(1);
+
     await del(`/products/${spare.id}`).expect(204);
     expect(await prisma.product.count({ where: { id: spare.id } })).toBe(0);
     expect(
@@ -104,6 +127,12 @@ describe('Deleting records, refused while history uses them (e2e)', () => {
     expect(
       (await del(`/stock/items/${used.id}`).expect(409)).body.message,
     ).toMatch(/stock movements.*Track this filament/);
+    expect(
+      (await ask(`/stock/items/${used.id}/deletion`).expect(200)).body,
+    ).toMatchObject({
+      deletable: false,
+      name: expect.stringContaining(used.colour),
+    });
 
     const group = await prisma.optionGroup.findUniqueOrThrow({
       where: { name: studio.colourGroup },
@@ -172,6 +201,12 @@ describe('Deleting records, refused while history uses them (e2e)', () => {
     expect(
       (await del(`/lead-stages/${won.id}`).expect(409)).body.message,
     ).toMatch(/Won and Quoted/);
+    expect(
+      (await ask(`/lead-stages/${won.id}/deletion`).expect(200)).body,
+    ).toMatchObject({
+      deletable: false,
+      instead: expect.stringMatching(/Won and Quoted/),
+    });
     const reason = await prisma.lostReason.create({
       data: { name: `Too far ${tag()}` },
     });
@@ -186,6 +221,10 @@ describe('Deleting records, refused while history uses them (e2e)', () => {
     await del(`/products/${studio.product.id}`, customer.cookie).expect(403);
     await del(`/leads/${randomUUID()}`, designer.cookie).expect(403);
     await del(`/printers/${randomUUID()}`, designer.cookie).expect(403);
+    await ask(`/printers/${randomUUID()}/deletion`, designer.cookie).expect(
+      403,
+    );
+    await ask(`/printers/${randomUUID()}/deletion`).expect(404);
     await request(app.getHttpServer())
       .delete(`/products/${studio.product.id}`)
       .set(CSRF)

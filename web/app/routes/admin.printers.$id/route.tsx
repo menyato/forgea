@@ -7,6 +7,9 @@ import { PrinterForm } from '~/features/production/printer-form';
 import { printerValues } from '~/features/production/printer-values.server';
 import { apiContext } from '~/lib/request.server';
 import { DeleteRecord } from '~/features/admin/delete-record';
+import { Money } from '~/components/money';
+import { SmartButtons } from '~/features/admin/smart-buttons';
+import { printerJobs } from '~/features/production/links';
 import type { Route } from './+types/route';
 
 /** One printer, or a new one at /admin/printers/new. */
@@ -55,6 +58,31 @@ export default function Printer({ loaderData }: Route.ComponentProps) {
         }
         trail={[{ label: 'Printers', to: '/admin/printers' }]}
       />
+      {printer && (
+        <SmartButtons
+          label="This printer in figures"
+          buttons={[
+            {
+              label: 'Print jobs',
+              value: printer.jobs,
+              hint: 'open the list',
+              to: printerJobs(printer.id),
+            },
+            {
+              label: 'Wear per hour',
+              value: printer.wearPerHour ? (
+                <Money amount={printer.wearPerHour} />
+              ) : (
+                '—'
+              ),
+              hint: printer.wearPerHour
+                ? 'price ÷ hours it lasts'
+                : 'fill in price and life',
+            },
+            { label: 'Power', value: `${printer.watts} W` },
+          ]}
+        />
+      )}
       <PrinterForm key={printer?.id ?? 'new'} printer={printer} />
       {printer && (
         <div className="mt-8 border-t border-border pt-4">

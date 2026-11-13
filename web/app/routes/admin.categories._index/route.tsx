@@ -135,6 +135,7 @@ export default function Categories({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="category"
           label="Categories"
           rows={categories.items}
           columns={COLUMNS}

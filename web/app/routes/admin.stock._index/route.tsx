@@ -165,6 +165,11 @@ export default function Stock({ loaderData }: Route.ComponentProps) {
         intro="Every material in every colour on the shelf. Record what comes in and what goes out in a few taps: grams and costs are worked out from your spools and your products. Orders take their filament by themselves when they go into production."
         action={
           <>
+            {manage && (
+              <Link to="/admin/stock/new" className={buttonClass()}>
+                New filament
+              </Link>
+            )}
             {manage &&
               STOCK_ACTIONS.map((a) => (
                 <Link key={a.path} to={a.path} className={buttonClass()}>
@@ -232,6 +237,7 @@ export default function Stock({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="stockItem"
           label="Filament stock"
           rows={lines.items}
           columns={COLUMNS}

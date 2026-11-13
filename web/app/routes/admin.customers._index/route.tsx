@@ -5,6 +5,7 @@ import { accountText } from '~/features/customers/account-text';
 import { listState } from '~/features/admin/list-state';
 import {
   ControlPanel,
+  KanbanView,
   type ListColumn,
   ListView,
 } from '~/features/admin/views';
@@ -113,20 +114,50 @@ export default function Customers({ loaderData }: Route.ComponentProps) {
         state={state}
         search="Name, email or phone"
         filters={FILTERS}
+        views={['list', 'kanban']}
         page={{
           shown: customers.items.length,
           total: customers.total,
           nextCursor: customers.nextCursor,
         }}
       />
-      <ListView
-        label="Customers"
-        rows={customers.items}
-        columns={COLUMNS}
-        href={(c) => `/admin/customers/${encodeURIComponent(c.email)}`}
-        state={state}
-        empty="No customers found."
-      />
+      {state.view === 'kanban' ? (
+        <KanbanView
+          href={(c) => `/admin/customers/${encodeURIComponent(c.email)}`}
+          columns={[
+            {
+              key: 'account',
+              title: 'With an account',
+              items: customers.items.filter((c) => c.account),
+            },
+            {
+              key: 'guest',
+              title: 'Without an account',
+              items: customers.items.filter((c) => !c.account),
+            },
+          ]}
+          title={(c) => c.name ?? c.email}
+          card={(c) => (
+            <span className="grid gap-0.5 text-xs text-text-muted">
+              {c.name && <span>{c.email}</span>}
+              <span>
+                {c.orders} order{c.orders === 1 ? '' : 's'} ·{' '}
+                <Money amount={c.spent} /> · {c.quotations} quotation
+                {c.quotations === 1 ? '' : 's'}
+              </span>
+            </span>
+          )}
+        />
+      ) : (
+        <ListView
+          label="Customers"
+          rows={customers.items}
+          columns={COLUMNS}
+          href={(c) => `/admin/customers/${encodeURIComponent(c.email)}`}
+          state={state}
+          empty="No customers found."
+        />
+      )}
     </>
   );
 }

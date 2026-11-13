@@ -196,6 +196,21 @@ Done 2026-11-08 to 2026-11-12, in steps the owner approved one by one.
   custom requests are cancelled, never deleted.
 - **Report days** follow the studio's day (Beirut), like documents.
 
+
+## Phase 16 — Every record a list, a form and a safe delete
+
+- **Delete, seen first:** a record's page and every list (tick rows) open a window saying, for
+  each one, what goes with it, what stops pointing at it and what keeps it; nothing is deleted
+  until confirmed, and history still keeps what it uses.
+- **Filaments:** a New filament form (material, name as bought, colour, its own price) before
+  any spool comes in; printers and customers get a kanban too.
+- **Printer costs in one place:** a printer's price, life and watts live on the printer; the
+  Pricing page names the printer prices come from and the electricity price, and follows any
+  change to the printer.
+- **Figures that open their details:** the Business page's figures and rows open the report,
+  list or production results they come from; a printer's job count opens its jobs.
+- **Merging customers:** a duplicate account moves into the one kept, history and all.
+
 Still open (owner's choice): the catalog file does not carry print files; Zero Trust in front
 of staging; enforcing the content security policy; Dependabot updates; order search indexes
 (not needed at today's size).

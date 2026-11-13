@@ -35,6 +35,8 @@ export interface PricingSettingsBody {
     watts: number;
     electricityPerKwh: string;
   } | null;
+  pricingPrinterId: string | null;
+  electricityPerKwh: string | null;
 }
 
 /** The settings as the Pricing page sends them back (PUT /pricing/settings). */
@@ -45,12 +47,8 @@ export function pricingForm(s: PricingSettingsBody): Record<string, unknown> {
     profitKind: profit.kind,
     profitValue: profit.value,
     ...s.order,
-    ...(s.printer && {
-      printerPrice: s.printer.printerPrice,
-      printerLifeHours: s.printer.lifeHours,
-      printerWatts: s.printer.watts,
-      electricityPerKwh: s.printer.electricityPerKwh,
-    }),
+    ...(s.pricingPrinterId && { pricingPrinterId: s.pricingPrinterId }),
+    ...(s.electricityPerKwh && { electricityPerKwh: s.electricityPerKwh }),
   };
 }
 
