@@ -4,11 +4,12 @@ import {
   type PrinterCosts,
   printerHourlyRate,
 } from '@forgea/pricing';
+import type { PrinterView } from '@forgea/types';
 import { UpdatePricingSettingsDto } from '@forgea/validation';
 import { useState } from 'react';
-import { useFetcher } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { Field } from '~/components/ui/field';
+import { Field, SelectField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   ProfitRuleField,
@@ -23,12 +24,21 @@ interface Settings {
   cost: CostSettings;
   order: OrderSettings;
   printer: PrinterCosts | null;
+  pricingPrinterId: string | null;
+  electricityPerKwh: string | null;
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
-  const r = await context.get(apiContext).get<Settings>('/pricing/settings');
+  const api = context.get(apiContext);
+  const [r, printers] = await Promise.all([
+    api.get<Settings>('/pricing/settings'),
+    api.get<PrinterView[]>('/printers'),
+  ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  return { settings: r.data };
+  return {
+    settings: r.data,
+    printers: printers.ok ? printers.data.filter((p) => p.active) : [],
+  };
 }
 
 const FIELDS = [
@@ -39,9 +49,7 @@ const FIELDS = [
   'packagingCostPerUnit',
   'profitKind',
   'profitValue',
-  'printerPrice',
-  'printerLifeHours',
-  'printerWatts',
+  'pricingPrinterId',
   'electricityPerKwh',
   'rushFeePercent',
   'deliveryFee',
@@ -64,27 +72,26 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
   const { cost, order } = loaderData.settings;
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
-  const saved = loaderData.settings.printer;
-  const [printer, setPrinter] = useState({
-    printerPrice: saved ? String(saved.printerPrice) : '',
-    printerLifeHours: saved ? String(saved.lifeHours) : '',
-    printerWatts: saved ? String(saved.watts) : '',
-    electricityPerKwh: saved ? String(saved.electricityPerKwh) : '',
-  });
+  const { printers, settings } = loaderData;
+  const [printerId, setPrinterId] = useState(settings.pricingPrinterId ?? '');
+  const [kwh, setKwh] = useState(settings.electricityPerKwh ?? '');
   const [profit, setProfit] = useState<ProfitValue>({
     kind: cost.profit.kind,
     value: String(cost.profit.value),
   });
-  // All four printer details given: the hourly cost follows from them, as the API works it out.
+  const chosen = printers.find((p) => p.id === printerId) ?? null;
+  // The printer's own details and the electricity: the hourly cost follows from them, as the
+  // API works it out.
   const rate = (() => {
-    const p = printer;
-    if (Object.values(p).some((v) => v.trim() === '')) return null;
+    if (!chosen || chosen.priceUsd === null || chosen.lifeHours === null)
+      return null;
+    if (kwh.trim() === '') return null;
     try {
       return printerHourlyRate({
-        printerPrice: p.printerPrice,
-        lifeHours: p.printerLifeHours,
-        watts: p.printerWatts,
-        electricityPerKwh: p.electricityPerKwh,
+        printerPrice: chosen.priceUsd,
+        lifeHours: chosen.lifeHours,
+        watts: chosen.watts,
+        electricityPerKwh: kwh,
       });
     } catch {
       return null;
@@ -130,42 +137,64 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
             })),
           )}
         />
-        <Panel title="Your printer">
+        <Panel title="Printer time">
           <p className="max-w-2xl text-sm text-text-muted">
-            Fill these in once, when you get the printer: what an hour of
-            printing costs you is worked out from them (its price spread over
-            its life, plus its electricity). Leave all four empty to type the
-            hourly cost yourself.
+            Choose the printer prices are worked out from: its price, the hours
+            it lasts and its power are entered once, on its own page (Printers),
+            and an hour of printing costs its price spread over its life plus
+            its electricity. Leave it empty to type the hourly cost yourself.
           </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(
-              [
-                ['printerPrice', 'What it cost (USD)', 'e.g. 600'],
-                ['printerLifeHours', 'Printing hours it lasts', 'e.g. 5000'],
-                ['printerWatts', 'Power while printing (W)', 'e.g. 150'],
-                ['electricityPerKwh', 'Electricity (USD per kWh)', 'e.g. 0.30'],
-              ] as const
-            ).map(([name, label, hint]) => (
-              <Field
-                key={name}
-                label={label}
-                name={name}
-                inputMode="decimal"
-                value={printer[name]}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  setPrinter((p) => ({ ...p, [name]: v }));
-                }}
-                error={errors[name]}
-                hint={hint}
-              />
-            ))}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField
+              label="Price printer time from"
+              name="pricingPrinterId"
+              value={printerId}
+              onChange={(e) => setPrinterId(e.currentTarget.value)}
+              error={errors['pricingPrinterId']}
+            >
+              <option value="">None: I type the hourly cost</option>
+              {printers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </SelectField>
+            <Field
+              label="Electricity (USD per kWh)"
+              name="electricityPerKwh"
+              inputMode="decimal"
+              value={kwh}
+              onChange={(e) => setKwh(e.currentTarget.value)}
+              error={errors['electricityPerKwh']}
+              hint="Also gives every print job its electricity"
+            />
           </div>
+          {chosen && (
+            <p className="text-sm text-text-muted">
+              {chosen.name}:{' '}
+              {chosen.priceUsd !== null && chosen.lifeHours !== null
+                ? `$${chosen.priceUsd}, lasts ${chosen.lifeHours.toLocaleString('en-US')} h, ${chosen.watts} W`
+                : 'its price and the hours it lasts are not filled in yet'}{' '}
+              ·{' '}
+              <Link
+                to={`/admin/printers/${chosen.id}`}
+                className="underline underline-offset-4"
+              >
+                change them on its page
+              </Link>
+            </p>
+          )}
           {rate ? (
             <p aria-live="polite">
               An hour of printing costs you <strong>${rate}</strong>.
               <input type="hidden" name="machineRatePerHour" value={rate} />
             </p>
+          ) : chosen ? (
+            <input
+              type="hidden"
+              name="machineRatePerHour"
+              value={String(cost.machineRatePerHour)}
+            />
           ) : (
             <div className="max-w-xs">
               {number(

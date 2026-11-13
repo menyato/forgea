@@ -176,7 +176,7 @@ export default function StockLine({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
       <div className="mt-8 border-t border-border pt-4">
-        <DeleteRecord kind="stockItem" id={i.id} what={'this filament line'} />
+        <DeleteRecord kind="stockItem" id={i.id} what={'this filament'} />
       </div>
     </>
   );

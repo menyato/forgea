@@ -100,6 +100,7 @@ export default function LostReasons({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="lostReason"
           label="Lost reasons"
           rows={reasons.items}
           columns={COLUMNS}

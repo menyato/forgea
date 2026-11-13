@@ -1,5 +1,6 @@
 import { percentChange } from '@forgea/types';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 
 /** Whether a figure going up is good news (sales), bad news (costs) or neither. */
 export type Better = 'up' | 'down' | 'neither';
@@ -16,6 +17,7 @@ export function FigureTile({
   better = 'up',
   note,
   estimated = false,
+  to,
 }: {
   label: string;
   value: ReactNode;
@@ -25,11 +27,24 @@ export function FigureTile({
   better?: Better;
   note?: ReactNode;
   estimated?: boolean;
+  /** Where the figure comes from: the whole tile opens it (links in the note stay their own). */
+  to?: string;
 }) {
   return (
-    <div className="grid content-start gap-1 rounded-lg border border-border bg-surface p-4">
+    <div
+      className={`relative grid content-start gap-1 rounded-lg border border-border bg-surface p-4 ${to ? 'hover:border-accent' : ''}`}
+    >
       <p className="text-sm text-text-muted">
-        {label}
+        {to ? (
+          <Link
+            to={to}
+            className="after:absolute after:inset-0 after:rounded-lg hover:text-text"
+          >
+            {label} <span aria-hidden>›</span>
+          </Link>
+        ) : (
+          label
+        )}
         {estimated && (
           <span className="ml-2 rounded-pill bg-surface-raised px-2 py-0.5 text-xs">
             estimated
@@ -40,7 +55,11 @@ export function FigureTile({
         {value}
       </p>
       <Change current={current} previous={previous} better={better} />
-      {note && <p className="text-xs text-text-muted">{note}</p>}
+      {note && (
+        <p className="relative text-xs text-text-muted [&_a]:relative [&_a]:z-10">
+          {note}
+        </p>
+      )}
     </div>
   );
 }

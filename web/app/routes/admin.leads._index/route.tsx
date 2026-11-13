@@ -222,6 +222,7 @@ export default function Leads({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="lead"
           label="Leads"
           rows={leads.items}
           columns={COLUMNS}

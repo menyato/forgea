@@ -154,6 +154,7 @@ export default function Products({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="product"
           label="Products"
           rows={products.items}
           columns={COLUMNS}

@@ -132,6 +132,7 @@ export default function LeadStages({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="leadStage"
           label="Lead stages"
           rows={stages.items}
           columns={COLUMNS}

@@ -8,9 +8,10 @@ Google account).
 
 | What | Where | Why it matters |
 |---|---|---|
-| Printer's price, life (hours), watts, electricity price | Settings → **Pricing** | Every price and cost counts printer wear and electricity from these. |
+| Your printers: name, watts, what it cost, the hours it lasts | Orders → Configuration → **Printers** (entered once, only there) | Print runs take their electricity and wear from the printer they ran on. |
+| Which printer prices come from, and the electricity price | Settings → **Pricing** → Printer time | Every price counts that printer's wear (price ÷ hours) and power; change the printer and prices follow. |
 | Default profit (a % of cost or a fixed amount) | Settings → **Pricing** | What the shop adds on top of the cost. |
-| Your printers (name, watts) | Orders → Configuration → **Printers** | Print runs take their electricity from the printer they ran on. |
+| Filaments as bought (PLA Red, PETG Black…) | Catalog → Filament stock → **New filament** | Its colour (RGB) and its own price; spools come in later. |
 | Materials (PLA, PETG…) | Catalog → Configuration → **Materials** | Density and print speed; a reel's own price wins over the material's. |
 | Colours customers may choose | Catalog → Configuration → **Options** | Each colour: its swatch, its add-on price, and **Printed from filament** (the reel orders take it from). |
 | Transfer and WhatsApp numbers | Settings → **Payment, requests & emails** | Shown to customers at checkout. |
@@ -89,10 +90,19 @@ never your costs. Otherwise send your quote from the request.
 
 ## 7. Removing things
 
-Each record's page has **Delete** at the bottom (products, categories, materials, options and
-their choices, filament lines, printers, leads, lost reasons, stages). It is refused while
-history uses the record (an order, a stock movement, a print run…), and says what to do
-instead, usually switching it off. Orders, quotations and custom requests are never deleted:
+Each record's page has **Delete…** at the bottom (products, categories, materials, options and
+their choices, filaments, printers, leads, lost reasons, stages), and their lists let you tick
+several rows and press **Delete…**. Before anything goes, a window shows each record: what goes
+with it (a product's sizes, colours and cart lines; a lead's notes), what stops pointing at it
+(a colour "printed from" a deleted reel), and what keeps it (an order, a stock movement, a print
+run…) with what to do instead, usually switching it off. **Keep them** leaves everything as it
+is; **Delete** removes only the ones nothing keeps.
+
+**Two accounts for one customer** (a second walk-in address): open the one to remove
+(Customers), and at the bottom **Merge into another customer** (admins): type the email to
+keep, tick, Merge. Its orders, quotations, requests, leads, invoices and payments become the
+other's with their history, and the duplicate is removed. Studio work for itself goes on the
+studio's own customer, hello@forgea-lab.com. Orders, quotations and custom requests are never deleted:
 they are **cancelled**, so their history stays.
 
 ## 8. Safety

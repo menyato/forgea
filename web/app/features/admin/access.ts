@@ -187,6 +187,7 @@ export const PAGES: readonly {
     label: 'Ready pieces',
     group: 'Catalog',
   },
+  { path: '/admin/stock/new', access: 'stock.manage' },
   { path: '/admin/stock/receive', access: 'stock.manage' },
   { path: '/admin/stock/purchase', access: 'stock.manage' },
   // The Delete button on record pages: the API checks each record's own permission.
@@ -290,6 +291,12 @@ export function mayOpen(staff: Profile, access: PageAccess): boolean {
 export function useCan(): (permission: Permission) => boolean {
   const data = useRouteLoaderData<typeof adminLoader>('routes/admin');
   return (permission) => (data ? can(data.staff, permission) : false);
+}
+
+/** Whether the signed-in team member is an admin (merging customers, the team). */
+export function useIsAdmin(): boolean {
+  const data = useRouteLoaderData<typeof adminLoader>('routes/admin');
+  return data?.staff.role === Role.ADMIN;
 }
 
 const LABELS = new Map<string, string>(

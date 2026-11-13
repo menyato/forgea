@@ -163,6 +163,7 @@ export default function Materials({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="material"
           label="Materials"
           rows={materials.items}
           columns={COLUMNS}

@@ -6,9 +6,11 @@ import { AdminHeader } from '~/features/admin/admin-ui';
 import { listState, localList } from '~/features/admin/list-state';
 import {
   ControlPanel,
+  KanbanView,
   type ListColumn,
   ListView,
 } from '~/features/admin/views';
+import { printerJobs } from '~/features/production/links';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -41,7 +43,20 @@ const COLUMNS: ListColumn<PrinterView>[] = [
     align: 'right',
     cell: (p) => (p.wearPerHour ? <Money amount={p.wearPerHour} /> : '—'),
   },
-  { key: 'jobs', label: 'Jobs', align: 'right', cell: (p) => p.jobs },
+  {
+    key: 'jobs',
+    label: 'Jobs',
+    align: 'right',
+    // Above the row's own link: the count opens this printer's jobs.
+    cell: (p) => (
+      <Link
+        to={printerJobs(p.id)}
+        className="relative z-10 underline-offset-4 hover:underline"
+      >
+        {p.jobs}
+      </Link>
+    ),
+  },
   {
     key: 'active',
     label: 'In use',
@@ -67,20 +82,48 @@ export default function Printers({ loaderData }: Route.ComponentProps) {
       <ControlPanel
         state={state}
         search="Name"
+        views={['list', 'kanban']}
         page={{
           shown: printers.items.length,
           total: printers.total,
           nextCursor: printers.nextCursor,
         }}
       />
-      <ListView
-        label="Printers"
-        rows={printers.items}
-        columns={COLUMNS}
-        href={(p) => `/admin/printers/${p.id}`}
-        state={state}
-        empty="No printers yet."
-      />
+      {state.view === 'kanban' ? (
+        <KanbanView
+          href={(p) => `/admin/printers/${p.id}`}
+          columns={[
+            {
+              key: 'on',
+              title: 'In use',
+              items: printers.items.filter((p) => p.active),
+            },
+            {
+              key: 'off',
+              title: 'Switched off',
+              items: printers.items.filter((p) => !p.active),
+            },
+          ]}
+          title={(p) => p.name}
+          card={(p) => (
+            <span className="text-xs text-text-muted">
+              {p.watts} W · {p.jobs} job{p.jobs === 1 ? '' : 's'}
+              {p.wearPerHour &&
+                ` · wear $${Number(p.wearPerHour).toFixed(2)}/h`}
+            </span>
+          )}
+        />
+      ) : (
+        <ListView
+          remove="printer"
+          label="Printers"
+          rows={printers.items}
+          columns={COLUMNS}
+          href={(p) => `/admin/printers/${p.id}`}
+          state={state}
+          empty="No printers yet."
+        />
+      )}
     </>
   );
 }

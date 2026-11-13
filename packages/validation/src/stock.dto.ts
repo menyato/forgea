@@ -124,6 +124,28 @@ export class SaveStockItemDto {
   hex?: string;
 }
 
+/**
+ * A new filament before any spool of it comes in: its material, its name as bought, how it
+ * looks and, when known, what a spool of it costs (its own price per gram).
+ */
+export class CreateStockItemDto extends SaveStockItemDto {
+  @IsUUID('all', { message: 'Choose a material' })
+  materialId!: string;
+
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Name the filament as bought' })
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour!: string;
+
+  /** What one spool (of `spoolGrams`) costs, USD; empty = the material's price. */
+  @IsOptional()
+  @Matches(MONEY_PATTERN, {
+    message: 'Enter the price of one spool, e.g. 19.50',
+  })
+  spoolPrice?: string;
+}
+
 const note = { message: 'At most 200 characters' };
 
 /** Where a delivery was paid from: the cash box or a money transfer; none = not booked. */

@@ -124,6 +124,7 @@ const DASHBOARD = [
   '/admin/fonts?view=kanban',
   '/admin/stock?view=kanban',
   '/admin/stock/movements',
+  '/admin/stock/new',
   '/admin/stock/receive',
   '/admin/stock/print',
   '/admin/stock/failed',

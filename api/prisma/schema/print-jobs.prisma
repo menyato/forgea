@@ -81,7 +81,9 @@ model Printer {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  jobs PrintJob[]
+  jobs       PrintJob[]
+  /// The pricing settings that price printer time from it.
+  pricingFor PricingSettings[]
 
   @@map("printers")
 }

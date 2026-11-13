@@ -175,6 +175,7 @@ export default function Options({ loaderData }: Route.ComponentProps) {
         />
       ) : (
         <ListView
+          remove="optionGroup"
           label="Options"
           rows={groups.items}
           columns={COLUMNS}

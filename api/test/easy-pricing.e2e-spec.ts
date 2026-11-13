@@ -138,31 +138,68 @@ describe('Easy pricing (e2e)', () => {
       .expect(400);
   });
 
-  it("works out an hour's cost from the printer; all four details or none", async () => {
+  it("works out an hour's cost from the printer's own details, entered once on the printer", async () => {
     const settings = async () =>
       (await as(admin.cookie).get('/pricing/settings').expect(200))
         .body as PricingSettingsBody;
     const base = pricingForm(await settings());
+    const printer = (
+      await as(admin.cookie)
+        .post('/printers', {
+          name: `Pricing printer ${randomUUID().slice(0, 8)}`,
+          watts: 150,
+          priceUsd: '600',
+          lifeHours: 6000,
+        })
+        .expect(201)
+    ).body as { id: string; name: string };
     await as(admin.cookie)
       .put('/pricing/settings', {
         ...base,
-        printerPrice: '600',
-        printerLifeHours: 6000,
-        printerWatts: 150,
+        pricingPrinterId: printer.id,
         electricityPerKwh: '0.30',
       })
       .expect(200);
     const after = await settings();
     // $600 / 6000 h + 0.15 kWh × $0.30 = $0.145 → $0.15 an hour.
     expect(after.cost['machineRatePerHour']).toBe('0.15');
+    expect(after.pricingPrinterId).toBe(printer.id);
     expect(after.printer).toEqual({
       printerPrice: '600',
       lifeHours: 6000,
       watts: 150,
       electricityPerKwh: '0.3',
     });
+
+    // The printer's page changes it: prices follow at once ($1200 / 6000 h + $0.045).
     await as(admin.cookie)
-      .put('/pricing/settings', { ...base, printerPrice: '600' })
+      .put(`/printers/${printer.id}`, {
+        name: printer.name,
+        watts: 150,
+        priceUsd: '1200',
+        lifeHours: 6000,
+      })
+      .expect(200);
+    expect((await settings()).cost['machineRatePerHour']).toBe('0.25');
+
+    // A printer without a price can't price anything; nor can one without electricity.
+    const bare = (
+      await as(admin.cookie)
+        .post('/printers', {
+          name: `Bare printer ${randomUUID().slice(0, 8)}`,
+          watts: 100,
+        })
+        .expect(201)
+    ).body as { id: string };
+    await as(admin.cookie)
+      .put('/pricing/settings', {
+        ...base,
+        pricingPrinterId: bare.id,
+        electricityPerKwh: '0.30',
+      })
+      .expect(400);
+    await as(admin.cookie)
+      .put('/pricing/settings', { ...base, pricingPrinterId: printer.id })
       .expect(400);
     // Cleared: the hourly cost is typed again.
     await as(admin.cookie).put('/pricing/settings', ROUND_PRICING).expect(200);

@@ -334,3 +334,25 @@ export type BackupsView =
       /** Requests waiting for the server (it picks them up within seconds). */
       pending: number;
     };
+
+/** What deleting one record does, shown before it is deleted. */
+export interface DeletionImpact {
+  id: string;
+  /** The record as its list names it ("PLA Red", "Twist lamp"). */
+  name: string;
+  /** History that keeps it: while any is here it can't be deleted. */
+  blockedBy: DeletionUse[];
+  /** What goes with it (its sizes, colours, cart lines…). */
+  removes: DeletionUse[];
+  /** What stays but stops pointing at it (a colour no longer "printed from" this reel). */
+  unlinks: DeletionUse[];
+  /** What to do instead when it can't be deleted. */
+  instead: string | null;
+  deletable: boolean;
+}
+
+export interface DeletionUse {
+  count: number;
+  /** "order lines", "products". */
+  what: string;
+}

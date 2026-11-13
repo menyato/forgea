@@ -569,4 +569,14 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await expect(
     page.getByRole('region', { name: 'Best sellers' }).getByRole('row'),
   ).not.toHaveCount(0);
+
+  // Every figure opens where it comes from: the delivered orders, the period's production.
+  await page
+    .getByRole('region', { name: 'Orders placed' })
+    .getByRole('link', { name: 'Delivered' })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/orders\?.*filter=delivered/);
+  await page.goBack();
+  await page.getByRole('link', { name: /^Production cost/ }).click();
+  await expect(page).toHaveURL(/\/admin\/production\/results\?from=/);
 });

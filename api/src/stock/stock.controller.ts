@@ -17,6 +17,7 @@ import type {
   StockPrintable,
 } from '@forgea/types';
 import {
+  CreateStockItemDto,
   PeriodQuery,
   ReceiveSpoolsDto,
   RecordStockMovementDto,
@@ -163,6 +164,13 @@ export class StockController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<{ difference: number }> {
     return this.stock.count(dto, user.id);
+  }
+
+  @RequirePermission('stock.manage')
+  @Audit({ action: 'stock.item.create', targetType: 'StockItem' })
+  @Post('items')
+  createItem(@Body() dto: CreateStockItemDto): Promise<{ id: string }> {
+    return this.stock.createItem(dto);
   }
 
   @RequirePermission('stock.manage')

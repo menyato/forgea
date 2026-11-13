@@ -427,6 +427,10 @@ export class StockRepository {
     });
   }
 
+  createItem(data: Prisma.StockItemUncheckedCreateInput) {
+    return this.prisma.stockItem.create({ data, select: { id: true } });
+  }
+
   updateItem(id: string, data: Prisma.StockItemUpdateInput) {
     return this.prisma.stockItem.update({ where: { id }, data });
   }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import type {
   StockPrintable,
 } from '@forgea/types';
 import type {
+  CreateStockItemDto,
   ReceiveSpoolsDto,
   RecordStockMovementDto,
   SaveStockItemDto,
@@ -462,6 +464,40 @@ export class StockService {
         await this.stock.setColourHex(tx, dto.materialId, dto.colour, dto.hex);
       return { difference };
     });
+  }
+
+  /** A new filament, before any spool of it is received: it starts with nothing on the shelf. */
+  async createItem(dto: CreateStockItemDto): Promise<{ id: string }> {
+    if (!(await this.stock.materialExists(dto.materialId)))
+      throw new BadRequestException('Choose a material');
+    const perGram = dto.spoolPrice
+      ? pricePerGramFromReel(dto.spoolPrice, dto.spoolGrams)
+      : null;
+    // A price too small to show in a tenth of a cent per gram is no price.
+    const price = perGram && new Prisma.Decimal(perGram).gt(0) ? perGram : null;
+    try {
+      const { id } = await this.stock.createItem({
+        materialId: dto.materialId,
+        colour: dto.colour,
+        hex: dto.hex ?? null,
+        pricePerGram: price,
+        lowStockGrams: dto.lowStockGrams,
+        spoolGrams: dto.spoolGrams,
+        leadTimeDays: dto.leadTimeDays,
+        coverDays: dto.coverDays,
+        active: dto.active,
+      });
+      return { id };
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException(
+          'That filament is already in stock: open it from the list.',
+        );
+      throw error;
+    }
   }
 
   async saveItem(id: string, dto: SaveStockItemDto): Promise<void> {
