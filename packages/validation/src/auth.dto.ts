@@ -121,3 +121,11 @@ export class UpdateProfileDto {
   @IsPhone()
   phone!: string;
 }
+
+/** PUT /customers/details: an admin corrects a customer account's name and phone. */
+export class CustomerDetailsDto extends UpdateProfileDto {
+  @NormalizeEmail()
+  @IsEmail({}, { message: 'Enter a valid email address' })
+  @MaxLength(EMAIL_MAX_LENGTH)
+  email!: string;
+}

@@ -10,6 +10,7 @@ export {
   RegisterDto,
   ResetPasswordDto,
   UpdateProfileDto,
+  CustomerDetailsDto,
   ConfirmEmailDto,
   ResendEmailCodeDto,
 } from './auth.dto.js';

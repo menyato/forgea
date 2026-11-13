@@ -32,6 +32,16 @@ export interface CustomerMergeResult {
 export class CustomerMergeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** A customer account's name and phone, as the studio corrects them (never a team account). */
+  async details(email: string, name: string, phone: string): Promise<void> {
+    const r = await this.prisma.user.updateMany({
+      where: { email, role: Role.CUSTOMER },
+      data: { name, phone },
+    });
+    if (r.count === 0)
+      throw new NotFoundException(`No customer account for ${email}`);
+  }
+
   async merge(from: string, into: string): Promise<CustomerMergeResult> {
     if (from === into)
       throw new BadRequestException('Choose another customer to keep');
