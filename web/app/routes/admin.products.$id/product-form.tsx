@@ -139,6 +139,8 @@ export function ProductForm({
                 next.map((c) => ({
                   ...c,
                   part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                  startsAs:
+                    colours.find((o) => o.hex === c.hex)?.startsAs ?? null,
                   stockItemId:
                     colours.find((o) => o.hex === c.hex)?.stockItemId ?? null,
                 })),
@@ -161,6 +163,8 @@ export function ProductForm({
                   hex: c.hex,
                   grams: c.grams,
                   part: colours.find((o) => o.hex === c.hex)?.part ?? null,
+                  startsAs:
+                    colours.find((o) => o.hex === c.hex)?.startsAs ?? null,
                   stockItemId:
                     colours.find((o) => o.hex === c.hex)?.stockItemId ?? null,
                 })),

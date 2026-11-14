@@ -140,6 +140,7 @@ export function ModelField({
                 hex: c.hex,
                 grams: c.grams,
                 part: null,
+                startsAs: null,
                 stockItemId: null,
               })),
             );

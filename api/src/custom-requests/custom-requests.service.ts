@@ -125,7 +125,7 @@ export class CustomRequestsService {
     ) {
       await this.quote(
         created.id,
-        { price: estimate.low, note: AUTO_QUOTE_NOTE },
+        { price: estimate.price, note: AUTO_QUOTE_NOTE },
         null,
       );
       return this.mineOne(userId, created.requestNumber);

@@ -1,6 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { estimatePrint, priceRange } from '@forgea/pricing';
-import type { PrintFile, RequestEstimate } from '@forgea/types';
+import {
+  averagePricePerGram,
+  estimatePrint,
+  priceRange,
+} from '@forgea/pricing';
+import {
+  type PrintFile,
+  type RequestEstimate,
+  startingChoice,
+} from '@forgea/types';
 import { ModelFileInfoService } from '../products/model-file-info.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
@@ -13,9 +21,11 @@ import { CustomRequestsRepository } from './custom-requests.repository.js';
 
 /**
  * The instant price for a customer's 3D model. The server measures the stored file itself
- * (never numbers from the browser) and prices it with the shop's own cost settings, material
- * and the owner's estimate rules. An STL or a 3MF never sliced gets a range; a sliced 3MF (the
- * slicer's own grams and time) an exact price. Other files are quoted by hand.
+ * (never numbers from the browser) and prices it as the shop prices a product: the same cost
+ * settings and profit, and each of a 3MF's colours at the filament on the shelf the shop would
+ * print it from (that material, the same name, else the closest colour). Customers see a range
+ * around that price (the owner's spread); a sliced 3MF's own grams and time make the price itself
+ * the quote when sliced files are quoted at once. Other files are quoted by hand.
  */
 @Injectable()
 export class RequestEstimator {
@@ -106,10 +116,27 @@ export class RequestEstimator {
       }
       throw error;
     }
+    // Each colour at its filament's own price, as a product printed from those reels.
+    const reels = (await this.requests.filaments(material.id)).map((r) => ({
+      label: r.colour,
+      swatchHex: r.hex,
+      pricePerGram: r.pricePerGram?.toString() ?? null,
+    }));
+    const pricePerGram = averagePricePerGram(
+      material.pricePerGram.toString(),
+      printFile.colours.map((c) => ({
+        grams: c.grams,
+        pricePerGram:
+          (reels.length
+            ? startingChoice(reels, { colour: c.colour, hex: c.hex })
+                ?.pricePerGram
+            : null) ?? null,
+      })),
+    );
     const { unitPrice } = await this.pricing.unitPrice({
       grams: printFile.grams,
       printHours: printFile.printHours,
-      pricePerGram: material.pricePerGram.toString(),
+      pricePerGram,
       // A sliced file's grams hold its purge, prime tower and supports already.
       wasteIncluded: printFile.sliced,
     });
@@ -117,10 +144,8 @@ export class RequestEstimator {
     const total = (cents / 100).toFixed(2);
     return {
       estimate: {
-        // The slicer's own numbers: the price itself, no range.
-        ...(printFile.sliced
-          ? { low: total, high: total }
-          : priceRange(total, rules.estimateSpreadPercent)),
+        ...priceRange(total, rules.estimateSpreadPercent),
+        price: total,
         exact: printFile.sliced,
         grams: printFile.grams,
         printHours: printFile.printHours,
@@ -157,8 +182,10 @@ export class RequestEstimator {
     });
     // Whole cents, so multiplying by the quantity never drifts.
     const cents = Math.round(Number(unitPrice) * 100) * quantity;
+    const total = (cents / 100).toFixed(2);
     return {
-      ...priceRange((cents / 100).toFixed(2), rules.estimateSpreadPercent),
+      ...priceRange(total, rules.estimateSpreadPercent),
+      price: total,
       exact: false,
       grams: print.grams,
       printHours: print.printHours,

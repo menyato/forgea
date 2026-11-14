@@ -12,7 +12,8 @@ const PRICED = /\.(stl|3mf)$/;
 
 /**
  * The optional attachment: a 3D model (shown in 3D, with an instant price for STL and 3MF:
- * a range, or the exact price of a sliced 3MF) or a photo. Uploaded on its own, before the
+ * a range around the price the shop would charge, from a sliced 3MF's own grams and time when it
+ * has them) or a photo. Uploaded on its own, before the
  * request is sent.
  */
 export function RequestFile({
@@ -84,8 +85,8 @@ export function RequestFile({
             }}
           />
           <span className="text-text-muted">
-            STL, GLB, 3MF (a sliced Bambu Studio file gets its exact price),
-            PNG, JPEG or WebP
+            STL, GLB, 3MF (a sliced Bambu Studio file is priced from its own
+            grams and time), PNG, JPEG or WebP
             {maxMb !== null ? `, up to ${maxMb} MB` : ''}.
           </span>
         </label>
@@ -124,14 +125,19 @@ export function RequestFile({
           ) : range?.exact ? (
             <>
               <span className="text-lg font-semibold">
-                <Money amount={range.low} />
+                About <Money amount={range.low} />–<Money amount={range.high} />
               </span>{' '}
               <span className="text-text-muted">
                 for {quantity || 1}, in {range.material.name} (
                 {Number(range.grams)} g each, from your slicer).{' '}
-                {autoQuote
-                  ? 'Send the request and this is your quote: you can order straight away.'
-                  : 'We confirm it with a quote.'}
+                {autoQuote ? (
+                  <>
+                    Send the request and your quote is{' '}
+                    <Money amount={range.price} />: you can order straight away.
+                  </>
+                ) : (
+                  'We confirm the exact price with a quote.'
+                )}
               </span>
             </>
           ) : range ? (

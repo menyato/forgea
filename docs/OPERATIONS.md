@@ -44,7 +44,10 @@ difference is recorded with your note.
    supports counted.
 4. **Colours:** for each colour, **Printed from** your reel (cost and stock follow it). Tick
    **Customers choose this colour** (or every colour) to let them recolour that part; the
-   colour group under it is what they choose from.
+   colour group under it is what they choose from (pick the one whose colours are linked to
+   your reels, e.g. Showcase colours). **Starts as** under each part is the colour the shop
+   shows first, in 3D and in the "from" price; left on automatic it is the choice printed from
+   the same reel, else the closest colour.
 5. **Price:** the panel shows cost (filament, printer wear, electricity, failures, labour,
    packaging), profit and the price. **Use my own price** to set yours: options still add to it.
 6. Leave **Visible in the shop** off until it is ready; a product not in the shop can still be
@@ -65,9 +68,12 @@ is yours to change, higher or lower than the shop's: profit follows what you cha
 **Getting paid:** the order's **Invoices** panel: post the invoice, then **Record the payment**
 (cash or transfer). The Business page and the books follow.
 
-**Custom requests** (customers send a file or an idea): Orders → **Custom requests**. A sliced
-file gets its exact price and, if you allow it, a quote at once; customers see the price only,
-never your costs. Otherwise send your quote from the request.
+**Custom requests** (customers send a file or an idea): Orders → **Custom requests**. A file is
+priced as the shop prices a product (the same costs, profit and reels: each of its colours at
+the reel of that colour), and customers see a range around that price (your spread, Payment,
+requests & emails). A sliced file uses the slicer's own grams and time and, if you allow it, is
+quoted at once at the price itself; customers never see your costs. Otherwise send your quote
+from the request.
 
 ## 5. Printing for the studio (tests, gifts, display pieces)
 

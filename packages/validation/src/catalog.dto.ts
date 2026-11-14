@@ -269,6 +269,15 @@ export class ProductColourDto {
     message: `At most ${PRODUCT_PART_NAME_MAX_LENGTH} characters`,
   })
   part?: string;
+
+  /** The part's starting choice on the product page (a label of the part colours); none = automatic. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(PRODUCT_PART_NAME_MAX_LENGTH, {
+    message: `At most ${PRODUCT_PART_NAME_MAX_LENGTH} characters`,
+  })
+  startsAs?: string;
 }
 
 /** A sliced print file of a product: the upload and what the owner calls it. */

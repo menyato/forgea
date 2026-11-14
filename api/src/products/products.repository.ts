@@ -367,6 +367,8 @@ const colourRow = (
   hex: c.hex,
   grams: c.grams,
   part: c.part || null,
+  // Only a part starts somewhere.
+  startsAs: (c.part && c.startsAs) || null,
   stockItemId: c.stockItemId ?? null,
   sortOrder,
 });

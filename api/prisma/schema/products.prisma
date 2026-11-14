@@ -128,6 +128,10 @@ model ProductColour {
   /// What customers call this part ("Body", "Ears"): they choose its colour from the product's
   /// part colours. Null = it always prints in `colour`. 1–40 characters (CHECK).
   part      String?
+  /// The part colours' choice it starts in on the product page (its label), as the owner
+  /// picked it; null = automatic (`startingChoice`: same filament, same name, closest colour).
+  /// 1–40 characters (CHECK).
+  startsAs  String?
   /// The file's colour, #RRGGBB (CHECK), for the swatch.
   hex       String
   /// Above 0 (CHECK).

@@ -14,6 +14,7 @@ import {
   type OptionSelection,
   PRODUCT_SIZE_GROUP_ID,
   type ProductOption,
+  startingChoice,
 } from '@forgea/types';
 import type { Prisma } from '../generated/prisma/client.js';
 import { OptionKind, type ProfitKind } from '../generated/prisma/enums.js';
@@ -106,7 +107,8 @@ export class ProductConfigurator {
 
   /**
    * A multi-colour product's named parts: each a colour choice from the product's part colours,
-   * starting in the colour the owner set for it. Kept apart from option groups (a part is not
+   * starting in the choice the owner picked for it (else `startingChoice`: the same filament, the
+   * same name, the closest colour). Kept apart from option groups (a part is not
    * one), with an id made from the product and the part's file colour, so saving the product
    * (which rewrites its colour rows) keeps carts' choices.
    */
@@ -115,10 +117,7 @@ export class ProductConfigurator {
     if (!group?.active || group.values.length === 0) return [];
     return product.colours.flatMap((c): ProductOption[] => {
       if (!c.part) return [];
-      const start =
-        group.values.find(
-          (v) => v.label.toLowerCase() === c.colour.toLowerCase(),
-        ) ?? group.values[0]!;
+      const start = startingChoice(group.values, c) ?? group.values[0]!;
       return [
         {
           groupId: partGroupId(product.id, c.hex),

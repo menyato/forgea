@@ -71,11 +71,13 @@ describe('3MF quotations and custom requests (e2e)', () => {
       ).map((m) => [m.stockItem.colour, m.grams]),
     );
 
+  let studio: Awaited<ReturnType<typeof createStudio>>;
+
   beforeAll(async () => {
     app = await createApp();
     prisma = app.get(PrismaService);
     // Its colours (#aa2222 Red, #b87333 Copper silk) are the file's.
-    await createStudio(app);
+    studio = await createStudio(app);
   });
   afterAll(async () => {
     await prisma.storeSettings.update({
@@ -203,6 +205,73 @@ describe('3MF quotations and custom requests (e2e)', () => {
     expect(Buffer.compare(file.body as Buffer, bytes)).toBe(0);
   });
 
+  it('a custom request costs what the shop charges for the same file printed from the same reels', async () => {
+    const admin = await signedInAs(app, Role.ADMIN);
+    const staff = as(admin.cookie);
+    // Two reels of the studio's material at their own prices, coloured as the file is.
+    for (const [colour, hex, price] of [
+      ['Red', '#aa2222', '30.00'],
+      ['Copper silk', '#b87333', '45.00'],
+    ] as const)
+      await staff
+        .post('/stock/receipts', {
+          materialId: studio.material.id,
+          colour,
+          hex,
+          spools: 1,
+          spoolGrams: 1000,
+          pricePerSpool: price,
+          updateCost: false,
+        })
+        .expect(204);
+    const reels = await prisma.stockItem.findMany({
+      where: {
+        materialId: studio.material.id,
+        colour: { in: ['Red', 'Copper silk'] },
+      },
+    });
+    const reel = (c: string) => reels.find((r) => r.colour === c)!.id;
+
+    const customer = await signedInCustomer(app);
+    const key = (
+      await as(customer.cookie)
+        .upload(
+          '/custom-requests/files',
+          bambuThreeMf({ sliced: true }),
+          'same.gcode.3mf',
+        )
+        .expect(201)
+    ).body.key as string;
+    const estimate = (
+      await as(customer.cookie)
+        .post('/custom-requests/estimate', {
+          fileKey: key,
+          quantity: 1,
+          materialId: studio.material.id,
+        })
+        .expect(200)
+    ).body.estimate as { price: string; low: string; high: string };
+
+    // The same piece as a product: the file's grams and time, each colour from its reel.
+    const shop = (
+      await staff
+        .post('/products/price-preview', {
+          materialId: studio.material.id,
+          grams: '12.5',
+          printHours: '1.5',
+          modelFileKey: key,
+          colours: [
+            { grams: '10.25', stockItemId: reel('Red') },
+            { grams: '2.25', stockItemId: reel('Copper silk') },
+          ],
+        })
+        .expect(200)
+    ).body as { calculatedPrice: string };
+    expect(estimate.price).toBe(shop.calculatedPrice);
+    expect(Number(estimate.low)).toBeLessThan(Number(shop.calculatedPrice));
+    expect(Number(estimate.high)).toBeGreaterThan(Number(shop.calculatedPrice));
+  });
+
   it('a customer’s sliced 3MF is quoted at once at its exact price, and their order takes it from stock', async () => {
     const customer = await signedInCustomer(app);
     const me = as(customer.cookie);
@@ -219,9 +288,16 @@ describe('3MF quotations and custom requests (e2e)', () => {
       await me
         .post('/custom-requests/estimate', { fileKey: key, quantity: 2 })
         .expect(200)
-    ).body.estimate as { low: string; high: string; exact: boolean };
+    ).body.estimate as {
+      low: string;
+      high: string;
+      price: string;
+      exact: boolean;
+    };
+    // The slicer's own numbers, shown as a range around the price itself.
     expect(estimate.exact).toBe(true);
-    expect(estimate.low).toBe(estimate.high);
+    expect(Number(estimate.low)).toBeLessThan(Number(estimate.price));
+    expect(Number(estimate.high)).toBeGreaterThan(Number(estimate.price));
 
     const created = (
       await me
@@ -234,7 +310,7 @@ describe('3MF quotations and custom requests (e2e)', () => {
         .expect(201)
     ).body as CustomRequestView;
     expect(created.status).toBe('QUOTED');
-    expect(created.quote).toMatchObject({ price: estimate.low });
+    expect(created.quote).toMatchObject({ price: estimate.price });
     expect(created.file).toEqual({ key, kind: 'model' });
     const row = await prisma.customRequest.findUniqueOrThrow({
       where: { requestNumber: created.requestNumber },
@@ -249,7 +325,7 @@ describe('3MF quotations and custom requests (e2e)', () => {
     await me
       .post(`/custom-requests/mine/${created.requestNumber}/accept`, {
         ...checkoutForm(),
-        quotedPrice: estimate.low,
+        quotedPrice: estimate.price,
       })
       .expect(201);
     const order = await prisma.order.findFirstOrThrow({
@@ -303,7 +379,9 @@ describe('3MF quotations and custom requests (e2e)', () => {
     });
     const waiting = await send(true);
     expect(waiting.status).toBe('SUBMITTED');
-    expect(waiting.estimate!.low).toBe(waiting.estimate!.high);
+    expect(Number(waiting.estimate!.high)).toBeGreaterThan(
+      Number(waiting.estimate!.low),
+    );
 
     // An STL still gets its range, as before.
     const stl = (

@@ -264,4 +264,37 @@ describe('Filament reels: own price, assigned to colours (e2e)', () => {
       1000 - 100,
     );
   });
+
+  it('a part starts in the colour the owner picked, else the one printed from its reel, never just the first', async () => {
+    const product = await prisma.product.findUniqueOrThrow({
+      where: { id: studio.product.id },
+      include: {
+        colours: true,
+        partColourGroup: { include: { values: true } },
+      },
+    });
+    const value = (label: string) =>
+      product.partColourGroup!.values.find((v) => v.label === label)!.id;
+    const start = async () => {
+      const shop = (await http().get(`/products/${product.slug}`).expect(200))
+        .body as { options: { name: string; defaultValueId: string | null }[] };
+      return shop.options.find((o) => o.name === 'Stand')!.defaultValueId;
+    };
+    const row = product.colours[0]!;
+    const beige = product.partColourGroup!.values.find(
+      (v) => v.label === 'Beige',
+    )!;
+    // Named after the reel it prints from, not a choice's label: its reel's choice (Beige).
+    await prisma.productColour.update({
+      where: { id: row.id },
+      data: { colour: 'Elegoo PLA+ (Beige)', stockItemId: beige.stockItemId },
+    });
+    expect(await start()).toBe(value('Beige'));
+    // The owner's pick wins.
+    await prisma.productColour.update({
+      where: { id: row.id },
+      data: { startsAs: 'Pink' },
+    });
+    expect(await start()).toBe(value('Pink'));
+  });
 });

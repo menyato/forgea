@@ -161,6 +161,7 @@ export class CatalogExporter {
             hex: c.hex,
             grams: c.grams.toString(),
             ...(c.part ? { part: c.part } : {}),
+            ...(c.part && c.startsAs ? { startsAs: c.startsAs } : {}),
           })),
           partColourGroup: p.partColourGroup?.name ?? null,
           text:

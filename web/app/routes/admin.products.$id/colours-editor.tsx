@@ -1,4 +1,8 @@
-import type { OptionGroupView, ProductColourView } from '@forgea/types';
+import {
+  type OptionGroupView,
+  type ProductColourView,
+  startingChoice,
+} from '@forgea/types';
 import { PRODUCT_PART_NAME_MAX_LENGTH } from '@forgea/validation/constants';
 import { Button } from '~/components/ui/button';
 import { SelectField } from '~/components/ui/field';
@@ -67,11 +71,33 @@ export function ColoursEditor({
         ? `${c.colour.trim()} part`
         : `Colour ${i + 1}`
     ).slice(0, PRODUCT_PART_NAME_MAX_LENGTH);
+  // The colours customers choose in: by default the group whose colours are printed from the
+  // filaments these rows use (its choices then start in the very same reels).
+  const linkedGroup = () =>
+    [...colourGroups]
+      .sort(
+        (a, b) =>
+          value.filter((c) =>
+            a.values.some(
+              (v) => v.stockItemId && v.stockItemId === c.stockItemId,
+            ),
+          ).length -
+          value.filter((c) =>
+            b.values.some(
+              (v) => v.stockItemId && v.stockItemId === c.stockItemId,
+            ),
+          ).length,
+      )
+      .at(-1);
   const choose = (next: ProductColourView[]) => {
     onChange(next);
-    if (next.some((c) => c.part !== null) && !partGroupId && colourGroups[0])
-      onPartGroupId(colourGroups[0].id);
+    const group = linkedGroup();
+    if (next.some((c) => c.part !== null) && !partGroupId && group)
+      onPartGroupId(group.id);
   };
+  const choices = (partGroup?.values ?? []).filter(
+    (v) => v.active && v.swatchHex,
+  );
   const every = value.every((c) => c.part !== null);
   const listError = Object.entries(errors).find(
     ([k]) => k.startsWith('colours') || k.startsWith('partColourGroupId'),
@@ -86,9 +112,10 @@ export function ColoursEditor({
         Orders take each colour&apos;s grams from its stock. Name each colour as
         the shop does. Tick &ldquo;Customers choose this colour&rdquo; (or every
         colour at once) to let them pick it on the product page: each one
-        changes only its own colour in the file, starts in the colour named
-        here, and the 3D view changes as they choose. Rename what customers see
-        (&ldquo;Body&rdquo;, &ldquo;Ears&rdquo;) as you like.
+        changes only its own colour in the file, starts as the colour you pick
+        under it (shown in 3D and priced &ldquo;from&rdquo;), and the 3D view
+        changes as they choose. Rename what customers see (&ldquo;Body&rdquo;,
+        &ldquo;Ears&rdquo;) as you like.
       </p>
       {value.length > 1 && (
         <label className="flex items-center gap-2 text-sm font-medium">
@@ -216,6 +243,34 @@ export function ColoursEditor({
               onChange={(e) => set(i, { part: e.currentTarget.value })}
               className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
             />
+          )}
+          {c.part !== null && choices.length > 0 && (
+            <select
+              id={`product-colour-start-${i}`}
+              name={`product-colour-start-${i}`}
+              aria-label={`Colour ${i + 1} starts as`}
+              autoComplete="off"
+              value={
+                c.startsAs && choices.some((v) => v.label === c.startsAs)
+                  ? c.startsAs
+                  : ''
+              }
+              onChange={(e) =>
+                set(i, { startsAs: e.currentTarget.value || null })
+              }
+              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+            >
+              <option value="">
+                Starts as:{' '}
+                {startingChoice(choices, { ...c, startsAs: null })?.label}{' '}
+                (automatic: its filament, or the closest colour)
+              </option>
+              {choices.map((v) => (
+                <option key={v.id} value={v.label}>
+                  Starts as: {v.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       ))}

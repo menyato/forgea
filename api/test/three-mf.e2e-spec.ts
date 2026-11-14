@@ -267,7 +267,12 @@ describe('3MF products and own prices (e2e)', () => {
         .expect(200)
     ).body as AdminProduct;
     expect(saved.colours).toEqual(
-      colours.map((c) => ({ ...c, part: null, stockItemId: null })),
+      colours.map((c) => ({
+        ...c,
+        part: null,
+        startsAs: null,
+        stockItemId: null,
+      })),
     );
     expect(saved.modelFileKey).toBe(slicedKey);
 

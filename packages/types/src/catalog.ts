@@ -170,6 +170,8 @@ export interface ProductColourView {
   grams: string;
   /** What customers call this part when they choose its colour; null = always `colour`. */
   part: string | null;
+  /** The choice the part starts in on the product page (a label); null = automatic. */
+  startsAs: string | null;
   /**
    * The filament on the shelf it is printed from (a stock line: its material, name and price);
    * null = the product's material in the colour named.

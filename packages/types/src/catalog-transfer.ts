@@ -132,6 +132,8 @@ export interface CatalogProduct {
     hex: string;
     grams: string;
     part?: string | null;
+    /** The part colours' choice it starts in (a label); none = automatic. */
+    startsAs?: string | null;
   }[];
   /** The option group customers recolour named parts from (by name). */
   partColourGroup?: string | null;

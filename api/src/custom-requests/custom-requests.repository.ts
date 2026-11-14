@@ -212,6 +212,15 @@ export class CustomRequestsRepository {
   }
 
   /** The material for an estimate: the one chosen, or the cheapest one in use. */
+  /** The filaments of a material on the shelf, as a file's colours are priced from them. */
+  filaments(materialId: string) {
+    return this.prisma.stockItem.findMany({
+      where: { materialId, active: true },
+      select: { colour: true, hex: true, pricePerGram: true },
+      orderBy: { colour: 'asc' },
+    });
+  }
+
   materialFor(materialId: string | null): Promise<Material | null> {
     return this.prisma.material.findFirst({
       where: { active: true, ...(materialId ? { id: materialId } : {}) },

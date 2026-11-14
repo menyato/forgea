@@ -667,6 +667,7 @@ export class ProductsService {
         hex: c.hex,
         grams: c.grams.toString(),
         part: c.part,
+        startsAs: c.startsAs,
         stockItemId: c.stockItemId,
       })),
       partColourGroupId: p.partColourGroupId,

@@ -21,7 +21,7 @@ test('a customer sends a sliced Bambu Studio file, gets its exact price as a quo
     page.getByRole('img', { name: /3D view of your model/ }).locator('canvas'),
   ).toBeVisible({ timeout: 15_000 });
   await expect(
-    page.getByText(/this is your quote: you can order straight away/),
+    page.getByText(/your quote is .*: you can order straight away/),
   ).toBeVisible();
   await page.getByLabel('What is it?').fill(title);
   await page

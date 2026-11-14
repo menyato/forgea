@@ -376,6 +376,7 @@ describe('ProductConfigurator', () => {
       hex,
       grams: D(grams),
       part,
+      startsAs: null,
       stockItemId: null,
       stockItem: null,
       sortOrder: 0,

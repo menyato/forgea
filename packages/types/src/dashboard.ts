@@ -141,9 +141,15 @@ export interface CustomRequestListItem {
 
 /** POST /custom-requests/estimate — the instant range shown before a request is sent. */
 export interface RequestEstimate {
+  /** The range shown to the customer, around `price`. */
   low: Money;
   high: Money;
-  /** A sliced 3MF: the slicer's own grams and time, so low = high is the price itself. */
+  /**
+   * The price the shop's own calculation gives (the same as a product with these grams, time and
+   * filaments): the middle of the range, and the quote when sliced files are quoted at once.
+   */
+  price: Money;
+  /** A sliced 3MF: the slicer's own grams and time (not estimated from the volume). */
   exact: boolean;
   grams: string;
   printHours: string;
