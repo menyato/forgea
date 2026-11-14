@@ -6,7 +6,7 @@
 # Each runtime image holds only its app's compiled code and production dependencies.
 # The Node image is written out in both FROM lines (not as an ARG) so Dependabot can update it.
 
-FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS base
+FROM node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=true
 RUN npm install --global pnpm@12.15.0 && npm cache clean --force
 WORKDIR /repo
@@ -37,7 +37,7 @@ RUN mkdir -p /out/migrate/prisma \
       "dotenv@$(node -p "require('/repo/api/node_modules/dotenv/package.json').version")" \
  && npm cache clean --force
 
-FROM node:24.22.2-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS runtime
+FROM node:24.22.2-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9 AS runtime
 ENV NODE_ENV=production PORT=3000
 # The apps run with node alone: drop the npm/corepack the Node image bundles (unused code that
 # security scanners flag, e.g. npm's own copies of undici and brace-expansion).
