@@ -11,6 +11,7 @@ import {
   type ProductRealCost,
   type ProfitKind,
   type SizeCm,
+  shownColours,
   startingChoice,
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
@@ -33,6 +34,7 @@ import { Panel, SaveStatus } from '~/features/admin/admin-ui';
 import type { ProfitValue } from '~/features/admin/profit-rule-field';
 import type { SaveResult } from '~/features/admin/staff.server';
 import { ImagesField } from './images-field';
+import { ShownColours } from '~/features/admin/shown-colours';
 import { ModelField } from './model-field';
 import { OptionsConfig } from './options-config';
 import { NO_SIZE, SizesEditor } from './sizes-editor';
@@ -127,8 +129,42 @@ export function ProductForm({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <SetupSteps
+        steps={[
+          {
+            to: '#product-model',
+            label: '3D model',
+            done: modelKey !== null,
+            hint: 'Upload the sliced .gcode.3mf: grams, time, size, colours and material fill in by themselves.',
+          },
+          {
+            to: '#product-details',
+            label: 'Name and category',
+            done: name.trim() !== '',
+            hint: 'What customers read; the web address follows the name.',
+          },
+          {
+            to: '#product-printing',
+            label: 'Grams and print time',
+            done: grams !== '' && hours !== '',
+            hint: 'From the file, or typed in. They make the price.',
+          },
+          {
+            to: '#product-printing',
+            label: 'Each colour from a reel',
+            done: colours.length === 0 || colours.every((c) => c.stockItemId),
+            hint: 'Printed from: the reel its cost and stock come from. Tick the parts customers may recolour.',
+          },
+          {
+            to: '#product-printing',
+            label: 'In the shop or hidden',
+            done: null,
+            hint: 'Untick Visible in the shop for studio-only pieces (tests, gifts, one client).',
+          },
+        ]}
+      />
       <div className="grid content-start gap-6">
-        <Panel title="3D model">
+        <Panel title="3D model" anchor="product-model">
           <ModelField
             modelKey={modelKey}
             onModelKey={setModelKey}
@@ -176,6 +212,21 @@ export function ProductForm({
             }}
             name={name}
           />
+          {/* What the shop shows it in first: each part in its starting colour. */}
+          {colours.length > 0 && (
+            <div className="mt-3 grid gap-1">
+              <p className="text-sm font-medium">Shown in</p>
+              <ShownColours
+                colours={shownColours(
+                  colours,
+                  groups
+                    .find((g) => g.id === partGroupId)
+                    ?.values.filter((v) => v.active && v.swatchHex),
+                )}
+                className="text-sm"
+              />
+            </div>
+          )}
         </Panel>
         <Panel title="Print files">
           <PrintFilesField
@@ -240,7 +291,7 @@ export function ProductForm({
           )}
         />
 
-        <Panel title="Details">
+        <Panel title="Details" anchor="product-details">
           <Field
             label="Name"
             name="name"
@@ -303,7 +354,7 @@ export function ProductForm({
           )}
         </Panel>
 
-        <Panel title="Printing and price">
+        <Panel title="Printing and price" anchor="product-printing">
           <SelectField
             label="Material"
             name="materialId"
@@ -481,5 +532,57 @@ function CopyOptions({
         Copy its options
       </Button>
     </div>
+  );
+}
+
+/**
+ * What a product needs, in order, each linking to its panel and ticked once it is there: the
+ * new-product page reads as five steps instead of one long form.
+ */
+function SetupSteps({
+  steps,
+}: {
+  steps: readonly {
+    to: string;
+    label: string;
+    /** null: a choice, not something missing. */
+    done: boolean | null;
+    hint: string;
+  }[];
+}) {
+  return (
+    <nav
+      aria-label="Steps"
+      className="rounded-lg border border-border bg-surface p-4 xl:col-span-2"
+    >
+      <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {steps.map((s, i) => (
+          <li
+            key={s.label}
+            className="grid min-w-0 content-start gap-1 text-sm"
+          >
+            <a
+              href={s.to}
+              className="flex items-center gap-2 font-semibold hover:underline"
+            >
+              <span
+                aria-hidden
+                className={`grid size-6 shrink-0 place-items-center rounded-full text-xs ${
+                  s.done
+                    ? 'bg-accent text-on-accent'
+                    : 'border border-border text-text-muted'
+                }`}
+              >
+                {s.done ? '✓' : i + 1}
+              </span>
+              {s.label}
+              {s.done === false && <span className="sr-only">(to do)</span>}
+              {s.done && <span className="sr-only">(done)</span>}
+            </a>
+            <span className="text-xs text-text-muted">{s.hint}</span>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }

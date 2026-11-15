@@ -28,7 +28,11 @@ import type {
   ProductListQuery,
   SaveProductDto,
 } from '@forgea/validation';
-import { formatSizeCm, PRODUCT_SIZE_GROUP_ID } from '@forgea/types';
+import {
+  formatSizeCm,
+  PRODUCT_SIZE_GROUP_ID,
+  shownColours,
+} from '@forgea/types';
 import { toPage } from '../common/pagination/keyset.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
@@ -197,6 +201,10 @@ export class ProductsService {
       hasModel: p.modelFileKey !== null,
       modelKey: p.modelFileKey,
       previewColor: this.summary(p).previewColor,
+      colours: shownColours(
+        p.colours,
+        p.partColourGroup?.active ? p.partColourGroup.values : null,
+      ),
       updatedAt: p.updatedAt.toISOString(),
     }));
   }

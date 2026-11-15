@@ -65,15 +65,19 @@ export function Panel({
   title,
   children,
   className = '',
+  anchor,
 }: {
   title?: string;
   children: ReactNode;
   className?: string;
+  /** An id to link to ("#product-model"), e.g. from a list of steps. */
+  anchor?: string;
 }) {
   // Named by its title, so screen readers can jump between panels.
   const id = useId();
   return (
     <section
+      id={anchor}
       aria-labelledby={title ? id : undefined}
       // One shrinkable column: a wide child (a 3D canvas, a long email) can't push past the border.
       className={`grid grid-cols-1 gap-4 rounded-lg border border-border bg-surface p-5 ${className}`}

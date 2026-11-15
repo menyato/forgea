@@ -38,6 +38,15 @@ test('a product from a sliced Bambu Studio 3MF: its colours, grams and time, and
   await expect(
     page.getByLabel('Material', { exact: true }).locator('option:checked'),
   ).toHaveText('PLA (PLA)');
+  // The steps tick off, and the colours it starts in show beside the model.
+  const steps = page.getByRole('navigation', { name: 'Steps' });
+  await expect(
+    steps.getByRole('link', { name: /3D model \(done\)/ }),
+  ).toBeVisible();
+  await expect(
+    steps.getByRole('link', { name: /Grams and print time \(done\)/ }),
+  ).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Shown in' })).toBeVisible();
   // "Use these numbers" still fills it in again.
   await page.getByRole('button', { name: 'Use these numbers' }).click();
   await expect(page.getByLabel('Material (g)')).toHaveValue('12.5');

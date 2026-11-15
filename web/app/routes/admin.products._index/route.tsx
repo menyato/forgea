@@ -12,6 +12,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { ShownColours } from '~/features/admin/shown-colours';
 import { ProductPreview } from './product-preview';
 import type { Route } from './+types/route';
 
@@ -53,7 +54,10 @@ const COLUMNS: ListColumn<AdminProductListItem>[] = [
     cell: (p) => (
       <span className="flex items-center gap-3">
         <ProductPreview product={p} className="size-12 shrink-0" />
-        {p.name}
+        <span className="grid min-w-0 gap-1">
+          {p.name}
+          <ShownColours colours={p.colours} />
+        </span>
       </span>
     ),
   },
@@ -141,6 +145,7 @@ export default function Products({ loaderData }: Route.ComponentProps) {
           card={(p) => (
             <>
               <ProductPreview product={p} className="aspect-[4/3] w-full" />
+              <ShownColours colours={p.colours} />
               <span className="text-text-muted">
                 {p.category ?? 'No category'} · {p.material}
                 {p.hasModel && ' · 3D'}

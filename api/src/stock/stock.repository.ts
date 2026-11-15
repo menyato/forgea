@@ -367,6 +367,7 @@ export class StockRepository {
         id: true,
         name: true,
         material: { select: { code: true } },
+        modelFileKey: true,
         sizes: {
           select: { sizeXcm: true, sizeYcm: true, sizeZcm: true },
           orderBy: { sortOrder: 'asc' },
@@ -394,8 +395,8 @@ export class StockRepository {
           },
         },
         // Parts customers recolour: the piece is printed in one of the group's colours.
+        // Every colour (the parts customers recolour among them).
         colours: {
-          where: { part: { not: null } },
           select: {
             part: true,
             colour: true,

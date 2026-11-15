@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
+import { ShownColours } from '~/features/admin/shown-colours';
+import { ModelThumbnail } from '~/features/model-viewer/model-thumbnail';
 import type { SaveResult } from '~/features/admin/staff.server';
 import {
   Chip,
@@ -276,11 +278,14 @@ export function StudioPrintForm({
   printables,
   start,
   requestKey,
+  shelf = false,
 }: {
   requestKey: string;
   failed: boolean;
   printables: readonly StockPrintable[];
   start: { productId: string; colour: string } | null;
+  /** Printed to sell (the ready pieces page): always kept on the shelf, no reason asked. */
+  shelf?: boolean;
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
@@ -320,6 +325,8 @@ export function StudioPrintForm({
       className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
     >
       <input type="hidden" name="requestKey" value={requestKey} />
+      {shelf && <input type="hidden" name="intent" value="print" />}
+      {shelf && <input type="hidden" name="toShelf" value="on" />}
       <SelectField
         label="Product"
         name="productId"
@@ -338,6 +345,9 @@ export function StudioPrintForm({
           </option>
         ))}
       </SelectField>
+      {product && (
+        <PrintableCard product={product} key={`card-${product.id}`} />
+      )}
       {product && product.sizes.length > 0 && (
         <SelectField
           label="Size"
@@ -413,7 +423,7 @@ export function StudioPrintForm({
         </div>
       )}
       <div className="grid gap-2 sm:col-span-2 lg:col-span-3">
-        {!failed && (
+        {!failed && !shelf && (
           <div
             className="flex flex-wrap gap-2"
             role="radiogroup"
@@ -435,7 +445,7 @@ export function StudioPrintForm({
           placeholder={failed ? 'e.g. came off the bed' : 'e.g. for the fair'}
         />
       </div>
-      {!failed && (
+      {!failed && !shelf && (
         <div className="sm:col-span-2 lg:col-span-3">
           <CheckboxField
             label="Keep them on the shelf to sell"
@@ -464,10 +474,49 @@ export function StudioPrintForm({
         )}
       </Summary>
       <Submit
-        label={failed ? 'Record the failure' : 'Take it off the shelf'}
+        label={
+          failed
+            ? 'Record the failure'
+            : shelf
+              ? 'Put them on the shelf'
+              : 'Take it off the shelf'
+        }
         fetcher={fetcher}
       />
     </fetcher.Form>
+  );
+}
+
+/** Which product it is: its 3D model, the colours it starts in, and one's grams and cost. */
+function PrintableCard({ product }: { product: StockPrintable }) {
+  const tile = (
+    <span className="grid h-full place-items-center text-xs text-text-muted">
+      {product.materialCode}
+    </span>
+  );
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-md border border-border p-2 sm:col-span-2 lg:col-span-3">
+      <span className="block size-20 shrink-0 overflow-hidden rounded-md bg-surface">
+        {product.modelKey ? (
+          <ModelThumbnail
+            modelKey={product.modelKey}
+            color={product.shown[0]?.hex ?? '#9a9ea3'}
+            turning={false}
+            fallback={tile}
+          />
+        ) : (
+          tile
+        )}
+      </span>
+      <span className="grid min-w-0 gap-1 text-sm">
+        <strong className="truncate">{product.name}</strong>
+        <span className="text-text-muted">
+          One: {grams(Number(product.gramsPerUnit))} of {product.materialCode},
+          about {usd(Number(product.unitCost))} to make
+        </span>
+        <ShownColours colours={product.shown} />
+      </span>
+    </div>
   );
 }
 

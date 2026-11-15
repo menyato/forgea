@@ -9,6 +9,8 @@ import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { StudioPrintForm } from '~/features/stock/stock-forms';
+import { studioPrint } from '~/features/stock/stock.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -24,7 +26,10 @@ export async function loader({ url, context }: Route.LoaderArgs) {
     all,
     // A fresh one-time key each load (after a save too): sent twice, added once.
     requestKey: randomUUID(),
+    // Its own key: the two forms are two different things to record.
+    printKey: randomUUID(),
     pieces: pieces.data,
+    printables: products.ok ? products.data : [],
     products: products.ok
       ? products.data.map((p) => ({
           id: p.id,
@@ -36,9 +41,11 @@ export async function loader({ url, context }: Route.LoaderArgs) {
   };
 }
 
-/** Pieces put on the shelf by hand. */
+/** Pieces just printed to sell (their filament comes off the shelf), or put on it by hand. */
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
+  if (form.get('intent') === 'print')
+    return studioPrint(context.get(apiContext), form, false);
   return save(
     AddReadyPiecesDto,
     {
@@ -55,7 +62,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function ReadyPieces({ loaderData }: Route.ComponentProps) {
-  const { all, pieces, products, requestKey } = loaderData;
+  const { all, pieces, products, printables, requestKey, printKey } =
+    loaderData;
   const mayManage = useCan()('stock.manage');
   const total = pieces.reduce((n, p) => n + p.onHand, 0);
   const value = pieces.reduce((n, p) => n + Number(p.value), 0).toFixed(2);
@@ -132,6 +140,22 @@ export default function ReadyPieces({ loaderData }: Route.ComponentProps) {
           </table>
         </div>
       )}
+      {mayManage && printables.length > 0 && (
+        <Panel title="Printed to sell">
+          <p className="mb-3 text-sm text-text-muted">
+            Choose the product and the colour each part was printed in: the
+            filament comes off those reels and the pieces go on the shelf at
+            what they cost to make.
+          </p>
+          <StudioPrintForm
+            shelf
+            failed={false}
+            printables={printables}
+            start={null}
+            requestKey={printKey}
+          />
+        </Panel>
+      )}
       {mayManage && <AddForm products={products} requestKey={requestKey} />}
     </>
   );
@@ -152,13 +176,8 @@ function AddForm({
   return (
     <Panel title="Add pieces by hand">
       <p className="mb-3 text-sm text-text-muted">
-        Just printed them? Record the print instead (
-        <Link to="/admin/stock/print" className="underline">
-          Printed for the studio
-        </Link>
-        , "Keep them on the shelf to sell"): the filament comes off the shelf
-        and the pieces land here at what they cost. This form is for pieces made
-        before, or elsewhere.
+        For pieces made before or elsewhere: nothing comes off the filament
+        shelf. Just printed them? Use <strong>Printed to sell</strong> above.
       </p>
       <fetcher.Form
         method="post"

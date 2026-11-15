@@ -30,7 +30,7 @@ import type {
   StockMovementListQuery,
   StudioPrintDto,
 } from '@forgea/validation';
-import { startingChoice } from '@forgea/types';
+import { shownColours, startingChoice } from '@forgea/types';
 import { toPage } from '../common/pagination/keyset.js';
 import { claimRequestKey } from '../common/request-key.js';
 import { Purchases } from '../accounting/purchases.js';
@@ -267,6 +267,8 @@ export class StockService {
             swatchHex,
           })),
           parts: partsOf(p),
+          modelKey: p.modelFileKey,
+          shown: shownColours(p.colours, p.partColourGroup?.values),
           gramsPerUnit: one.gramsPerUnit,
           unitCost: one.unitCost,
         },

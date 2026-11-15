@@ -69,8 +69,8 @@ export {
 export type { Permission, PermissionRole } from './permissions.js';
 export { PRODUCT_SIZE_GROUP_ID } from './catalog.js';
 export { scaledSize } from './sizes.js';
-export { startingChoice } from './parts.js';
-export type { PartChoice, PartRow } from './parts.js';
+export { shownColours, startingChoice } from './parts.js';
+export type { PartChoice, PartRow, ShownColour } from './parts.js';
 export type {
   BusinessInsights,
   DateRange,

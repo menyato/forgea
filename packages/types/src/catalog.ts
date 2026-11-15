@@ -1,4 +1,5 @@
 import type { OptionKind, ProfitKind } from './generated/prisma/enums.js';
+import type { ShownColour } from './parts.js';
 import type { Money, ProductListItem } from './lists.js';
 import type { ProductTextOffer, ProductTextSettings } from './text-studio.js';
 
@@ -319,6 +320,8 @@ export interface AdminProductListItem {
   /** Its 3D model, and the colour a one-colour model is first shown in: as the shop shows it. */
   modelKey: string | null;
   previewColor: string | null;
+  /** The colours it starts in (each part's starting choice), shown beside its model. */
+  colours: ShownColour[];
   updatedAt: string;
 }
 

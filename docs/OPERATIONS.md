@@ -36,7 +36,9 @@ difference is recorded with your note.
 
 ## 3. A product for the shop
 
-1. Catalog → **Products** → New product. Name, description, category, material.
+1. Catalog → **Products** → New product. The **Steps** at the top tick off as you go (model,
+   name, grams and time, a reel for each colour, shop or hidden); each opens its panel. The
+   colours it starts in show under the model (**Shown in**), and in the products list.
 2. **3D model:** upload what customers see. An assembled piece: the assembly file. A sliced
    `.gcode.3mf` is read as soon as it is uploaded and fills a new product in by itself: grams,
    time, size, colours, the material the file prints in, and each colour's **Printed from**
@@ -83,8 +85,10 @@ from the request.
 - **A product:** Filament stock → **Printed for the studio**. Grams and cost come from it; a
   piece whose parts customers recolour gets a colour per part (each from its own reel). Tick
   **Keep them on the shelf to sell** and they land in **Ready pieces** at what they cost.
-  Pieces made before (or elsewhere): Ready pieces → **Add pieces by hand**, where a product's
-  cost fills in from its grams and time.
+  The same from Ready pieces → **Printed to sell**: the product shows with its model and the
+  colours it starts in; choose each part's colour and the filament comes off those reels.
+  Pieces made before (or elsewhere): Ready pieces → **Add pieces by hand** (no filament taken),
+  where a product's cost fills in from its grams and time.
 - **Anything else:** a quotation at $0 to `hello@forgea-lab.com` with one free line per piece,
   **Confirm**, **Start production**. Each line gets a print run: open it (Orders →
   **Production**), choose the printer and the reel, then **Printing** and **Done** with the

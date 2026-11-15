@@ -1,4 +1,5 @@
 import type { DateRange } from './insights.js';
+import type { ShownColour } from './parts.js';
 import type { StockMovementKind } from './generated/prisma/enums.js';
 
 /** The kinds the team records by hand; the others come from orders, prints and the start. */
@@ -116,6 +117,9 @@ export interface StockPrintable {
    * the colour the shop starts it in.
    */
   parts: { name: string; startsAs: string }[];
+  /** Its 3D model and the colours it starts in, to show which product it is. */
+  modelKey: string | null;
+  shown: ShownColour[];
   /** Grams and cost of one, default size and colour: the form's preview. */
   gramsPerUnit: string;
   unitCost: string;

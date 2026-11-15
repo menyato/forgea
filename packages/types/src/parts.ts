@@ -18,6 +18,32 @@ export interface PartRow {
   stockItemId?: string | null;
 }
 
+/** A colour a product is first shown and printed in: a recoloured part's starting choice, or a fixed colour. */
+export interface ShownColour {
+  /** The part customers recolour; null for a colour that is always the same. */
+  part: string | null;
+  colour: string;
+  /** #rrggbb */
+  hex: string;
+}
+
+/**
+ * The colours a product starts in, row by row: each recoloured part in its starting choice (as
+ * the shop shows it first), every other colour as the file and its filament have it.
+ */
+export function shownColours(
+  rows: readonly (PartRow & { part: string | null })[],
+  choices: readonly PartChoice[] | null | undefined,
+): ShownColour[] {
+  return rows.map((row) => {
+    const start =
+      row.part && choices?.length ? startingChoice(choices, row) : undefined;
+    return start
+      ? { part: row.part, colour: start.label, hex: start.swatchHex ?? row.hex }
+      : { part: null, colour: row.colour, hex: row.hex };
+  });
+}
+
 const rgb = (hex: string): [number, number, number] | null => {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
   return m
