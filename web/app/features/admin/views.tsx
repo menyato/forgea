@@ -5,6 +5,7 @@ import {
   useId,
   useRef,
   useState,
+  type RefObject,
 } from 'react';
 import {
   Form,
@@ -84,6 +85,7 @@ export function ControlPanel({
   const href = useWith();
   const [params] = useSearchParams();
   const inputId = useId();
+  const menu = useRef<HTMLDetailsElement>(null);
   // One facet per set of filters that add up: each "apart" one, each set of alternatives,
   // and the rest together ("To confirm or In production").
   const facets: ListFilter[][] = [];
@@ -116,7 +118,18 @@ export function ControlPanel({
 
   return (
     <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-      <div className="relative flex min-w-0 rounded-md border border-border bg-surface focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-focus-ring">
+      {/* A click anywhere on the field (not only its arrow) opens the menu; above the page's
+          cards and rows, so the menu always shows over them. */}
+      <div
+        className="relative z-20 flex min-w-0 cursor-text rounded-md border border-border bg-surface focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-focus-ring"
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          // Links (a facet's ×, a menu choice) and the arrow do their own thing.
+          if (target.closest('a, summary, [role="group"]')) return;
+          if (menu.current) menu.current.open = true;
+          document.getElementById(inputId)?.focus();
+        }}
+      >
         <Form
           method="get"
           role="search"
@@ -161,6 +174,7 @@ export function ControlPanel({
         </Form>
         {(filters.length > 0 || groups.length > 0) && (
           <FilterMenu
+            menu={menu}
             filters={filters}
             groups={groups}
             state={state}
@@ -234,32 +248,35 @@ function Facet({
 
 /** The menu at the end of the search box: filters on the left, groupings on the right. */
 function FilterMenu({
+  menu,
   filters,
   groups,
   state,
   toggle,
   groupHref,
 }: {
+  menu: RefObject<HTMLDetailsElement | null>;
   filters: readonly ListFilter[];
   groups: readonly ListOption[];
   state: ListState;
   toggle: (f: ListFilter) => string;
   groupHref: (key: string) => string;
 }) {
-  const menu = useRef<HTMLDetailsElement>(null);
   const { search } = useLocation();
   // Closes once a choice is made, and on a click anywhere else.
   useEffect(() => {
     if (menu.current) menu.current.open = false;
-  }, [search]);
+  }, [menu, search]);
   useEffect(() => {
     const close = (e: MouseEvent) => {
-      if (menu.current && !menu.current.contains(e.target as Node))
+      // The whole search field counts as the menu's own: a click on it opens it.
+      const field = menu.current?.parentElement ?? menu.current;
+      if (menu.current && field && !field.contains(e.target as Node))
         menu.current.open = false;
     };
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
-  }, []);
+  }, [menu]);
   const item = (active: boolean) =>
     `flex items-center justify-between gap-3 rounded px-2 py-1 hover:bg-surface-raised ${
       active ? 'font-semibold text-text' : 'text-text-muted'
@@ -273,7 +290,11 @@ function FilterMenu({
       >
         <span aria-hidden>▾</span>
       </summary>
-      <div className="absolute right-0 top-full z-30 mt-1 grid w-[min(32rem,calc(100vw-2rem))] gap-4 rounded-md border border-border bg-surface p-3 text-sm shadow-lg sm:grid-cols-2">
+      <div
+        role="group"
+        aria-label="Filter and group choices"
+        className="absolute right-0 top-full z-30 mt-1 grid w-[min(32rem,calc(100vw-2rem))] gap-4 rounded-md border border-border bg-surface p-3 text-sm shadow-lg sm:grid-cols-2"
+      >
         {filters.length > 0 && (
           <section aria-label="Filters">
             <h3 className="mb-1 px-2 text-xs font-bold uppercase tracking-wide">

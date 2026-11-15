@@ -11,7 +11,12 @@ test('a custom design kept on the shelf is sold, and the production results show
   await signInAsAdmin(context, baseURL!);
   const name = `Favour ${Date.now().toString(36)}`;
   await page.goto('/admin/stock/pieces');
+  // A shop product's cost fills in from its grams and print time.
+  await expect(page.getByLabel('What one cost to make')).toHaveValue(
+    /^\d+\.\d{2}$/,
+  );
   await page.getByLabel('A custom design').check();
+  await expect(page.getByLabel('What one cost to make')).toHaveValue('');
   await page.getByLabel('What it is').fill(name);
   await page.getByLabel('Colour, size, text').fill('Gold, 6 cm');
   await page.getByLabel('How many').fill('6');

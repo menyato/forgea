@@ -366,7 +366,9 @@ export function StudioPrintForm({
           <input type="hidden" name="part" value={part.name} />
           <ColourChoice
             name="partColour"
-            legend={`${part.name} part`}
+            legend={
+              /\bpart$/i.test(part.name) ? part.name : `${part.name} part`
+            }
             colours={product?.colours ?? []}
             value={partColours[part.name] ?? ''}
             onChange={(c) =>

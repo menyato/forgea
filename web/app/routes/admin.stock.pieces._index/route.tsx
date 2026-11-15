@@ -26,7 +26,12 @@ export async function loader({ url, context }: Route.LoaderArgs) {
     requestKey: randomUUID(),
     pieces: pieces.data,
     products: products.ok
-      ? products.data.map((p) => ({ id: p.id, name: p.name }))
+      ? products.data.map((p) => ({
+          id: p.id,
+          name: p.name,
+          // What one costs to make, from its model's grams and time (filament + machine).
+          unitCost: p.unitCost,
+        }))
       : [],
   };
 }
@@ -136,14 +141,25 @@ function AddForm({
   products,
   requestKey,
 }: {
-  products: readonly { id: string; name: string }[];
+  products: readonly { id: string; name: string; unitCost: string }[];
   requestKey: string;
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
   const [custom, setCustom] = useState(products.length === 0);
+  const [productId, setProductId] = useState(products[0]?.id ?? '');
+  const product = custom ? undefined : products.find((p) => p.id === productId);
   return (
     <Panel title="Add pieces by hand">
+      <p className="mb-3 text-sm text-text-muted">
+        Just printed them? Record the print instead (
+        <Link to="/admin/stock/print" className="underline">
+          Printed for the studio
+        </Link>
+        , "Keep them on the shelf to sell"): the filament comes off the shelf
+        and the pieces land here at what they cost. This form is for pieces made
+        before, or elsewhere.
+      </p>
       <fetcher.Form
         method="post"
         key={fetcher.data?.ok ? 'reset' : 'form'}
@@ -171,6 +187,8 @@ function AddForm({
             label="Product"
             name="productId"
             required
+            value={productId}
+            onChange={(e) => setProductId(e.currentTarget.value)}
             error={errors['productId']}
           >
             {products.map((p) => (
@@ -195,10 +213,18 @@ function AddForm({
           error={errors['quantity']}
         />
         <Field
+          // A product's cost fills in from its model's grams and time; change it if it differed.
+          key={product?.id ?? 'custom'}
           label="What one cost to make (USD)"
           name="unitCost"
           inputMode="decimal"
           required
+          defaultValue={product?.unitCost ?? ''}
+          hint={
+            product
+              ? "From the product's grams and print time (filament and machine)."
+              : undefined
+          }
           error={errors['unitCost']}
         />
         <Field label="Note (optional)" name="note" error={errors['note']} />

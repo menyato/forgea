@@ -11,6 +11,7 @@ import {
   type ProductRealCost,
   type ProfitKind,
   type SizeCm,
+  startingChoice,
 } from '@forgea/types';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
@@ -133,19 +134,46 @@ export function ProductForm({
             onModelKey={setModelKey}
             material={materials.find((m) => m.id === materialId)}
             onSuggest={suggest}
-            // Read again from the file: parts keep their names (by file colour).
-            onColours={(next) =>
+            autoUse={grams === ''}
+            // Read from the file: its material (by the filament type), and each colour
+            // printed from the reel on the shelf closest to it. Read again, parts keep their
+            // names and reels (by file colour).
+            onColours={(next, type) => {
+              const fileMaterial = type
+                ? materials.find(
+                    (m) =>
+                      m.active && m.code.toUpperCase() === type.toUpperCase(),
+                  )
+                : undefined;
+              if (fileMaterial) setMaterialId(fileMaterial.id);
+              const code =
+                fileMaterial?.code ??
+                materials.find((m) => m.id === materialId)?.code;
+              const reels = filaments
+                .filter((f) => f.material === code)
+                .map((f) => ({
+                  label: f.colour,
+                  swatchHex: f.swatchHex,
+                  stockItemId: f.id,
+                }));
               setColours(
-                next.map((c) => ({
-                  ...c,
-                  part: colours.find((o) => o.hex === c.hex)?.part ?? null,
-                  startsAs:
-                    colours.find((o) => o.hex === c.hex)?.startsAs ?? null,
-                  stockItemId:
-                    colours.find((o) => o.hex === c.hex)?.stockItemId ?? null,
-                })),
-              )
-            }
+                next.map((c) => {
+                  const before = colours.find((o) => o.hex === c.hex);
+                  const reel = before
+                    ? undefined
+                    : startingChoice(reels, { colour: c.colour, hex: c.hex });
+                  return {
+                    ...c,
+                    // A colour printed from a reel takes the reel's name, as when picked.
+                    colour: reel?.label ?? c.colour,
+                    part: before?.part ?? null,
+                    startsAs: before?.startsAs ?? null,
+                    stockItemId:
+                      before?.stockItemId ?? reel?.stockItemId ?? null,
+                  };
+                }),
+              );
+            }}
             name={name}
           />
         </Panel>

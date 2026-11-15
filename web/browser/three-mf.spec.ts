@@ -24,10 +24,8 @@ test('a product from a sliced Bambu Studio 3MF: its colours, grams and time, and
     .first()
     .click();
 
-  // The API reads the file: the slicer's own time and grams, per colour.
-  await page
-    .getByRole('button', { name: 'Read colours, grams and time from the file' })
-    .click();
+  // The API reads the file as soon as it is uploaded: the slicer's own time and grams, per
+  // colour, fill the new product in by themselves, in the material the file prints in.
   await expect(
     page.getByText(
       /from the slicer: the file was sliced, so the purge, prime tower and supports are counted/,
@@ -35,9 +33,14 @@ test('a product from a sliced Bambu Studio 3MF: its colours, grams and time, and
   ).toBeVisible();
   await expect(page.getByText('10.25 g')).toBeVisible();
   await expect(page.getByText('2.25 g')).toBeVisible();
-  await page.getByRole('button', { name: 'Use these numbers' }).click();
   await expect(page.getByLabel('Material (g)')).toHaveValue('12.5');
   await expect(page.getByLabel('Print time (h)')).toHaveValue('1.50');
+  await expect(
+    page.getByLabel('Material', { exact: true }).locator('option:checked'),
+  ).toHaveText('PLA (PLA)');
+  // "Use these numbers" still fills it in again.
+  await page.getByRole('button', { name: 'Use these numbers' }).click();
+  await expect(page.getByLabel('Material (g)')).toHaveValue('12.5');
 
   // Each file colour gets the shop's name for it: that is the stock it comes from.
   await page.getByLabel(/Colour 1 \(file colour #aa2222\)/).fill('Red');

@@ -6,7 +6,7 @@ import type {
   ProductColourView,
   SizeCm,
 } from '@forgea/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import {
@@ -21,7 +21,8 @@ import type { ModelInfoResult, UploadResult } from './route';
  * Upload an STL, GLB or 3MF and see it in 3D. An STL or GLB gets grams and print hours
  * suggested from its volume with the chosen material's density and print speed; a 3MF (Bambu
  * Studio and other slicers) is read by the API: its colours, and the slicer's own grams and
- * time when it was sliced. The admin decides what to use.
+ * time when it was sliced. A 3MF is read as soon as it is uploaded, and a sliced one fills in a
+ * new product at once (grams, time, size, colours, material); "Use these numbers" does it again.
  */
 export function ModelField({
   modelKey,
@@ -29,6 +30,7 @@ export function ModelField({
   material,
   onSuggest,
   onColours,
+  autoUse,
   name,
 }: {
   modelKey: string | null;
@@ -40,8 +42,10 @@ export function ModelField({
     printHours: string;
     size: SizeCm;
   }) => void;
-  /** A sliced 3MF's grams per colour. */
-  onColours: (colours: ProductColourView[]) => void;
+  /** A sliced 3MF's grams per colour, and the filament type most of it prints in ("PLA"). */
+  onColours: (colours: ProductColourView[], type: string | null) => void;
+  /** Fill the form from a sliced 3MF as soon as it is read (a product with no numbers yet). */
+  autoUse: boolean;
   name: string;
 }) {
   const upload = useFetcher<UploadResult>();
@@ -127,12 +131,20 @@ export function ModelField({
         <ThreeMfInfo
           modelKey={modelKey}
           material={material}
+          autoUse={autoUse}
           onUse={(info) => {
             onSuggest({
               grams: info.grams,
               printHours: info.printHours,
               size: info.size,
             });
+            // The type most of its grams print in decides the material.
+            const byType = new Map<string, number>();
+            for (const c of info.colours)
+              if (c.type)
+                byType.set(c.type, (byType.get(c.type) ?? 0) + Number(c.grams));
+            const type =
+              [...byType].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
             // One colour too: customers may still choose the colour it prints in.
             onColours(
               info.colours.map((c) => ({
@@ -143,6 +155,7 @@ export function ModelField({
                 startsAs: null,
                 stockItemId: null,
               })),
+              type,
             );
           }}
         />
@@ -205,15 +218,41 @@ export function ModelField({
 function ThreeMfInfo({
   modelKey,
   material,
+  autoUse,
   onUse,
 }: {
   modelKey: string;
   material: MaterialView | undefined;
+  autoUse: boolean;
   onUse: (info: ModelFileInfo) => void;
 }) {
   const reader = useFetcher<ModelInfoResult>();
   // Sliced files carry their own grams; the solidity only matters for a guess.
   const info = reader.data?.info;
+  // Read once per uploaded file, by itself; a sliced file then fills a new product in.
+  const readFor = useRef<string | null>(null);
+  const usedFor = useRef<string | null>(null);
+  const { submit } = reader;
+  useEffect(() => {
+    if (!material || readFor.current === modelKey) return;
+    readFor.current = modelKey;
+    void submit(
+      {
+        intent: 'model-info',
+        key: modelKey,
+        materialId: material.id,
+        solidityPercent: '40',
+      },
+      { method: 'post' },
+    );
+  }, [modelKey, material, submit]);
+  const latest = useRef({ autoUse, onUse });
+  latest.current = { autoUse, onUse };
+  useEffect(() => {
+    if (!info?.sliced || usedFor.current === modelKey) return;
+    usedFor.current = modelKey;
+    if (latest.current.autoUse) latest.current.onUse(info);
+  }, [info, modelKey]);
   const read = () =>
     void reader.submit(
       {

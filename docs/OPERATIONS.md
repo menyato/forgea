@@ -37,7 +37,10 @@ difference is recorded with your note.
 ## 3. A product for the shop
 
 1. Catalog → **Products** → New product. Name, description, category, material.
-2. **3D model:** upload what customers see. An assembled piece: the assembly file.
+2. **3D model:** upload what customers see. An assembled piece: the assembly file. A sliced
+   `.gcode.3mf` is read as soon as it is uploaded and fills a new product in by itself: grams,
+   time, size, colours, the material the file prints in, and each colour's **Printed from**
+   set to the closest reel on your shelf (check them; change any that are wrong).
 3. **Print files:** add each sliced file (Bambu Studio: slice, then File → Export → **Export
    plate sliced file**, a `.gcode.3mf`). The panel shows each file's grams per colour, time
    and set-up. Click **Use the totals**: grams, time and colours fill in, purge, prime tower and
@@ -77,7 +80,11 @@ from the request.
 
 ## 5. Printing for the studio (tests, gifts, display pieces)
 
-- **A product:** Filament stock → **Printed for the studio**. Grams and cost come from it.
+- **A product:** Filament stock → **Printed for the studio**. Grams and cost come from it; a
+  piece whose parts customers recolour gets a colour per part (each from its own reel). Tick
+  **Keep them on the shelf to sell** and they land in **Ready pieces** at what they cost.
+  Pieces made before (or elsewhere): Ready pieces → **Add pieces by hand**, where a product's
+  cost fills in from its grams and time.
 - **Anything else:** a quotation at $0 to `hello@forgea-lab.com` with one free line per piece,
   **Confirm**, **Start production**. Each line gets a print run: open it (Orders →
   **Production**), choose the printer and the reel, then **Printing** and **Done** with the
