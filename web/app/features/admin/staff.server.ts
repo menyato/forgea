@@ -27,6 +27,12 @@ export const staffMiddleware: MiddlewareFunction<Response> = async (
   if (!api.hasSession) throw redirect(signInFor(url));
   const me = await api.me();
   if (me.status === 401) throw redirect(signInFor(url));
+  // Too many pages at once (or the API briefly down): "one moment", never "not allowed".
+  if (!me.ok && (me.status === 429 || me.status >= 500)) {
+    throw new Response(me.message, {
+      status: me.status === 429 ? 429 : 503,
+    });
+  }
   if (!me.ok || me.data.role === Role.CUSTOMER) {
     throw new Response('The dashboard is for the Forgea team', { status: 403 });
   }
