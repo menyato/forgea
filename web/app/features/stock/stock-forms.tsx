@@ -291,6 +291,13 @@ export function StudioPrintForm({
   const [colour, setColour] = useState(
     start?.colour ?? product?.colours[0]?.label ?? '',
   );
+  // A piece whose parts customers recolour: each part's colour, starting as the shop starts it.
+  const startParts = (p: StockPrintable | undefined) =>
+    Object.fromEntries((p?.parts ?? []).map((x) => [x.name, x.startsAs]));
+  const [partColours, setPartColours] = useState<Record<string, string>>(() =>
+    startParts(product),
+  );
+  const parts = product?.parts ?? [];
   const [quantity, setQuantity] = useState('1');
   const [progress, setProgress] = useState(50);
   const [note, setNote] = useState('');
@@ -321,6 +328,7 @@ export function StudioPrintForm({
           const next = printables.find((p) => p.id === e.currentTarget.value);
           setProductId(e.currentTarget.value);
           setColour(next?.colours[0]?.label ?? '');
+          setPartColours(startParts(next));
         }}
         error={errors['productId']}
       >
@@ -353,7 +361,23 @@ export function StudioPrintForm({
         onChange={(e) => setQuantity(e.currentTarget.value)}
         error={errors['quantity']}
       />
-      {product && product.colours.length > 0 && (
+      {parts.map((part) => (
+        <div key={part.name} className="sm:col-span-2 lg:col-span-3">
+          <input type="hidden" name="part" value={part.name} />
+          <ColourChoice
+            name="partColour"
+            legend={`${part.name} part`}
+            colours={product?.colours ?? []}
+            value={partColours[part.name] ?? ''}
+            onChange={(c) =>
+              setPartColours((all) => ({ ...all, [part.name]: c }))
+            }
+            allowAny={false}
+            allowOther={false}
+          />
+        </div>
+      ))}
+      {product && product.colours.length > 0 && parts.length === 0 && (
         <div className="sm:col-span-2 lg:col-span-3">
           <ColourChoice
             colours={product.colours}
@@ -423,8 +447,12 @@ export function StudioPrintForm({
         {q > 0 && product ? (
           <>
             <strong>−{grams(g)}</strong> of {product.materialCode}{' '}
-            {colour || ''} · about <strong>{usd(cost)}</strong> with machine
-            time
+            {parts.length > 0
+              ? parts
+                  .map((p) => `${p.name}: ${partColours[p.name] ?? ''}`)
+                  .join(', ')
+              : colour || ''}{' '}
+            · about <strong>{usd(cost)}</strong> with machine time
             {product.sizes.length > 1 &&
               ' (in its first size; others are worked out when saved)'}
             {failed && ' · counted as lost'}

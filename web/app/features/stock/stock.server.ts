@@ -118,6 +118,11 @@ export async function studioPrint(
       productId: text(form, 'productId'),
       size: text(form, 'size'),
       colour: text(form, 'colour'),
+      // A recoloured piece: each part with the colour it was printed in.
+      parts: form.getAll('part').map((part, i) => ({
+        part: String(part),
+        colour: String(form.getAll('partColour')[i] ?? ''),
+      })),
       quantity: text(form, 'quantity'),
       progressPercent: failed ? text(form, 'progressPercent') : undefined,
       toShelf: failed ? undefined : form.get('toShelf') === 'on',

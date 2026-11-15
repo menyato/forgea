@@ -32,6 +32,7 @@ import {
   MONEY_PATTERN,
   VENDOR_PURCHASE_LINES_MAX,
   ORDER_NUMBER_PATTERN,
+  PRODUCT_PART_NAME_MAX_LENGTH,
   STOCK_COLOUR_MAX_LENGTH,
   STOCK_GRAMS_MAX,
   STOCK_MOVEMENT_SORTS,
@@ -288,6 +289,20 @@ export class VendorPurchaseDto {
  * failed: the product, its size and colour as the shop offers them, how many. The grams and
  * cost come from the product's own figures; a failure counts only how far it got.
  */
+/** One recoloured part of a piece and the colour it was printed in. */
+class PartColourDto {
+  @Trim()
+  @IsString()
+  @MaxLength(PRODUCT_PART_NAME_MAX_LENGTH)
+  part!: string;
+
+  @Trim()
+  @IsString({ message: 'Choose the colour each part was printed in' })
+  @MinLength(1, { message: 'Choose the colour each part was printed in' })
+  @MaxLength(STOCK_COLOUR_MAX_LENGTH)
+  colour!: string;
+}
+
 export class StudioPrintDto {
   /** The form's one-time key: sent twice, it is recorded once. */
   @IsOptional()
@@ -309,6 +324,14 @@ export class StudioPrintDto {
   @IsString()
   @MaxLength(STOCK_COLOUR_MAX_LENGTH)
   colour?: string;
+
+  /** A piece whose parts customers recolour: the colour each part was printed in. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => PartColourDto)
+  parts?: PartColourDto[];
 
   @Type(() => Number)
   @IsInt({ message: 'Enter how many' })

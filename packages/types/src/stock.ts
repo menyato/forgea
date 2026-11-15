@@ -111,6 +111,11 @@ export interface StockPrintable {
   sizes: string[];
   /** The colours it is offered in (labels), with swatches. */
   colours: { label: string; swatchHex: string | null }[];
+  /**
+   * Parts customers recolour (empty when none): each is printed in one of `colours`, starting in
+   * the colour the shop starts it in.
+   */
+  parts: { name: string; startsAs: string }[];
   /** Grams and cost of one, default size and colour: the form's preview. */
   gramsPerUnit: string;
   unitCost: string;

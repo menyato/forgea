@@ -394,13 +394,23 @@ export class StockRepository {
           },
         },
         // Parts customers recolour: the piece is printed in one of the group's colours.
-        colours: { where: { part: { not: null } }, select: { part: true } },
+        colours: {
+          where: { part: { not: null } },
+          select: {
+            part: true,
+            colour: true,
+            hex: true,
+            stockItemId: true,
+            startsAs: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
         partColourGroup: {
           select: {
             name: true,
             values: {
               where: { active: true },
-              select: { label: true, swatchHex: true },
+              select: { label: true, swatchHex: true, stockItemId: true },
               orderBy: { sortOrder: 'asc' },
             },
           },

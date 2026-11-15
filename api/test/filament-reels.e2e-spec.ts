@@ -251,6 +251,32 @@ describe('Filament reels: own price, assigned to colours (e2e)', () => {
         .body as StockPrintable[]
     ).find((p) => p.id === product.id)!;
     expect(printable.colours.map((c) => c.label)).toEqual(['Beige', 'Pink']);
+    // Each part gets its own colour on the form, starting as the shop starts it.
+    expect(printable.parts).toEqual([{ name: 'Stand', startsAs: 'Pink' }]);
+    await as(admin.cookie)
+      .post('/stock/studio-prints', {
+        productId: product.id,
+        parts: [{ part: 'Base', colour: 'Beige' }],
+        quantity: 1,
+      })
+      .expect(400);
+    await as(admin.cookie)
+      .post('/stock/studio-prints', {
+        productId: product.id,
+        parts: [{ part: 'Stand', colour: 'Teal' }],
+        quantity: 1,
+      })
+      .expect(400);
+    await as(admin.cookie)
+      .post('/stock/studio-prints', {
+        productId: product.id,
+        parts: [{ part: 'Stand', colour: 'Beige' }],
+        quantity: 1,
+      })
+      .expect(200);
+    expect((await shelf()).find((i) => i.id === beige.id)!.stockGrams).toBe(
+      1000 - 100,
+    );
 
     await as(admin.cookie)
       .post('/stock/studio-prints', {
@@ -261,7 +287,7 @@ describe('Filament reels: own price, assigned to colours (e2e)', () => {
       })
       .expect(200);
     expect((await shelf()).find((i) => i.id === beige.id)!.stockGrams).toBe(
-      1000 - 100,
+      1000 - 200,
     );
   });
 

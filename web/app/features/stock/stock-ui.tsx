@@ -151,11 +151,16 @@ export function ColourChoice({
   allowAny = true,
   allowOther = true,
   pickLook = false,
+  name = 'colour',
+  legend = 'Colour',
   error,
 }: {
   colours: readonly Colour[];
   value: string;
   onChange: (colour: string) => void;
+  /** The field's name and heading: several on one form (a piece's parts) each have their own. */
+  name?: string;
+  legend?: string;
   allowAny?: boolean;
   allowOther?: boolean;
   /** Also how the colour looks (RGB), sent as `hex`: a new or special colour gets its own. */
@@ -166,11 +171,11 @@ export function ColourChoice({
   const swatch = colours.find((c) => c.label === value)?.swatchHex ?? null;
   return (
     <fieldset className="grid min-w-0 gap-2">
-      <legend className="mb-1 text-sm font-medium">Colour</legend>
-      <input type="hidden" name="colour" value={value} />
+      <legend className="mb-1 text-sm font-medium">{legend}</legend>
+      <input type="hidden" name={name} value={value} />
       <div
         role="radiogroup"
-        aria-label="Colour"
+        aria-label={legend}
         className="flex flex-wrap gap-2"
       >
         {allowAny && (

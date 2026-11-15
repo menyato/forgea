@@ -30,6 +30,7 @@ import type {
   StockMovementListQuery,
   StudioPrintDto,
 } from '@forgea/validation';
+import { startingChoice } from '@forgea/types';
 import { toPage } from '../common/pagination/keyset.js';
 import { claimRequestKey } from '../common/request-key.js';
 import { Purchases } from '../accounting/purchases.js';
@@ -265,6 +266,7 @@ export class StockService {
             label,
             swatchHex,
           })),
+          parts: partsOf(p),
           gramsPerUnit: one.gramsPerUnit,
           unitCost: one.unitCost,
         },
@@ -290,18 +292,34 @@ export class StockService {
       : undefined;
     if (dto.colour && !colour)
       throw new BadRequestException('Choose one of its colours');
-    if (!dto.colour && colours.length > 0)
+    // Each recoloured part in the colour it was printed in (all of them, each once).
+    const partNames = partsOf(product).map((p) => p.name);
+    if (dto.parts?.length) {
+      const names = dto.parts.map((p) => p.part);
+      if (
+        partNames.length === 0 ||
+        names.length !== partNames.length ||
+        new Set(names).size !== names.length ||
+        !partNames.every((n) => names.includes(n))
+      )
+        throw new BadRequestException('Choose a colour for each of its parts');
+      if (!dto.parts.every((p) => colours.some((c) => c.label === p.colour)))
+        throw new BadRequestException('Choose one of its colours');
+    }
+    if (!dto.colour && !dto.parts?.length && colours.length > 0)
       throw new BadRequestException('Choose the colour it was printed in');
     const sizes = product.sizes.map(sizeLabel);
     if (dto.size && !sizes.includes(dto.size))
       throw new BadRequestException('Choose one of its sizes');
     const options: ChosenOption[] = [
-      // A recoloured piece: every part the customer would choose is printed in that colour.
-      ...(colour
-        ? colour.parts.length > 0
-          ? colour.parts.map((part) => ({ group: part, value: colour.label }))
-          : [{ group: colour.group, value: colour.label }]
-        : []),
+      // A recoloured piece: each part in its own colour, or every part in the one colour.
+      ...(dto.parts?.length
+        ? dto.parts.map((p) => ({ group: p.part, value: p.colour }))
+        : colour
+          ? colour.parts.length > 0
+            ? colour.parts.map((part) => ({ group: part, value: colour.label }))
+            : [{ group: colour.group, value: colour.label }]
+          : []),
       ...(dto.size ? [{ group: 'Size', value: dto.size }] : []),
     ];
     const line = { productId: product.id, options };
@@ -572,6 +590,34 @@ function coloursOf(p: {
           }));
   const seen = new Set<string>();
   return all.filter((c) => !seen.has(c.label) && seen.add(c.label));
+}
+
+/** A product's recoloured parts (once each, in the file's order) and the colour each starts in. */
+function partsOf(p: {
+  colours: {
+    part: string | null;
+    colour: string;
+    hex: string;
+    stockItemId: string | null;
+    startsAs: string | null;
+  }[];
+  partColourGroup: {
+    values: {
+      label: string;
+      swatchHex: string | null;
+      stockItemId: string | null;
+    }[];
+  } | null;
+}): { name: string; startsAs: string }[] {
+  const group = p.partColourGroup;
+  if (!group || group.values.length === 0) return [];
+  const seen = new Set<string>();
+  return p.colours.flatMap((row) => {
+    if (!row.part || seen.has(row.part)) return [];
+    seen.add(row.part);
+    const start = startingChoice(group.values, row) ?? group.values[0]!;
+    return [{ name: row.part, startsAs: start.label }];
+  });
 }
 
 function toMovementView(m: MovementRow): StockMovementView {
