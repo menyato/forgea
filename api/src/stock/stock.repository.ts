@@ -61,6 +61,8 @@ export interface NewMovement {
   quantity?: number | null;
   journalEntryId?: string | null;
   note?: string | null;
+  /** The print it went into (the "Where it is" board). */
+  pieceId?: string | null;
   createdById?: string | null;
 }
 
@@ -159,6 +161,7 @@ export class StockRepository {
         quantity: m.quantity ?? null,
         journalEntryId: m.journalEntryId ?? null,
         note: m.note ?? null,
+        pieceId: m.pieceId ?? null,
         createdById: m.createdById ?? null,
       });
     }

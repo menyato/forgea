@@ -9,6 +9,7 @@ import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { ShownColours } from '~/features/admin/shown-colours';
 import { ModelThumbnail } from '~/features/model-viewer/model-thumbnail';
+import { studioToday } from '~/lib/studio-time';
 import type { SaveResult } from '~/features/admin/staff.server';
 import {
   Chip,
@@ -455,6 +456,23 @@ export function StudioPrintForm({
           />
         </div>
       )}
+      {!failed && (
+        <div className="sm:col-span-2 lg:col-span-3">
+          <CheckboxField
+            label="Still printing"
+            name="printing"
+            hint="It waits on the Where it is board as Printing; its filament comes off the shelf when you mark it done there"
+          />
+        </div>
+      )}
+      <Field
+        label="Printed on"
+        name="printedOn"
+        type="date"
+        defaultValue={studioToday()}
+        hint="Today, or the day it really came off the printer"
+        error={errors['printedOn']}
+      />
       <Summary>
         {q > 0 && product ? (
           <>

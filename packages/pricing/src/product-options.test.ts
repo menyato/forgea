@@ -127,6 +127,16 @@ describe('configuredUnitCost', () => {
       configuredUnitCost(calculator, { ...base, wasteIncluded: true }, [large]),
     ).toMatchObject({ cost: '17.50' });
   });
+
+  it("counts the product's extra parts once a piece, whatever the size or options", () => {
+    // $19 as above + a $0.40 key ring (not scaled by the bigger size).
+    expect(
+      configuredUnitCost(calculator, { ...base, extraCost: '0.40' }, [
+        large,
+        silk,
+      ]),
+    ).toMatchObject({ cost: '19.40' });
+  });
 });
 
 describe('overriddenUnitPrice', () => {

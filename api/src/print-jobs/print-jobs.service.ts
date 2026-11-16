@@ -20,6 +20,7 @@ import type {
   UpdatePrintJobDto,
 } from '@forgea/validation';
 import { toPage } from '../common/pagination/keyset.js';
+import { PiecesRepository } from '../pieces/pieces.repository.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrintJobStatus } from '../generated/prisma/enums.js';
@@ -57,6 +58,7 @@ export class PrintJobsService {
     private readonly calendar: GoogleCalendar,
     private readonly estimator: ProductionEstimator,
     private readonly prisma: PrismaService,
+    private readonly board: PiecesRepository,
   ) {}
 
   async list(query: PrintJobListQuery): Promise<Page<PrintJobListItem>> {
@@ -238,6 +240,9 @@ export class PrintJobsService {
       throw new ConflictException(
         'Someone else just changed this job. Reload and try again.',
       );
+    // An order line off the printer goes on the "Where it is" board (once per line).
+    if (data.status === PrintJobStatus.DONE && job.orderItemId)
+      await this.board.forOrderLine(job.orderItemId);
     return toItem(await this.syncCalendar(updated));
   }
 

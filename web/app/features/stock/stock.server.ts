@@ -126,6 +126,9 @@ export async function studioPrint(
       quantity: text(form, 'quantity'),
       progressPercent: failed ? text(form, 'progressPercent') : undefined,
       toShelf: failed ? undefined : form.get('toShelf') === 'on',
+      // Still on the printer: it waits on the "Where it is" board.
+      printing: failed ? undefined : form.get('printing') === 'on',
+      printedOn: text(form, 'printedOn'),
       note: text(form, 'note'),
       requestKey: text(form, 'requestKey'),
     },

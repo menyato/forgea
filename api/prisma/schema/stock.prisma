@@ -25,12 +25,12 @@ model StockItem {
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
-  movements StockMovement[]
+  movements      StockMovement[]
   /// Product colours printed from this filament.
   productColours ProductColour[]
   /// The shop's colours printed from this filament.
   optionValues   OptionValue[]
-  printJobs PrintJob[]
+  printJobs      PrintJob[]
 
   @@unique([materialId, colour])
   @@map("stock_items")
@@ -82,6 +82,9 @@ model StockMovement {
   journalEntryId String?           @db.Uuid
   journalEntry   JournalEntry?     @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
   note           String?
+  /// The print it went into (studio and failed prints recorded since the "Where it is" board).
+  pieceId        String?           @db.Uuid
+  piece          Piece?            @relation(fields: [pieceId], references: [id], onDelete: Restrict)
   createdById    String?           @db.Uuid
   createdBy      User?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt      DateTime          @default(now()) @db.Timestamptz(3)

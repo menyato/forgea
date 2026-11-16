@@ -1,0 +1,71 @@
+/// Where a printed piece is: from the printer to the lab, the shop, someone's hands, given or sold.
+enum PieceStage {
+  /// On the printer now: its filament comes off the shelf when it is done.
+  PRINTING
+  IN_LAB
+  /// In the shop: on display or for sale.
+  IN_SHOP
+  /// Lent or left with someone (`holder`), still the studio's.
+  WITH_SOMEONE
+  GIVEN
+  SOLD
+  /// Came out wrong (its filament counted as lost).
+  FAILED
+}
+
+/// One print: what came off the printer (a studio print, a failed print, an order line's runs, or
+/// a piece added by hand), when it was printed, and where it is now. The "Where it is" board.
+model Piece {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  name        String
+  /// The catalog product, when it is one.
+  productId   String?    @db.Uuid
+  product     Product?   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// An order line's print: once per line.
+  orderItemId String?    @unique @db.Uuid
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  quantity    Int        @default(1)
+  stage       PieceStage
+  /// Who has it (with someone, given to, sold to): a name, and their account when they have one
+  /// (a customer, or someone of the team such as the photographer).
+  holder      String?
+  holderId    String?    @db.Uuid
+  holderUser  User?      @relation("PieceHolder", fields: [holderId], references: [id], onDelete: Restrict)
+  note        String?
+  /// The day it was printed (edited by the team; a date at the studio's midnight, UTC).
+  printedAt   DateTime   @db.Timestamptz(3)
+  /// The filament it took and what it cost to make (filament and machine), when recorded.
+  grams       Int?
+  cost        Decimal?   @db.Decimal(10, 2)
+  /// PRINTING: what was started (the studio print to record when it is done).
+  plan        Json?
+  createdById String?    @db.Uuid
+  createdBy   User?      @relation("PieceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  moves          PieceMove[]
+  stockMovements StockMovement[]
+
+  @@index([printedAt])
+  @@index([stage])
+  @@map("pieces")
+}
+
+/// Append-only: every move of a piece (its stage and who has it), who moved it and when.
+model PieceMove {
+  id         String     @id @default(uuid(7)) @db.Uuid
+  pieceId    String     @db.Uuid
+  piece      Piece      @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  stage      PieceStage
+  holder     String?
+  holderId   String?    @db.Uuid
+  holderUser User?      @relation("PieceMoveHolder", fields: [holderId], references: [id], onDelete: Restrict)
+  note       String?
+  byId       String?    @db.Uuid
+  by         User?      @relation("PieceMover", fields: [byId], references: [id], onDelete: Restrict)
+  at         DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([pieceId, at])
+  @@map("piece_moves")
+}

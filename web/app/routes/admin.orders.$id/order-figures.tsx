@@ -140,6 +140,24 @@ export function OrderFigures({
               ))}
             </tbody>
           </table>
+          {production.taken.length === 0 && production.shelf.length > 0 && (
+            <ul aria-label="On the shelf" className="mt-3 grid gap-1 text-sm">
+              {production.shelf.map((s) => (
+                <li
+                  key={`${s.material} ${s.colour}`}
+                  className={s.short ? 'text-danger' : 'text-text-muted'}
+                >
+                  {s.short ? '⚠ ' : '✓ '}
+                  {s.material} {s.colour}: needs {s.needed} g,{' '}
+                  {s.onShelf === null
+                    ? 'no reel of it on the shelf: buy it or link the colour to a reel you have'
+                    : s.short
+                      ? `only ${s.onShelf} g left: not enough`
+                      : `${s.onShelf} g on the shelf`}
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="mt-3 text-sm text-text-muted">
             {production.taken.length > 0
               ? `Taken from stock: ${production.taken

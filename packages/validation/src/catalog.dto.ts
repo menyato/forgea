@@ -297,6 +297,18 @@ export class ProductPrintFileDto {
 /** The owner's own price, in place of the calculated one (USD, above 0). */
 const PRICE_OVERRIDE_MESSAGE = { message: 'Enter your price, e.g. 25.00' };
 
+/** Something else one piece costs to make (a key ring, a lamp's wiring), USD. */
+export class ProductExtraCostDto {
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Name the extra cost, e.g. Key ring' })
+  @MaxLength(80)
+  label!: string;
+
+  @Matches(MONEY_PATTERN, { message: 'Enter the amount, e.g. 0.15' })
+  amount!: string;
+}
+
 export class SaveProductDto {
   @Trim()
   @Matches(SLUG_PATTERN, { message: SLUG_MESSAGE })
@@ -416,6 +428,14 @@ export class SaveProductDto {
   @Type(() => ProductColourDto)
   colours: ProductColourDto[] = [];
 
+  /** What else one piece costs (parts besides the print): pricing.manage only. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ProductExtraCostDto)
+  extraCosts: ProductExtraCostDto[] = [];
+
   /** Its sliced print files (their total is its grams, time and colours); none: its model. */
   @IsArray()
   @ArrayMaxSize(PRODUCT_PRINT_FILES_MAX)
@@ -487,6 +507,14 @@ export class PricePreviewDto {
     message: 'Choose a percentage or a fixed amount',
   })
   profitKind?: ProfitKind;
+
+  /** The product's extra costs (one piece), added to its cost. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ProductExtraCostDto)
+  extraCosts?: ProductExtraCostDto[];
 
   @ValidateIf((o: PricePreviewDto) => o.profitKind !== undefined)
   @Matches(MONEY_PATTERN, {

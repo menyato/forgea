@@ -61,6 +61,10 @@ model User {
   savedThemes         SavedTheme[]
   stockMovements      StockMovement[]
   readyPieceMovements ReadyPieceMovement[]
+  piecesRecorded      Piece[]                      @relation("PieceCreator")
+  pieceMoves          PieceMove[]                  @relation("PieceMover")
+  piecesHeld          Piece[]                      @relation("PieceHolder")
+  pieceMovesHeld      PieceMove[]                  @relation("PieceMoveHolder")
 
   @@map("users")
 }

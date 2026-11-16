@@ -27,9 +27,14 @@ export function PricePanel({
   onProfit,
   priceOverride,
   onPriceOverride,
+  extraCosts,
+  onExtraCosts,
   shopProfit,
   errors,
 }: {
+  /** What else one piece costs (a key ring, a lamp's wiring): pricing.manage only. */
+  extraCosts: readonly { label: string; amount: string }[];
+  onExtraCosts: (next: { label: string; amount: string }[]) => void;
   materialId: string;
   grams: string;
   printHours: string;
@@ -74,6 +79,14 @@ export function PricePanel({
       : {}),
     ...rule,
     ...(priceOverride ? { priceOverride } : {}),
+    // Only complete rows price anything (a row being typed waits).
+    ...(extraCosts.some((e) => e.label.trim() && e.amount)
+      ? {
+          extraCosts: JSON.stringify(
+            extraCosts.filter((e) => e.label.trim() && e.amount),
+          ),
+        }
+      : {}),
   });
   // Re-priced a moment after the last change.
   useEffect(() => {
@@ -119,6 +132,14 @@ export function PricePanel({
         mayPrice={shopProfit !== null}
         error={errors['priceOverride']}
       />
+      <ExtraCosts
+        value={extraCosts}
+        onChange={onExtraCosts}
+        mayPrice={shopProfit !== null}
+        error={
+          Object.entries(errors).find(([k]) => k.startsWith('extraCosts'))?.[1]
+        }
+      />
       <div aria-live="polite" className="grid gap-1 text-sm">
         {b ? (
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
@@ -139,6 +160,9 @@ export function PricePanel({
                 ],
                 ['Labour', b.labour],
                 ['Packaging', b.packaging],
+                ...(Number(b.extras) > 0
+                  ? ([['Extra parts', b.extras]] as const)
+                  : []),
               ] as const
             ).map(([label, amount]) => (
               <div key={label} className="contents">
@@ -191,6 +215,92 @@ export function PricePanel({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * What else one piece costs besides the print (a key ring, a lamp's cable and bulb holder):
+ * added to its cost, so the profit rule applies to it too. Only whoever manages pricing may
+ * change them; anyone else sees them and keeps them as they are.
+ */
+function ExtraCosts({
+  value,
+  onChange,
+  mayPrice,
+  error,
+}: {
+  value: readonly { label: string; amount: string }[];
+  onChange: (next: { label: string; amount: string }[]) => void;
+  mayPrice: boolean;
+  error: string | undefined;
+}) {
+  const rows = value.filter((e) => e.label.trim() && e.amount);
+  const field = (
+    <input type="hidden" name="extraCosts" value={JSON.stringify(rows)} />
+  );
+  if (!mayPrice)
+    return rows.length > 0 ? (
+      <p className="text-sm text-text-muted">
+        Extra costs: {rows.map((e) => `${e.label} $${e.amount}`).join(', ')}{' '}
+        (set by whoever manages pricing).
+        {field}
+      </p>
+    ) : null;
+  const set = (i: number, next: { label: string; amount: string }) =>
+    onChange(value.map((e, j) => (j === i ? next : e)));
+  return (
+    <fieldset className="grid min-w-0 gap-2">
+      <legend className="mb-1 text-sm font-medium">
+        Extra costs for one piece
+      </legend>
+      {field}
+      {value.map((e, i) => (
+        <div
+          key={i}
+          className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-end gap-2"
+        >
+          <Field
+            label={`Extra cost ${i + 1}`}
+            name={`extra-cost-label-${i}`}
+            autoComplete="off"
+            placeholder="e.g. Key ring"
+            value={e.label}
+            onChange={(ev) => set(i, { ...e, label: ev.currentTarget.value })}
+          />
+          <Field
+            label="USD"
+            name={`extra-cost-amount-${i}`}
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="0.15"
+            value={e.amount}
+            onChange={(ev) =>
+              set(i, { ...e, amount: ev.currentTarget.value.trim() })
+            }
+          />
+          <button
+            type="button"
+            className="mb-2 text-sm text-text-muted hover:text-danger"
+            aria-label={`Remove extra cost ${i + 1}`}
+            onClick={() => onChange(value.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="justify-self-start text-sm underline underline-offset-4"
+        onClick={() => onChange([...value, { label: '', amount: '' }])}
+      >
+        Add an extra cost
+      </button>
+      <p className="text-xs text-text-muted">
+        Parts besides the print, e.g. a key ring or a lamp&apos;s wiring: added
+        to what it costs you, so your profit applies to them too.
+      </p>
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </fieldset>
   );
 }
 

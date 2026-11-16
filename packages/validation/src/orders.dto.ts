@@ -23,3 +23,11 @@ export class ChangeOrderStatusDto {
 
 /** "My Orders": newest first, paged. */
 export class MyOrdersQuery extends CursorPageQuery {}
+
+/** Removing a test order: its number typed again, as a confirmation. */
+export class RemoveTestOrderDto {
+  @Trim()
+  @IsString()
+  @MaxLength(40)
+  confirm!: string;
+}

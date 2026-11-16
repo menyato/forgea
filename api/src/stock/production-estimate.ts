@@ -17,6 +17,8 @@ interface CatalogProduct {
   materialId: string;
   /** Grams and time are its sliced 3MF's own: no purge waste on top. */
   slicedFile: boolean;
+  /** Its extra parts (a key ring, a lamp's wiring), USD per piece. */
+  extraCost: string;
   /**
    * Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. A named
    * part prints in the colour the order chose for it ("Body: Copper"), else in `colour`.
@@ -185,6 +187,7 @@ export function estimateItem(
         printHours: size?.printHours ?? product.printHours,
         pricePerGram,
         wasteIncluded: product.slicedFile,
+        extraCost: product.extraCost,
       },
       effects,
     );

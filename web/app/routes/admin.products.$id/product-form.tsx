@@ -99,6 +99,9 @@ export function ProductForm({
   const [priceOverride, setPriceOverride] = useState(
     product?.priceOverride ?? '',
   );
+  const [extraCosts, setExtraCosts] = useState<
+    { label: string; amount: string }[]
+  >(product?.extraCosts ?? []);
   const [colours, setColoursOnly] = useState<ProductColourView[]>(
     product?.colours ?? [],
   );
@@ -420,6 +423,8 @@ export function ProductForm({
             onProfit={setProfit}
             priceOverride={priceOverride}
             onPriceOverride={setPriceOverride}
+            extraCosts={extraCosts}
+            onExtraCosts={setExtraCosts}
             shopProfit={shopProfit}
             errors={errors}
           />

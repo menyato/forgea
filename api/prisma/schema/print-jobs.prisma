@@ -54,7 +54,7 @@ model PrintJob {
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
 
-  stockMovements StockMovement[]
+  stockMovements      StockMovement[]
   readyPieceMovements ReadyPieceMovement[]
 
   @@index([status, id])

@@ -344,6 +344,16 @@ export class StudioPrintDto {
   @IsBoolean()
   toShelf?: boolean;
 
+  /** Still on the printer: it waits on the board, its filament taken when it is done. */
+  @IsOptional()
+  @IsBoolean()
+  printing?: boolean;
+
+  /** The studio day it was printed (default: now). */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Enter a date' })
+  printedOn?: string;
+
   /** A failure: how far it printed before it failed. */
   @IsOptional()
   @Type(() => Number)

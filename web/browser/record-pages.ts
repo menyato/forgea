@@ -20,6 +20,7 @@ const LISTS = [
   '/admin/team',
   '/admin/stock?filter=',
   '/admin/production?view=list&filter=',
+  '/admin/pieces?view=list',
   '/admin/accounting?filter=',
   '/admin/accounting/books?filter=',
   '/admin/audit',

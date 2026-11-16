@@ -12,6 +12,7 @@ export {
   OptionKind,
   OrderStatus,
   PaymentMethod,
+  PieceStage,
   PrintJobStatus,
   ProfitKind,
   Role,
@@ -117,3 +118,15 @@ export {
   READY_PIECE_TAKE_KINDS,
   STOCK_MOVEMENT_LABELS,
 } from './stock.js';
+export {
+  PIECE_HELD_STAGES,
+  PIECE_STAGE_LABELS,
+  PIECE_STAGES,
+} from './pieces.js';
+export type {
+  PieceCounts,
+  PieceDetail,
+  PieceHolderAccount,
+  PieceMoveView,
+  PieceView,
+} from './pieces.js';

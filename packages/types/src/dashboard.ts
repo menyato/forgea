@@ -187,6 +187,17 @@ export interface OrderProduction {
   printHours: string;
   /** Filament taken from stock for it (less what was returned), per reel. */
   taken: { material: string; colour: string; grams: number }[];
+  /**
+   * What its products need, per filament, against what the shelf holds now: `onShelf` null
+   * when no reel of that material and colour is on the shelf; `short` when it holds less.
+   */
+  shelf: {
+    material: string;
+    colour: string;
+    needed: number;
+    onShelf: number | null;
+    short: boolean;
+  }[];
   money: {
     /** The lines' total without tax. */
     revenue: Money;
@@ -361,4 +372,17 @@ export interface DeletionUse {
   count: number;
   /** "order lines", "products". */
   what: string;
+}
+
+/** GET /orders/:id/removal: what removing a test order takes away, and what stops it. */
+export interface OrderRemovalPreview {
+  orderNumber: string;
+  lines: number;
+  printRuns: number;
+  stockMovements: number;
+  pieces: number;
+  /** Its invoices, credit notes and the payments matched to them ("INV/2026/00002"). */
+  documents: string[];
+  /** Why it can't be removed; empty when it can. */
+  blockedBy: string[];
 }

@@ -81,6 +81,8 @@ export function configureUnit(
       printHours: hours.round(3).toString(),
       pricePerGram: pricePerGram.toString(),
       ...(base.wasteIncluded ? { wasteIncluded: true } : {}),
+      // The product's extra parts: one set per piece, whatever the size or options.
+      ...(base.extraCost !== undefined ? { extraCost: base.extraCost } : {}),
     },
     extraPrice: money(extra),
   };

@@ -61,15 +61,15 @@ model Order {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  items          OrderItem[]
-  statusHistory  OrderStatusHistory[]
-  printJobs      PrintJob[]
+  items               OrderItem[]
+  statusHistory       OrderStatusHistory[]
+  printJobs           PrintJob[]
   readyPieceMovements ReadyPieceMovement[]
   /// Set when the order was made by accepting a custom request's quote.
-  customRequest  CustomRequest?
+  customRequest       CustomRequest?
   /// Set when the order was made by confirming a quotation.
-  quotation      Quotation?
-  journalEntries JournalEntry[]
+  quotation           Quotation?
+  journalEntries      JournalEntry[]
 
   @@index([userId, id])
   @@index([status, id])
@@ -102,6 +102,7 @@ model OrderItem {
 
   stockMovements StockMovement[]
   printJobs      PrintJob[]
+  piece          Piece?
 
   @@index([orderId])
   @@map("order_items")

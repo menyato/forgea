@@ -150,6 +150,8 @@ export interface AdminProduct {
   profit: { kind: ProfitKind; value: string } | null;
   /** The owner's own price in place of the calculated one; null = calculated. */
   priceOverride: Money | null;
+  /** What else one piece costs (a key ring, a lamp's wiring), added to its cost. */
+  extraCosts: { label: string; amount: Money }[];
   /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
   colours: ProductColourView[];
   /** The colours customers recolour its named parts in (an option group); null = none. */
@@ -291,6 +293,8 @@ export interface PricePreview {
     wasteAndFailures: Money;
     labour: Money;
     packaging: Money;
+    /** The product's extra costs (parts besides the print). */
+    extras: Money;
     /** Everything above: what one piece costs to make. */
     cost: Money;
     profit: Money;

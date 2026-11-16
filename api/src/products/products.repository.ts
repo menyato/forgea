@@ -257,6 +257,7 @@ export class ProductsRepository {
         ...optionRows(dto),
         sizes: { create: dto.sizes.map(sizeRow) },
         colours: { create: dto.colours.map(colourRow) },
+        extraCosts: { create: dto.extraCosts.map(extraCostRow) },
       },
       include: withConfiguration,
     });
@@ -274,6 +275,7 @@ export class ProductsRepository {
       await tx.productOptionValue.deleteMany({ where: { productId: id } });
       await tx.productOptionGroup.deleteMany({ where: { productId: id } });
       await tx.productColour.deleteMany({ where: { productId: id } });
+      await tx.productExtraCost.deleteMany({ where: { productId: id } });
       // Sizes keep their ids (matched by name), so carts holding one still find it.
       const labels = dto.sizes.map((s) => s.label);
       await tx.productSize.deleteMany({
@@ -298,12 +300,18 @@ export class ProductsRepository {
           ...optionRows(dto),
           colours: { create: dto.colours.map(colourRow) },
           printFiles: { create: printFiles.map(printFileRow) },
+          extraCosts: { create: dto.extraCosts.map(extraCostRow) },
         },
         include: withConfiguration,
       });
     });
   }
 }
+
+const extraCostRow = (
+  e: SaveProductDto['extraCosts'][number],
+  sortOrder: number,
+) => ({ label: e.label, amount: e.amount, sortOrder });
 
 const fields = (dto: SaveProductDto) => ({
   slug: dto.slug,

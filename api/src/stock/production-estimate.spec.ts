@@ -28,6 +28,7 @@ const catalog: Catalog = {
         printHours: '5',
         materialId: 'pla',
         slicedFile: false,
+        extraCost: '0.00',
         colours: [],
         partColourGroup: null,
         sizes: [
@@ -56,6 +57,7 @@ const catalog: Catalog = {
         printHours: '0',
         materialId: 'pla',
         slicedFile: false,
+        extraCost: '0.00',
         colours: [],
         partColourGroup: null,
         sizes: [],

@@ -55,6 +55,8 @@ difference is recorded with your note.
    the same reel, else the closest colour.
 5. **Price:** the panel shows cost (filament, printer wear, electricity, failures, labour,
    packaging), profit and the price. **Use my own price** to set yours: options still add to it.
+   **Add an extra cost** for parts besides the print (a key ring, a lamp's cable and bulb
+   holder): it counts in what one piece costs you, so your profit applies to it too.
 6. Leave **Visible in the shop** off until it is ready; a product not in the shop can still be
    sold on a quotation.
 
@@ -63,7 +65,9 @@ difference is recorded with your note.
 **Shop orders** arrive in Orders → **Orders**. Open one: the figures at the top show its
 filament, print time, cost to make and profit; the buttons under "Next step" move it on
 (Confirm → Start production → Ready → Delivered). **Start production** takes each colour's
-grams from its reel. The order page has a download for every sliced file.
+grams from its reel. The order page has a download for every sliced file. Before production,
+"What it takes to make" checks each filament against the shelf: **⚠** marks a colour with no
+reel (buy it, or link the shop colour to a reel you have) or with too little left.
 
 **A sale you make yourself** (a walk-in, WhatsApp, a client's piece): Sales → **Quotations** →
 New. Pick the product (hidden ones say "not in the shop") or write a free line; **Unit price**
@@ -97,6 +101,21 @@ from the request.
   what it took and what it cost.
 - **A print that failed:** Filament stock → **Failed print** (a product), or **Failed** on its
   print run: the filament is counted as lost.
+- **Printed on:** both forms take the day it really came off the printer (today by default).
+- **Still printing:** tick it and nothing comes off the shelf yet; the print waits on **Where
+  it is** as *Printing*. When it comes off, open it there: **It is done** takes its filament,
+  **Failed** (how far it got) counts it as lost.
+
+**Where it is** (Orders → Where it is) shows everything printed, as cards in columns:
+Printing, In the lab, In the shop, With someone, Given, Sold, Failed. Studio prints, failed
+prints and every order line whose print run is done arrive by themselves (a paid order's
+pieces as *Sold* to its customer). Drag a card to move it; *With someone*, *Given* and *Sold*
+open its page to say who, by name and, when they have one, their account (a customer, or the
+photographer or designer of the team): then the piece shows on their page too. The page also
+corrects its name, how many, the note (e.g. "1 black and white, 1 white and light brown") and
+the day it was printed. Filter by stage or by the days printed (this month, last month, any two
+days); the line above says how many pieces, grams and cost that is. Every move is kept with who
+made it, and an order's page shows where its pieces are.
 
 ## 6. Checking
 
@@ -121,6 +140,12 @@ keep, tick, Merge. Its orders, quotations, requests, leads, invoices and payment
 other's with their history, and the duplicate is removed. Studio work for itself goes on the
 studio's own customer, hello@forgea-lab.com. Orders, quotations and custom requests are never deleted:
 they are **cancelled**, so their history stays.
+
+**A test order that never happened** (admins only): at the bottom of its page, **Remove this
+test order** lists what goes with it (its lines, print runs, filament records, pieces, and its
+invoices, credit notes and the payments matched to them); type its number and press **Remove**.
+The shelf gets its grams back. It refuses an order made from a quotation or a custom request,
+or one whose payment also paid something else. Its document numbers are not reused.
 
 ## 8. Safety
 

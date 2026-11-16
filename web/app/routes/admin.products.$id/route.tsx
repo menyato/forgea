@@ -135,6 +135,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       colours: jsonField(form, 'colours') ?? undefined,
       modelFileKey: text(form, 'modelFileKey'),
       printFileKeys: jsonField(form, 'printFileKeys') ?? undefined,
+      extraCosts: jsonField(form, 'extraCosts') ?? undefined,
     });
     if (!parsed.ok) return data({ preview: null }, { status: 400 });
     const r = await api.post<PricePreview>(
@@ -235,6 +236,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
+      extraCosts: jsonField(form, 'extraCosts') ?? [],
     },
     async (dto) => {
       const r = isNew

@@ -16,7 +16,7 @@ import {
   type ProductOption,
   startingChoice,
 } from '@forgea/types';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { OptionKind, type ProfitKind } from '../generated/prisma/enums.js';
 
 /** Everything needed to show, configure and price a product. */
@@ -61,6 +61,7 @@ export const withConfiguration = {
     },
   },
   printFiles: { orderBy: { sortOrder: 'asc' } },
+  extraCosts: { orderBy: { sortOrder: 'asc' } },
   // Multi-colour products: the colours customers recolour named parts in.
   partColourGroup: {
     include: {
@@ -269,6 +270,7 @@ export class ProductConfigurator {
           configuration.base?.printHours ?? product.printHours.toString(),
         pricePerGram: filamentPricePerGram(product),
         wasteIncluded: product.slicedFile,
+        extraCost: extraCostOf(product),
       },
       configuration.effects,
       profitOf(product),
@@ -441,6 +443,7 @@ export function withPriceOverride(
     | 'profitValue'
     | 'slicedFile'
     | 'colours'
+    | 'extraCosts'
   >,
   calculated: string,
 ): string {
@@ -452,6 +455,7 @@ export function withPriceOverride(
       printHours: product.printHours.toString(),
       pricePerGram: filamentPricePerGram(product),
       wasteIncluded: product.slicedFile,
+      extraCost: extraCostOf(product),
     },
     [],
     profitOf(product),
@@ -491,4 +495,13 @@ export function profitOf(product: {
   return product.profitKind && product.profitValue !== null
     ? { kind: product.profitKind, value: product.profitValue.toString() }
     : null;
+}
+
+/** What one piece's extra parts cost (a key ring, a lamp's wiring), USD. */
+export function extraCostOf(product: {
+  extraCosts?: readonly { amount: { toString(): string } }[];
+}): string {
+  return (product.extraCosts ?? [])
+    .reduce((n, e) => n.plus(e.amount.toString()), new Prisma.Decimal(0))
+    .toFixed(2);
 }

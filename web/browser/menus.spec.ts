@@ -6,6 +6,8 @@ const LISTS = [
   '/admin/orders',
   '/admin/orders?view=kanban',
   '/admin/production',
+  '/admin/pieces',
+  '/admin/pieces?view=list',
   '/admin/production?view=list',
   '/admin/requests',
   '/admin/leads',

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module.js';
 import { DatabaseModule } from '../database/database.module.js';
+import { PiecesRepository } from '../pieces/pieces.repository.js';
 import { PricingModule } from '../pricing/pricing.module.js';
 import { OrderStock } from './order-stock.service.js';
 import { ProductionEstimator } from './production-estimator.js';
@@ -22,6 +23,7 @@ import { StockService } from './stock.service.js';
     OrderStock,
     ReadyPiecesRepository,
     ReadyPiecesService,
+    PiecesRepository,
   ],
   // Orders take their filament when they go into production; print jobs record failed
   // prints; materials record their opening stock; the business page estimates costs.
@@ -31,6 +33,7 @@ import { StockService } from './stock.service.js';
     StockService,
     ProductionEstimator,
     ReadyPiecesRepository,
+    PiecesRepository,
   ],
 })
 export class StockModule {}

@@ -29,7 +29,11 @@ export {
   CheckoutDto,
   UpdateCartItemDto,
 } from './checkout.dto.js';
-export { ChangeOrderStatusDto, MyOrdersQuery } from './orders.dto.js';
+export {
+  ChangeOrderStatusDto,
+  MyOrdersQuery,
+  RemoveTestOrderDto,
+} from './orders.dto.js';
 export { DeliveryAreasDto, UpdateStoreSettingsDto } from './settings.dto.js';
 export {
   AddTeamMemberDto,
@@ -128,3 +132,8 @@ export {
   TextDesignDto,
   UpdateFontDto,
 } from './text-studio.dto.js';
+export {
+  FinishPieceDto,
+  PieceListQuery,
+  UpdatePieceDto,
+} from './pieces.dto.js';

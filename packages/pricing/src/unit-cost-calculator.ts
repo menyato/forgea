@@ -43,6 +43,11 @@ export interface UnitCostInput {
    * tower and supports, so no purge waste is added on top.
    */
   wasteIncluded?: boolean | undefined;
+  /**
+   * What else one piece costs besides filament and machine (the product's extra costs: a key
+   * ring, a lamp's wiring), USD. Part of the cost, so the profit rule applies to it.
+   */
+  extraCost?: DecimalInput | undefined;
 }
 
 /** Every component as a 2-decimal string. `unitPrice` is computed from unrounded components. */
@@ -53,6 +58,8 @@ export interface UnitPriceBreakdown {
   failureAllowance: string;
   laborCost: string;
   packagingCost: string;
+  /** The product's own extra costs (parts besides the print). */
+  extraCost: string;
   /** What it costs the studio to make. */
   subtotal: string;
   /** What the studio earns on it, by the rule applied. */
@@ -68,7 +75,7 @@ export interface UnitPriceBreakdown {
  *   machineCost      = printHours × machineRate
  *   wasteCost        = (materialCost + machineCost) × purgeWaste%  (0 when wasteIncluded)
  *   failureAllowance = (materialCost + machineCost) × failureAllowance%
- *   subtotal         = material + machine + waste + failure + labor + packaging
+ *   subtotal         = material + machine + waste + failure + labor + packaging + extras
  *   profit           = subtotal × percent%  (PERCENT)  or  the amount  (FIXED)
  *   unitPrice        = subtotal + profit
  */
@@ -125,11 +132,16 @@ export class UnitCostCalculator {
       ? base.times(0)
       : percentOf(base, this.purgeWaste);
     const failureAllowance = percentOf(base, this.failureAllowance);
+    const extraCost = requireNonNegative(
+      toBig(input.extraCost ?? 0, 'extraCost'),
+      'extraCost',
+    );
     const subtotal = base
       .plus(wasteCost)
       .plus(failureAllowance)
       .plus(this.labor)
-      .plus(this.packaging);
+      .plus(this.packaging)
+      .plus(extraCost);
     const value = toBig(rule.value, 'profit');
     const profitAmount =
       rule.kind === 'PERCENT' ? percentOf(subtotal, value) : value;
@@ -141,6 +153,7 @@ export class UnitCostCalculator {
       failureAllowance: money(failureAllowance),
       laborCost: money(this.labor),
       packagingCost: money(this.packaging),
+      extraCost: money(extraCost),
       subtotal: money(subtotal),
       profit: money(profitAmount),
       profitRule: { kind: rule.kind, value: value.toString() },

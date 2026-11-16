@@ -2,18 +2,25 @@ import { randomUUID } from 'node:crypto';
 import {
   ORDER_STATUS_LABELS,
   type OrderProduction,
+  type OrderRemovalPreview,
   OrderStatus,
   type Page,
   PAYMENT_METHOD_LABELS,
+  PIECE_STAGE_LABELS,
+  type PieceView,
   type PrintJobListItem,
   type StaffOrder,
 } from '@forgea/types';
-import { ChangeOrderStatusDto, RecordPaymentDto } from '@forgea/validation';
-import { data, Link, useFetcher } from 'react-router';
+import {
+  ChangeOrderStatusDto,
+  RecordPaymentDto,
+  RemoveTestOrderDto,
+} from '@forgea/validation';
+import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { DesignLines } from '~/features/text-studio/design-lines';
-import { TextAreaField } from '~/components/ui/field';
+import { Field, TextAreaField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
@@ -28,7 +35,7 @@ import { ProductionPanel } from './production-panel';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [r, related, jobs, production] = await Promise.all([
+  const [r, related, jobs, production, removal] = await Promise.all([
     api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
     relatedOf(api, 'order', params.id),
     // Only for staff who run production (others get a 403 and no panel).
@@ -38,13 +45,25 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     api.get<OrderProduction>(
       `/orders/${encodeURIComponent(params.id)}/production`,
     ),
+    // Admins only (others get 403): what removing it as a test order would take away.
+    api.get<OrderRemovalPreview>(
+      `/orders/${encodeURIComponent(params.id)}/removal`,
+    ),
   ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
+  // Where its pieces are now (the "Where it is" board), for whoever sees the stock.
+  const pieces = await api.get<Page<PieceView>>(
+    `/pieces?limit=50&q=${encodeURIComponent(r.data.orderNumber)}`,
+  );
   return {
     order: r.data,
     related,
     jobs: jobs.ok ? jobs.data.items : null,
     production: production.ok ? production.data : null,
+    removal: removal.ok ? removal.data : null,
+    pieces: pieces.ok
+      ? pieces.data.items.filter((p) => p.orderNumber === r.data.orderNumber)
+      : null,
     // A fresh one-time key per load (after a save too): a payment sent twice counts once.
     requestKey: randomUUID(),
   };
@@ -56,6 +75,17 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
   const intent = form.get('intent');
   const orderPath = `/accounting/orders/${encodeURIComponent(params.id)}`;
+  // A test order removed entirely (admins only): back to the orders.
+  if (intent === 'remove-test') {
+    const result = await save(
+      RemoveTestOrderDto,
+      { confirm: text(form, 'confirm') },
+      (dto) => api.post(`/orders/${encodeURIComponent(params.id)}/remove`, dto),
+    );
+    if (result.data && 'ok' in result.data && result.data.ok)
+      throw redirect('/admin/orders?filter=');
+    return result;
+  }
   if (intent === 'post-invoice') {
     const invoiceId = text(form, 'invoiceId') ?? '';
     if (!/^[0-9a-f-]{36}$/.test(invoiceId))
@@ -114,6 +144,65 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       context
         .get(apiContext)
         .patch(`/orders/${encodeURIComponent(params.id)}/status`, dto),
+  );
+}
+
+/**
+ * Admins only: an order that never happened (a test) removed entirely, with its invoices,
+ * credit notes, the payments matched to them, its print runs and the filament they took. Says
+ * first what goes, and asks for the order number to be typed again.
+ */
+function RemoveTestOrder({ preview: r }: { preview: OrderRemovalPreview }) {
+  const fetcher = useFetcher<SaveResult>();
+  return (
+    <Panel title="Remove this test order">
+      <p className="text-sm text-text-muted">
+        Only for an order that never really happened. Real orders are cancelled,
+        never removed. This removes the order and everything it made:
+      </p>
+      <ul className="list-disc pl-5 text-sm">
+        <li>
+          {r.lines} line{r.lines === 1 ? '' : 's'}, {r.printRuns} print run
+          {r.printRuns === 1 ? '' : 's'}, {r.pieces} piece
+          {r.pieces === 1 ? '' : 's'} on the board
+        </li>
+        <li>
+          {r.stockMovements} filament record
+          {r.stockMovements === 1 ? '' : 's'} (the shelf gets its grams back)
+        </li>
+        <li>
+          {r.documents.length > 0
+            ? `Its documents: ${r.documents.join(', ')}`
+            : 'No invoices or payments'}
+        </li>
+      </ul>
+      {r.blockedBy.length > 0 ? (
+        <p className="text-sm text-danger">
+          It can&apos;t be removed: {r.blockedBy.join('; ')}.
+        </p>
+      ) : (
+        <fetcher.Form method="post" className="grid gap-3">
+          <input type="hidden" name="intent" value="remove-test" />
+          <Field
+            label={`Type ${r.orderNumber} to remove it`}
+            name="confirm"
+            autoComplete="off"
+            required
+            error={fetcher.data?.errors?.['confirm']}
+          />
+          <div className="flex items-center gap-3">
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={fetcher.state !== 'idle'}
+            >
+              Remove the test order
+            </Button>
+            <SaveStatus state={fetcher.state} result={fetcher.data} />
+          </div>
+        </fetcher.Form>
+      )}
+    </Panel>
   );
 }
 
@@ -361,6 +450,34 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
               orderId={o.id}
               total={o.total}
             />
+          )}
+          {loaderData.pieces && loaderData.pieces.length > 0 && (
+            <Panel title="Where its pieces are">
+              <ul className="grid gap-2 text-sm">
+                {loaderData.pieces.map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      to={`/admin/pieces/${p.id}`}
+                      className="font-semibold underline-offset-4 hover:underline"
+                    >
+                      {p.quantity} × {p.name}
+                    </Link>
+                    {' · '}
+                    {PIECE_STAGE_LABELS[p.stage]}
+                    {(p.holder || p.holderAccount) &&
+                      ` · ${p.holder ?? p.holderAccount?.name ?? p.holderAccount?.email}`}
+                    {p.note && (
+                      <span className="block text-text-muted">
+                        As printed: {p.note}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+          {loaderData.removal && (
+            <RemoveTestOrder preview={loaderData.removal} />
           )}
         </div>
 

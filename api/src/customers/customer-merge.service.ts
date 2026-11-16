@@ -96,6 +96,13 @@ export class CustomerMergeService {
             keep,
             old,
           );
+        // Pieces they hold (lent, given, sold to them), now and in each piece's history.
+        await tx.piece.updateMany({
+          where: { holderId: old },
+          data: { holderId: keep },
+        });
+        await tx.$executeRaw`
+          UPDATE "piece_moves" SET "holderId" = ${keep}::uuid WHERE "holderId" = ${old}::uuid`;
         await tx.upload.updateMany({
           where: { uploadedById: old },
           data: { uploadedById: keep },

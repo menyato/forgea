@@ -41,11 +41,33 @@ describe('UnitCostCalculator', () => {
       failureAllowance: '5.94',
       laborCost: '5.00',
       packagingCost: '3.00',
+      extraCost: '0.00',
       subtotal: '76.31',
       profit: '45.79',
       profitRule: { kind: 'PERCENT', value: '60' },
       unitPrice: '122.10',
     });
+  });
+
+  it("adds a product's extra parts to its cost, before the profit", () => {
+    // As above with a $2.50 key ring: subtotal 78.81, price 78.81 × 1.6 = 126.096 → 126.10
+    const result = new UnitCostCalculator(settings).price({
+      grams: '120',
+      printHours: '4.5',
+      pricePerGram: '0.12',
+      extraCost: '2.50',
+    });
+    expect(result.extraCost).toBe('2.50');
+    expect(result.subtotal).toBe('78.81');
+    expect(result.unitPrice).toBe('126.10');
+    expect(() =>
+      new UnitCostCalculator(settings).price({
+        grams: '1',
+        printHours: '1',
+        pricePerGram: '1',
+        extraCost: '-1',
+      }),
+    ).toThrow();
   });
 
   it("adds no purge waste to a slicer's grams: they already hold it", () => {

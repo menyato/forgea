@@ -42,6 +42,7 @@ import { RelatedModule } from './related/related.module.js';
 import { QuotationsModule } from './quotations/quotations.module.js';
 import { AccountingModule } from './accounting/accounting.module.js';
 import { StockModule } from './stock/stock.module.js';
+import { PiecesModule } from './pieces/pieces.module.js';
 import { TextStudioModule } from './text-studio/text-studio.module.js';
 import { DeletionsModule } from './deletions/deletions.module.js';
 import { InsightsModule } from './insights/insights.module.js';
@@ -81,6 +82,7 @@ import { InsightsModule } from './insights/insights.module.js';
     BackupsModule,
     AccountingModule,
     StockModule,
+    PiecesModule,
     TextStudioModule,
     InsightsModule,
     DeletionsModule,

@@ -45,6 +45,8 @@ export const INVOICE_SORTS = ['date', 'number', 'total', 'residual'] as const;
 export const INVOICE_FILTERS = ['draft', 'unpaid', 'paid', 'credit'] as const;
 export const ENTRY_SORTS = ['date', 'number'] as const;
 export const STOCK_MOVEMENT_SORTS = ['createdAt', 'grams'] as const;
+/** The "Where it is" list's sortable columns. */
+export const PIECE_SORTS = ['printedAt', 'name'] as const;
 
 /** "FG-" + 10 Crockford base-32 characters (no I, L, O or U). Also enforced by the database. */
 /** "FG-2026-0001" (the year, then a running count); older orders kept a random one. */

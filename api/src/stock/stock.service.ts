@@ -33,11 +33,14 @@ import type {
 import { shownColours, startingChoice } from '@forgea/types';
 import { toPage } from '../common/pagination/keyset.js';
 import { claimRequestKey } from '../common/request-key.js';
+import { studioDayStart } from '../common/studio-day.js';
+import { PiecesRepository } from '../pieces/pieces.repository.js';
 import { Purchases } from '../accounting/purchases.js';
 import { Prisma } from '../generated/prisma/client.js';
 import {
   ReadyPieceMovementKind,
   StockMovementKind,
+  PieceStage,
 } from '../generated/prisma/enums.js';
 import { sizeLabel } from './production-estimate.js';
 import { ProductionEstimator } from './production-estimator.js';
@@ -59,6 +62,7 @@ export class StockService {
     private readonly estimator: ProductionEstimator,
     private readonly purchases: Purchases,
     private readonly pieces: ReadyPiecesRepository,
+    private readonly board: PiecesRepository,
   ) {}
 
   async overview(today: string, usage: DateRange): Promise<StockOverview> {
@@ -279,13 +283,16 @@ export class StockService {
   /**
    * Pieces printed for the studio (samples, display, gifts, stock made ahead) or a failed
    * print of a product: the filament comes off the shelf by the product's own grams (its size
-   * and colour), costed with machine time; a failure only as far as it got.
+   * and colour), costed with machine time; a failure only as far as it got. Each goes on the
+   * "Where it is" board; one still printing waits there, its filament taken when it is done
+   * (`started`: that piece, finished or failed now).
    */
   async studioPrint(
     dto: StudioPrintDto,
     failed: boolean,
     actorId: string,
-  ): Promise<{ grams: number; cost: string }> {
+    started?: { id: string; expected: Date },
+  ): Promise<{ grams: number; cost: string; pieceId: string | null }> {
     const [product] = await this.stock.printables(dto.productId);
     if (!product) throw new NotFoundException('Product not found');
     const colours = coloursOf(product);
@@ -356,6 +363,33 @@ export class StockService {
       (failed && dto.progressPercent !== undefined
         ? `Failed at ${dto.progressPercent}%`
         : null);
+    const details = pieceDetails(options, null);
+    const pieceName = details ? `${product.name} (${details})` : product.name;
+    const printedAt = dto.printedOn
+      ? studioDayStart(dto.printedOn)
+      : new Date();
+    // Still on the printer: on the board, nothing off the shelf until it is done.
+    if (dto.printing && !failed && !started) {
+      const { requestKey: _key, printing: _printing, ...plan } = dto;
+      let pieceId: string | null = null;
+      await this.stock.transaction(async (tx) => {
+        if (!(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print')))
+          return;
+        pieceId = await this.board.add(tx, {
+          name: pieceName,
+          productId: product.id,
+          quantity: dto.quantity,
+          stage: PieceStage.PRINTING,
+          note: dto.note || null,
+          printedAt,
+          grams,
+          cost,
+          plan: JSON.parse(JSON.stringify(plan)) as Prisma.InputJsonValue,
+          createdById: actorId,
+        });
+      });
+      return { grams, cost, pieceId };
+    }
     const movements = parts.flatMap((part) => {
       const share = total > 0 ? Number(part.gramsPerUnit) / total : 1;
       const partGrams = Math.max(1, Math.ceil(grams * share));
@@ -378,16 +412,59 @@ export class StockService {
         },
       ];
     });
+    let pieceId: string | null = started?.id ?? null;
+    const stage = failed
+      ? PieceStage.FAILED
+      : dto.toShelf
+        ? PieceStage.IN_SHOP
+        : PieceStage.IN_LAB;
     await this.stock.transaction(async (tx) => {
-      if (!(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print')))
+      if (
+        !started &&
+        !(await claimRequestKey(tx, dto.requestKey, 'stock.studio-print'))
+      )
         return;
-      await this.stock.record(tx, movements);
+      if (started) {
+        const moved = await this.board.change(
+          started.id,
+          started.expected,
+          {
+            stage,
+            grams,
+            cost,
+            note: note ?? undefined,
+            printedAt: new Date(),
+            plan: Prisma.DbNull,
+          },
+          actorId,
+          tx,
+        );
+        if (!moved)
+          throw new ConflictException(
+            'Someone else just changed this print. Reload and try again.',
+          );
+      } else
+        pieceId = await this.board.add(tx, {
+          name: pieceName,
+          productId: product.id,
+          quantity: dto.quantity,
+          stage,
+          note,
+          printedAt,
+          grams,
+          cost,
+          createdById: actorId,
+        });
+      await this.stock.record(
+        tx,
+        movements.map((m) => ({ ...m, pieceId })),
+      );
       // Printed to sell: the pieces wait on the shelf, at what they cost to make.
       if (!failed && dto.toShelf)
         await this.pieces.add(tx, {
           productId: product.id,
           name: product.name,
-          details: pieceDetails(options, null),
+          details,
           kind: ReadyPieceMovementKind.PRINTED,
           quantity: dto.quantity,
           unitCost: e.unitCost,
@@ -395,7 +472,7 @@ export class StockService {
           createdById: actorId,
         });
     });
-    return { grams, cost };
+    return { grams, cost, pieceId };
   }
 
   /**

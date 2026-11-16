@@ -30,7 +30,7 @@ model Product {
   profitValue   Decimal?    @db.Decimal(10, 2)
   /// Its grams and printHours are its sliced 3MF's own (set by the API when they match the
   /// file): they already hold the purge, prime tower and supports, so no purge waste is added.
-  slicedFile Boolean @default(false)
+  slicedFile    Boolean     @default(false)
   /// The owner's own selling price (USD) in place of the calculated one; null = calculated.
   /// Sizes and options still add what they change in the calculated price. Above 0 (CHECK).
   priceOverride Decimal?    @db.Decimal(10, 2)
@@ -87,6 +87,9 @@ model Product {
   printFiles     ProductPrintFile[]
   stockMovements StockMovement[]
   readyPieces    ReadyPiece[]
+  pieces         Piece[]
+  /// What else one piece costs besides filament and machine (a key ring, a lamp's wiring).
+  extraCosts     ProductExtraCost[]
 
   @@index([active, id])
   @@index([categoryId])
@@ -119,29 +122,29 @@ model ProductSize {
 /// product's own size. They add up to the product's grams; orders take each from its colour's
 /// stock (scaled with the chosen size and options).
 model ProductColour {
-  id        String  @id @default(uuid(7)) @db.Uuid
-  productId String  @db.Uuid
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid(7)) @db.Uuid
+  productId   String     @db.Uuid
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   /// The colour as the shop names it (an option value with a swatch): its stock line, and the
   /// part's starting colour when customers choose it.
-  colour    String
+  colour      String
   /// What customers call this part ("Body", "Ears"): they choose its colour from the product's
   /// part colours. Null = it always prints in `colour`. 1–40 characters (CHECK).
-  part      String?
+  part        String?
   /// The part colours' choice it starts in on the product page (its label), as the owner
   /// picked it; null = automatic (`startingChoice`: same filament, same name, closest colour).
   /// 1–40 characters (CHECK).
-  startsAs  String?
+  startsAs    String?
   /// The file's colour, #RRGGBB (CHECK), for the swatch.
-  hex       String
+  hex         String
   /// Above 0 (CHECK).
-  grams     Decimal @db.Decimal(10, 2)
+  grams       Decimal    @db.Decimal(10, 2)
   /// The filament on the shelf this colour is printed from (its material, name and price):
   /// stock takes its grams there and its cost uses that filament's price. Null = the product's
   /// material in the colour named.
   stockItemId String?    @db.Uuid
   stockItem   StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
-  sortOrder Int     @default(0)
+  sortOrder   Int        @default(0)
 
   @@unique([productId, colour])
   @@map("product_colours")
@@ -169,4 +172,19 @@ model ProductPrintFile {
 
   @@unique([productId, fileKey])
   @@map("product_print_files")
+}
+
+/// Something else one piece of a product costs to make (a key ring, a lamp's cable and bulb
+/// holder): added to its cost, so to its price through the profit rule.
+model ProductExtraCost {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  /// USD, for one piece.
+  amount    Decimal @db.Decimal(10, 2)
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+  @@map("product_extra_costs")
 }

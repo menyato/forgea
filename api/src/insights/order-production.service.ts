@@ -97,6 +97,11 @@ export class OrderProductionService {
     let hours = D(0);
     let cost: Prisma.Decimal | null = D(0);
     let revenue = D(0);
+    // What its products need, per filament (material and colour).
+    const needs = new Map<
+      string,
+      { materialId: string; colour: string; grams: Prisma.Decimal }
+    >();
     const lines = order.items.map((item) => {
       const lineRevenue = splitTaxIncluded(item.lineTotal, taxRate).base;
       revenue = revenue.plus(lineRevenue);
@@ -108,6 +113,20 @@ export class OrderProductionService {
         grams = grams.plus(lineGrams);
         hours = hours.plus(lineHours);
         cost = cost?.plus(lineCost) ?? null;
+        for (const c of e.colours ?? [
+          { colour: e.colour, gramsPerUnit: e.gramsPerUnit },
+        ]) {
+          const materialId =
+            ('materialId' in c ? c.materialId : undefined) ?? e.materialId;
+          const key = `${materialId}\u0000${c.colour}`;
+          const need = needs.get(key) ?? {
+            materialId,
+            colour: c.colour,
+            grams: D(0),
+          };
+          need.grams = need.grams.plus(D(c.gramsPerUnit).times(item.quantity));
+          needs.set(key, need);
+        }
         return {
           itemId: item.id,
           name: item.name,
@@ -190,6 +209,8 @@ export class OrderProductionService {
       reels.set(key, reel);
     }
 
+    const shelf = await this.shelfFor([...needs.values()]);
+
     const knownCost = cost as Prisma.Decimal | null;
     const profit = knownCost ? revenue.minus(knownCost) : null;
     return {
@@ -197,6 +218,7 @@ export class OrderProductionService {
       grams: grams.toFixed(1),
       printHours: hours.toFixed(2),
       taken: [...reels.values()].filter((r) => r.grams !== 0),
+      shelf,
       money:
         withMoney && knownCost && profit
           ? {
@@ -209,5 +231,52 @@ export class OrderProductionService {
             }
           : null,
     };
+  }
+
+  /** Each filament needed against what its reel holds now (none: no such reel on the shelf). */
+  private async shelfFor(
+    needs: { materialId: string; colour: string; grams: Prisma.Decimal }[],
+  ): Promise<OrderProduction['shelf']> {
+    if (needs.length === 0) return [];
+    const [materials, items] = await Promise.all([
+      this.prisma.material.findMany({
+        where: { id: { in: [...new Set(needs.map((n) => n.materialId))] } },
+        select: { id: true, code: true },
+      }),
+      this.prisma.stockItem.findMany({
+        where: {
+          active: true,
+          OR: needs.map((n) => ({
+            materialId: n.materialId,
+            colour: n.colour,
+          })),
+        },
+        select: { id: true, materialId: true, colour: true },
+      }),
+    ]);
+    const held = await this.prisma.stockMovement.groupBy({
+      by: ['stockItemId'],
+      where: { stockItemId: { in: items.map((i) => i.id) } },
+      _sum: { grams: true },
+    });
+    const gramsOf = new Map(
+      held.map((h) => [h.stockItemId, h._sum.grams ?? 0]),
+    );
+    return needs
+      .filter((n) => n.colour !== '')
+      .map((n) => {
+        const item = items.find(
+          (i) => i.materialId === n.materialId && i.colour === n.colour,
+        );
+        const onShelf = item ? Math.max(0, gramsOf.get(item.id) ?? 0) : null;
+        const needed = Math.ceil(n.grams.toNumber());
+        return {
+          material: materials.find((m) => m.id === n.materialId)?.code ?? '',
+          colour: n.colour,
+          needed,
+          onShelf,
+          short: onShelf === null || onShelf < needed,
+        };
+      });
   }
 }

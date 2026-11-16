@@ -97,6 +97,13 @@ export const PAGES: readonly {
     label: 'Production results',
     group: 'Orders',
   },
+  // Every print and where it is; moving pieces needs stock.manage (the API checks each call).
+  {
+    path: '/admin/pieces',
+    access: 'materials.view',
+    label: 'Where it is',
+    group: 'Orders',
+  },
   {
     path: '/admin/printers',
     access: 'production.manage',

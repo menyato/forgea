@@ -11,6 +11,7 @@ import { StockModule } from '../stock/stock.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { CheckoutService } from './checkout.service.js';
 import { CustomerOrdersService } from './customer-orders.service.js';
+import { OrderRemoval } from './order-removal.service.js';
 import { OrderStatusService } from './order-status.service.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersRepository } from './orders.repository.js';
@@ -38,6 +39,7 @@ import { ReorderService } from './reorder.service.js';
     CustomerOrdersService,
     OrderStatusService,
     ReorderService,
+    OrderRemoval,
   ],
   // Custom requests place an order when their quote is accepted.
   // Quotations: a confirmed one cancelled cancels its order too.

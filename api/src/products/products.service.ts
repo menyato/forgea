@@ -45,6 +45,7 @@ import { TextStudio } from '../text-studio/text-studio.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import {
   type ConfigurableProduct,
+  extraCostOf,
   ProductConfigurator,
   profitOf,
 } from './product-configurator.js';
@@ -225,7 +226,9 @@ export class ProductsService {
   async create(dto: SaveProductDto, mayPrice: boolean): Promise<AdminProduct> {
     if (
       !mayPrice &&
-      (dto.profitKind !== undefined || dto.priceOverride !== undefined)
+      (dto.profitKind !== undefined ||
+        dto.priceOverride !== undefined ||
+        dto.extraCosts.length > 0)
     )
       throw profitNotYours();
     await this.checkSetup(dto);
@@ -268,6 +271,16 @@ export class ProductsService {
       ) {
         throw profitNotYours();
       }
+      // And its extra costs.
+      const same = (a: { label: string; amount: { toString(): string } }[]) =>
+        a
+          .map(
+            (e) =>
+              `${e.label}=${new Prisma.Decimal(e.amount.toString()).toFixed(2)}`,
+          )
+          .join('|');
+      if (same(current.extraCosts) !== same(dto.extraCosts))
+        throw profitNotYours();
     }
     await this.checkSetup(dto);
     return this.toAdmin(
@@ -419,6 +432,7 @@ export class ProductsService {
           printHours: dto.printHours,
           pricePerGram,
           wasteIncluded,
+          extraCost: extraCostOf({ extraCosts: dto.extraCosts ?? [] }),
         },
         profit,
       );
@@ -448,6 +462,7 @@ export class ProductsService {
               .toFixed(2),
             labour: b.laborCost,
             packaging: b.packagingCost,
+            extras: b.extraCost,
             cost: b.subtotal,
             profit: b.profit,
             profitRule: b.profitRule,
@@ -670,6 +685,10 @@ export class ProductsService {
       text: this.studio.settingsView(p),
       profit: profitOf(p),
       priceOverride: p.priceOverride?.toFixed(2) ?? null,
+      extraCosts: p.extraCosts.map((e) => ({
+        label: e.label,
+        amount: e.amount.toFixed(2),
+      })),
       colours: p.colours.map((c) => ({
         colour: c.colour,
         hex: c.hex,

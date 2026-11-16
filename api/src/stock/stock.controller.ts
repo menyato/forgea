@@ -134,7 +134,7 @@ export class StockController {
   studioPrint(
     @Body() dto: StudioPrintDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ grams: number; cost: string }> {
+  ): Promise<{ grams: number; cost: string; pieceId: string | null }> {
     return this.stock.studioPrint(dto, false, user.id);
   }
 
@@ -150,7 +150,7 @@ export class StockController {
   failedPrint(
     @Body() dto: StudioPrintDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<{ grams: number; cost: string }> {
+  ): Promise<{ grams: number; cost: string; pieceId: string | null }> {
     return this.stock.studioPrint(dto, true, user.id);
   }
 

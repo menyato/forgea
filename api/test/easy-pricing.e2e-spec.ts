@@ -290,6 +290,7 @@ describe('Easy pricing (e2e)', () => {
         wasteAndFailures: '2.00',
         labour: '0.50',
         packaging: '0.50',
+        extras: '0.00',
         cost: '13.00',
         profit: '13.00',
         profitRule: { kind: 'PERCENT', value: '100' },

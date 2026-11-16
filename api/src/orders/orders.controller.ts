@@ -17,6 +17,7 @@ import type {
   CustomerOrder,
   ReorderResult,
   OrderListItem,
+  OrderRemovalPreview,
   Page,
   Permission,
   StaffOrder,
@@ -26,16 +27,19 @@ import {
   CheckoutDto,
   MyOrdersQuery,
   OrderListQuery,
+  RemoveTestOrderDto,
 } from '@forgea/validation';
 import type { Request, Response } from 'express';
 import type { OrderStatus } from '../generated/prisma/enums.js';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
 import {
+  AdminOnly,
   CallerPermissions,
   CurrentUser,
   RequirePermission,
 } from '../authorization/decorators.js';
+import { OrderRemoval } from './order-removal.service.js';
 import { CartCookie } from '../cart/cart-cookie.js';
 import { THROTTLE } from '../security/throttle-policies.js';
 import { CheckoutService } from './checkout.service.js';
@@ -64,6 +68,7 @@ export class OrdersController {
     private readonly statuses: OrderStatusService,
     private readonly cartCookie: CartCookie,
     private readonly reorders: ReorderService,
+    private readonly removal: OrderRemoval,
   ) {}
 
   /** The order pipeline for staff and admins. */
@@ -110,6 +115,26 @@ export class OrdersController {
   @Get('counts')
   counts(): Promise<Partial<Record<OrderStatus, number>>> {
     return this.orders.counts();
+  }
+
+  /** What removing a test order takes away (admins only; real orders are cancelled). */
+  @AdminOnly()
+  @Get(':id/removal')
+  removalPreview(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<OrderRemovalPreview> {
+    return this.removal.preview(id);
+  }
+
+  /** Removes a test order entirely, with its documents and stock records. Audit-logged. */
+  @AdminOnly()
+  @Audit({ action: 'order.remove-test', targetType: 'Order' })
+  @Post(':id/remove')
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RemoveTestOrderDto,
+  ): Promise<OrderRemovalPreview> {
+    return this.removal.remove(id, dto.confirm);
   }
 
   @RequirePermission('orders.view')
