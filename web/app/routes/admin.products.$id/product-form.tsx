@@ -108,6 +108,7 @@ export function ProductForm({
   const [partGroupId, setPartGroupId] = useState(
     product?.partColourGroupId ?? '',
   );
+  const [pricing, setPricing] = useState(false);
   const [printFiles, setPrintFiles] = useState<PrintFileRef[]>(
     (product?.printFiles ?? []).map((p) => ({ key: p.fileKey, name: p.name })),
   );
@@ -126,6 +127,11 @@ export function ProductForm({
     },
     [],
   );
+  // A new product shows every part (the steps walk through them); a saved one opens the
+  // parts it uses and folds the rest to a line.
+  const isNew = product === null;
+  const count = (n: number, one: string, many = `${one}s`) =>
+    n === 0 ? 'none' : `${n} ${n === 1 ? one : many}`;
   const optionErrors = Object.entries(errors)
     .filter(([k]) => k.startsWith('options'))
     .map(([, m]) => m);
@@ -159,7 +165,7 @@ export function ProductForm({
             hint: 'Printed from: the reel its cost and stock come from. Tick the parts customers may recolour.',
           },
           {
-            to: '#product-printing',
+            to: '#product-details',
             label: 'In the shop or hidden',
             done: null,
             hint: 'Untick Visible in the shop for studio-only pieces (tests, gifts, one client).',
@@ -231,7 +237,13 @@ export function ProductForm({
             </div>
           )}
         </Panel>
-        <Panel title="Print files">
+        <Panel
+          title="Print files"
+          fold={{
+            open: isNew || printFiles.length > 0,
+            holds: count(printFiles.length, 'file'),
+          }}
+        >
           <PrintFilesField
             files={printFiles}
             onFiles={setPrintFiles}
@@ -254,7 +266,13 @@ export function ProductForm({
             }}
           />
         </Panel>
-        <Panel title="Photos">
+        <Panel
+          title="Photos"
+          fold={{
+            open: isNew || imageKeys.length > 0,
+            holds: count(imageKeys.length, 'photo'),
+          }}
+        >
           <ImagesField keys={imageKeys} onChange={setImageKeys} />
         </Panel>
       </div>
@@ -347,6 +365,18 @@ export function ProductForm({
               </option>
             ))}
           </SelectField>
+          <CheckboxField
+            label="Visible in the shop"
+            name="active"
+            defaultChecked={product?.active ?? true}
+            hint="Off: only the studio sees it, and it can still be sold on a quotation"
+          />
+          <CheckboxField
+            label="Made to order"
+            name="isCustom"
+            defaultChecked={product?.isCustom ?? false}
+            hint="Checkout asks for a deposit"
+          />
           {categories.length === 0 && (
             <p className="text-sm text-text-muted">
               <Link to="/admin/categories" className="underline">
@@ -357,7 +387,7 @@ export function ProductForm({
           )}
         </Panel>
 
-        <Panel title="Printing and price" anchor="product-printing">
+        <Panel title="Printing" anchor="product-printing">
           <SelectField
             label="Material"
             name="materialId"
@@ -401,17 +431,8 @@ export function ProductForm({
             groups={groups}
             errors={errors}
           />
-          <CheckboxField
-            label="Made to order"
-            name="isCustom"
-            defaultChecked={product?.isCustom ?? false}
-            hint="Checkout asks for a 50% deposit"
-          />
-          <CheckboxField
-            label="Visible in the shop"
-            name="active"
-            defaultChecked={product?.active ?? true}
-          />
+        </Panel>
+        <Panel title="Price" anchor="product-price">
           <PricePanel
             materialId={materialId}
             grams={grams}
@@ -427,6 +448,7 @@ export function ProductForm({
             onExtraCosts={setExtraCosts}
             shopProfit={shopProfit}
             errors={errors}
+            onPricing={setPricing}
           />
         </Panel>
         {realCost && product && (
@@ -439,7 +461,10 @@ export function ProductForm({
           </Panel>
         )}
 
-        <Panel title="Personalised text">
+        <Panel
+          title="Personalised text"
+          fold={{ open: isNew || text !== null, holds: text ? 'on' : 'off' }}
+        >
           <TextSettingsPanel
             value={text}
             onChange={setText}
@@ -451,7 +476,18 @@ export function ProductForm({
           )}
         </Panel>
 
-        <Panel title="Size">
+        <Panel
+          title="Size"
+          fold={{
+            open: isNew || sizes.length > 0,
+            holds:
+              sizes.length > 0
+                ? count(sizes.length, 'size')
+                : measured.x && measured.y && measured.z
+                  ? `${formatSizeCm(measured)}, one size`
+                  : 'not measured',
+          }}
+        >
           <SizesEditor
             measured={measured}
             onMeasured={setMeasured}
@@ -463,7 +499,10 @@ export function ProductForm({
           />
         </Panel>
 
-        <Panel title="Options customers choose">
+        <Panel
+          title="Options customers choose"
+          fold={{ open: true, holds: count(options.length, 'option') }}
+        >
           <CopyOptions others={others} onCopy={setOptions} />
           <OptionsConfig
             groups={groups}
@@ -475,10 +514,10 @@ export function ProductForm({
           )}
         </Panel>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
           <Button
             type="submit"
-            disabled={fetcher.state !== 'idle'}
+            disabled={fetcher.state !== 'idle' || pricing}
             className="px-6 py-2.5"
           >
             {product ? 'Save product' : 'Create product'}

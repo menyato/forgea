@@ -41,6 +41,10 @@ difference is recorded with your note.
 
 ## 3. A product for the shop
 
+A saved product's page opens the parts it uses and folds the rest to one line each (Print
+files, Photos, Personalised text, Size, each saying what it holds): click a title to open it.
+**Save product** stays at the bottom of the screen wherever you are on the page.
+
 1. Catalog → **Products** → New product. The **Steps** at the top tick off as you go (model,
    name, grams and time, a reel for each colour, shop or hidden); each opens its panel. The
    colours it starts in show under the model (**Shown in**), and in the products list.

@@ -228,7 +228,7 @@ export function OptionsConfig({
               placeholder="Find an option…"
               value={find}
               onChange={(e) => setFind(e.currentTarget.value)}
-              className="rounded-md border border-border bg-bg px-3 py-1.5 text-sm"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm"
             />
           )}
           <ul className="grid max-h-64 gap-x-4 gap-y-1 overflow-y-auto text-sm sm:grid-cols-2">

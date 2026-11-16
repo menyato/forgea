@@ -1,6 +1,6 @@
 import type { RelatedRecord } from '@forgea/types';
 import { Link } from 'react-router';
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { Busy } from '~/components/brand/busy';
 import { Breadcrumbs, type Crumb, RecordPager } from './breadcrumbs';
 
@@ -60,34 +60,60 @@ export function AdminHeader({
   );
 }
 
-/** A bordered block grouping related fields. */
+/**
+ * A bordered block grouping related fields. With `fold`, its title opens and closes it and
+ * says in a few words what it holds, so a long form shows only the parts in use; the fields
+ * inside a closed panel are still sent with the form.
+ */
 export function Panel({
   title,
   children,
   className = '',
   anchor,
+  fold,
 }: {
   title?: string;
   children: ReactNode;
   className?: string;
   /** An id to link to ("#product-model"), e.g. from a list of steps. */
   anchor?: string;
+  /** Folds: whether it starts open, and what it holds ("2 files", "off"). */
+  fold?: { open: boolean; holds?: string };
 }) {
   // Named by its title, so screen readers can jump between panels.
   const id = useId();
+  const [open, setOpen] = useState(fold?.open ?? true);
+  const heading = title && (
+    <h2 id={id} className="font-display text-lg font-bold">
+      {title}
+    </h2>
+  );
+  // One shrinkable column: a wide child (a 3D canvas, a long email) can't push past the border.
+  const frame = `rounded-lg border border-border bg-surface p-5 ${className}`;
+  if (!fold || !title) {
+    return (
+      <section
+        id={anchor}
+        aria-labelledby={title ? id : undefined}
+        className={`grid grid-cols-1 gap-4 ${frame}`}
+      >
+        {heading}
+        {children}
+      </section>
+    );
+  }
   return (
-    <section
-      id={anchor}
-      aria-labelledby={title ? id : undefined}
-      // One shrinkable column: a wide child (a 3D canvas, a long email) can't push past the border.
-      className={`grid grid-cols-1 gap-4 rounded-lg border border-border bg-surface p-5 ${className}`}
-    >
-      {title && (
-        <h2 id={id} className="font-display text-lg font-bold">
-          {title}
-        </h2>
-      )}
-      {children}
+    <section id={anchor} aria-labelledby={id} className={frame}>
+      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+          {heading}
+          <span className="flex min-w-0 items-center gap-2 text-sm text-text-muted">
+            {fold.holds && <span className="truncate">{fold.holds}</span>}
+            <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+          </span>
+        </summary>
+        <div className="grid grid-cols-1 gap-4 pt-4">{children}</div>
+      </details>
     </section>
   );
 }

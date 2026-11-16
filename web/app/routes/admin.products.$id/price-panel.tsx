@@ -31,7 +31,10 @@ export function PricePanel({
   onExtraCosts,
   shopProfit,
   errors,
+  onPricing,
 }: {
+  /** Told while a price is being asked for: the form saves once it has answered. */
+  onPricing: (pricing: boolean) => void;
   /** What else one piece costs (a key ring, a lamp's wiring): pricing.manage only. */
   extraCosts: readonly { label: string; amount: string }[];
   onExtraCosts: (next: { label: string; amount: string }[]) => void;
@@ -88,17 +91,25 @@ export function PricePanel({
         }
       : {}),
   });
+  // What the latest request asked: until it is this form's, a price is on its way.
+  const [asked, setAsked] = useState<string | null>(null);
+  const priceable = Boolean(materialId && grams && printHours);
   // Re-priced a moment after the last change.
   useEffect(() => {
-    const values = JSON.parse(ask) as Record<string, string>;
-    if (!values['materialId'] || !values['grams'] || !values['printHours'])
-      return;
-    const timer = setTimeout(
-      () => void submit({ intent: 'preview', ...values }, { method: 'post' }),
-      300,
-    );
+    if (!priceable) return;
+    const timer = setTimeout(() => {
+      setAsked(ask);
+      void submit(
+        { intent: 'preview', ...(JSON.parse(ask) as Record<string, string>) },
+        { method: 'post' },
+      );
+    }, 300);
     return () => clearTimeout(timer);
-  }, [ask, submit]);
+  }, [ask, submit, priceable]);
+  // A save sent while a price request is out would have its move to the saved product
+  // cut short by the answer, so the form waits the moment it takes.
+  const pricing = (priceable && asked !== ask) || preview.state !== 'idle';
+  useEffect(() => onPricing(pricing), [onPricing, pricing]);
   const p = preview.data?.preview;
   const b = p?.breakdown;
 

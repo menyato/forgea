@@ -109,13 +109,11 @@ export function ColoursEditor({
         Colours ({total.toFixed(1)} g in all)
       </legend>
       <p className="text-sm text-text-muted">
-        Orders take each colour&apos;s grams from its stock. Name each colour as
-        the shop does. Tick &ldquo;Customers choose this colour&rdquo; (or every
-        colour at once) to let them pick it on the product page: each one
-        changes only its own colour in the file, starts as the colour you pick
-        under it (shown in 3D and priced &ldquo;from&rdquo;), and the 3D view
-        changes as they choose. Rename what customers see (&ldquo;Body&rdquo;,
-        &ldquo;Ears&rdquo;) as you like.
+        One card per colour in the file. <strong>Printed from</strong> is the
+        reel its cost and stock come from. Tick{' '}
+        <strong>Customers choose this colour</strong> to let them recolour that
+        part in the shop; <strong>Starts as</strong> is the colour the shop
+        shows first, in 3D and in the price.
       </p>
       {value.length > 1 && (
         <label className="flex items-center gap-2 text-sm font-medium">
@@ -145,7 +143,7 @@ export function ColoursEditor({
       {value.map((c, i) => (
         <div
           key={`${c.hex}-${i}`}
-          className="grid grid-cols-[auto_minmax(0,1fr)_6rem_auto] items-center gap-2"
+          className="grid grid-cols-[auto_minmax(0,1fr)_6rem_auto] items-center gap-2 rounded-md border border-border p-3"
         >
           <Swatch
             hex={
@@ -184,6 +182,11 @@ export function ColoursEditor({
             ×
           </Button>
           {filaments.length > 0 && (
+            <span className="col-start-2 text-xs text-text-muted" aria-hidden>
+              Printed from
+            </span>
+          )}
+          {filaments.length > 0 && (
             <select
               id={`product-colour-filament-${i}`}
               name={`product-colour-filament-${i}`}
@@ -202,10 +205,10 @@ export function ColoursEditor({
                     : { stockItemId: null },
                 );
               }}
-              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+              className="col-span-3 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
             >
               <option value="">
-                Printed from: the product&apos;s material, by colour name
+                The product&apos;s material, by colour name
               </option>
               {filaments.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -232,6 +235,11 @@ export function ColoursEditor({
             Customers choose this colour
           </label>
           {c.part !== null && (
+            <span className="col-start-2 text-xs text-text-muted" aria-hidden>
+              What customers call it
+            </span>
+          )}
+          {c.part !== null && (
             <input
               id={`product-colour-part-${i}`}
               name={`product-colour-part-${i}`}
@@ -241,8 +249,13 @@ export function ColoursEditor({
               placeholder="e.g. Body, Ears"
               value={c.part}
               onChange={(e) => set(i, { part: e.currentTarget.value })}
-              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+              className="col-span-3 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
             />
+          )}
+          {c.part !== null && choices.length > 0 && (
+            <span className="col-start-2 text-xs text-text-muted" aria-hidden>
+              Starts as (shown first in the shop)
+            </span>
           )}
           {c.part !== null && choices.length > 0 && (
             <select
@@ -258,16 +271,16 @@ export function ColoursEditor({
               onChange={(e) =>
                 set(i, { startsAs: e.currentTarget.value || null })
               }
-              className="col-span-2 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+              className="col-span-3 col-start-2 min-w-0 rounded-md border border-border bg-surface px-2 py-1 text-sm"
             >
               <option value="">
-                Starts as:{' '}
-                {startingChoice(choices, { ...c, startsAs: null })?.label}{' '}
-                (automatic: its filament, or the closest colour)
+                Automatic:{' '}
+                {startingChoice(choices, { ...c, startsAs: null })?.label} (its
+                filament, or the closest colour)
               </option>
               {choices.map((v) => (
                 <option key={v.id} value={v.label}>
-                  Starts as: {v.label}
+                  {v.label}
                 </option>
               ))}
             </select>
