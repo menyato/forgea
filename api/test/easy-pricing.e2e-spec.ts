@@ -255,19 +255,36 @@ describe('Easy pricing (e2e)', () => {
     await as(designer.cookie)
       .put(`/products/${product.id}`, asDto(product, { name: 'Vase renamed' }))
       .expect(200);
-    // …and may not change it, or drop it.
+    // …and may not change it.
     await as(designer.cookie)
       .put(
         `/products/${product.id}`,
         asDto(product, { profitKind: 'FIXED', profitValue: '1' }),
       )
       .expect(403);
-    const { profitKind: _k, profitValue: _v, ...withoutRule } = asDto(product);
-    if (product.profit) {
+    // They are not shown what the studio earns on it, so a save of theirs says nothing
+    // about it: the rule, the price and the extra costs stay as they were.
+    const theirs = (
       await as(designer.cookie)
-        .put(`/products/${product.id}`, withoutRule)
-        .expect(403);
-    }
+        .get(`/products/manage/${product.id}`)
+        .expect(200)
+    ).body as AdminProduct;
+    expect(theirs).toMatchObject({
+      profit: null,
+      priceOverride: null,
+      extraCosts: [],
+    });
+    await as(designer.cookie)
+      .put(`/products/${product.id}`, asDto(theirs, { name: 'Vase renamed' }))
+      .expect(200);
+    const after = (
+      await as(admin.cookie).get(`/products/manage/${product.id}`).expect(200)
+    ).body as AdminProduct;
+    expect(after).toMatchObject({
+      profit: product.profit,
+      priceOverride: product.priceOverride,
+      extraCosts: product.extraCosts,
+    });
 
     const ask = {
       materialId: studio.material.id,

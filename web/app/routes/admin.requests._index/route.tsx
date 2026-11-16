@@ -15,6 +15,7 @@ import {
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import { studioDate } from '~/lib/studio-time';
+import { statusList } from '~/features/admin/status-list.server';
 import type { Route } from './+types/route';
 
 /** The filters: new requests, those waiting on the customer, then the rest; they add up. */
@@ -51,35 +52,19 @@ const DEFAULTS = { filters: ['new'], sorts: ['createdAt', 'title'] };
 const GROUPS = [{ key: 'status', label: 'Status' }];
 
 export async function loader({ url, context }: Route.LoaderArgs) {
-  const api = context.get(apiContext);
   const state = listState(url.searchParams, DEFAULTS);
-  const kanban = state.view === 'kanban';
-  const picked = FILTERS.filter((f) => state.filters.includes(f.key)).flatMap(
-    (f) => f.statuses,
-  );
-  const statuses = picked.length > 0 ? picked : kanban ? OPEN : [];
-  const query = pageQuery(state, kanban ? 100 : 50);
-  if (statuses.length > 0) query.set('statuses', statuses.join(','));
-  const [r, counts] = await Promise.all([
-    api.get<Page<CustomRequestListItem>>(`/custom-requests?${query}`),
-    api.get<Partial<Record<CustomRequestStatus, number>>>(
-      '/custom-requests/counts',
+  const { page, ...rest } = await statusList<
+    CustomRequestListItem,
+    CustomRequestStatus
+  >(context.get(apiContext), state, {
+    path: '/custom-requests',
+    flow: FLOW,
+    open: OPEN,
+    picked: FILTERS.filter((f) => state.filters.includes(f.key)).flatMap(
+      (f) => f.statuses,
     ),
-  ]);
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const count = counts.ok ? counts.data : {};
-  return {
-    state,
-    requests: r.data,
-    counts: count,
-    total: state.q
-      ? undefined
-      : (statuses.length > 0 ? statuses : FLOW).reduce(
-          (n, s) => n + (count[s] ?? 0),
-          0,
-        ),
-    columns: kanban ? FLOW.filter((s) => statuses.includes(s)) : [],
-  };
+  });
+  return { state, requests: page, ...rest };
 }
 
 const status = (r: CustomRequestListItem) =>

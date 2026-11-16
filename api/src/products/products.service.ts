@@ -210,10 +210,11 @@ export class ProductsService {
     }));
   }
 
-  async manageOne(id: string): Promise<AdminProduct> {
+  /** `mayPrice`: the caller manages pricing; others don't get its profit, price or extra costs. */
+  async manageOne(id: string, mayPrice: boolean): Promise<AdminProduct> {
     const p = await this.products.findById(id);
     if (!p) throw new NotFoundException('Product not found');
-    return this.toAdmin(p);
+    return this.toAdmin(p, mayPrice);
   }
 
   /** Null when no product has this address (visible or not). */
@@ -240,6 +241,7 @@ export class ProductsService {
           await this.printFilesOf(dto),
         ),
       ),
+      mayPrice,
     );
   }
 
@@ -249,10 +251,28 @@ export class ProductsService {
     mayPrice: boolean,
   ): Promise<AdminProduct> {
     if (!mayPrice) {
-      // Anyone editing the catalog keeps the product's profit rule as it is.
+      // Anyone editing the catalog keeps the product's profit rule as it is. They are not
+      // shown it, so a save that says nothing about it means "as it is".
       const current = await this.products.findById(id);
       if (!current) throw new NotFoundException('Product not found');
       const now = profitOf(current);
+      if (
+        dto.profitKind === undefined &&
+        dto.priceOverride === undefined &&
+        dto.extraCosts.length === 0
+      ) {
+        dto = {
+          ...dto,
+          ...(now ? { profitKind: now.kind, profitValue: now.value } : {}),
+          ...(current.priceOverride
+            ? { priceOverride: current.priceOverride.toFixed(2) }
+            : {}),
+          extraCosts: current.extraCosts.map((e) => ({
+            label: e.label,
+            amount: e.amount.toFixed(2),
+          })),
+        };
+      }
       const asked =
         dto.profitKind !== undefined && dto.profitValue !== undefined
           ? { kind: dto.profitKind, value: dto.profitValue }
@@ -292,6 +312,7 @@ export class ProductsService {
           await this.printFilesOf(dto),
         ),
       ),
+      mayPrice,
     );
   }
 
@@ -666,7 +687,10 @@ export class ProductsService {
       );
   }
 
-  private async toAdmin(p: ConfigurableProduct): Promise<AdminProduct> {
+  private async toAdmin(
+    p: ConfigurableProduct,
+    mayPrice = true,
+  ): Promise<AdminProduct> {
     const calculator = await this.pricing.costCalculator();
     return {
       id: p.id,
@@ -683,12 +707,15 @@ export class ProductsService {
       modelFileKey: p.modelFileKey,
       imageKeys: p.imageKeys,
       text: this.studio.settingsView(p),
-      profit: profitOf(p),
-      priceOverride: p.priceOverride?.toFixed(2) ?? null,
-      extraCosts: p.extraCosts.map((e) => ({
-        label: e.label,
-        amount: e.amount.toFixed(2),
-      })),
+      // What the studio earns on it is for whoever manages pricing.
+      profit: mayPrice ? profitOf(p) : null,
+      priceOverride: mayPrice ? (p.priceOverride?.toFixed(2) ?? null) : null,
+      extraCosts: mayPrice
+        ? p.extraCosts.map((e) => ({
+            label: e.label,
+            amount: e.amount.toFixed(2),
+          }))
+        : [],
       colours: p.colours.map((c) => ({
         colour: c.colour,
         hex: c.hex,

@@ -74,8 +74,11 @@ export class ProductsController {
 
   @RequirePermission('catalog.view')
   @Get('manage/:id')
-  manageOne(@Param('id', ParseUUIDPipe) id: string): Promise<AdminProduct> {
-    return this.products.manageOne(id);
+  manageOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CallerPermissions() permissions: Permission[],
+  ): Promise<AdminProduct> {
+    return this.products.manageOne(id, permissions.includes('pricing.manage'));
   }
 
   /** Public: what stands on the home page's print bed. Before :slug, which would match it. */

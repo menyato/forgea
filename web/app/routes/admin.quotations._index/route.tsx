@@ -17,6 +17,7 @@ import {
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import { studioDate } from '~/lib/studio-time';
+import { statusList } from '~/features/admin/status-list.server';
 import type { Route } from './+types/route';
 
 const LABELS: Record<QuotationStatus, string> = {
@@ -47,30 +48,16 @@ const GROUPS = [
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const state = listState(url.searchParams, DEFAULTS);
-  const kanban = state.view === 'kanban';
-  const picked = STATUSES.filter((s) => state.filters.includes(key(s)));
-  const statuses = picked.length > 0 ? picked : kanban ? BOARD : [];
-  const query = pageQuery(state, kanban ? 100 : 50);
-  if (statuses.length > 0) query.set('statuses', statuses.join(','));
-  const api = context.get(apiContext);
-  const [r, counts] = await Promise.all([
-    api.get<Page<QuotationListItem>>(`/quotations?${query}`),
-    api.get<Partial<Record<QuotationStatus, number>>>('/quotations/counts'),
-  ]);
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const count = counts.ok ? counts.data : {};
-  return {
-    state,
-    quotations: r.data,
-    counts: count,
-    total: state.q
-      ? undefined
-      : (statuses.length > 0 ? statuses : STATUSES).reduce(
-          (n, s) => n + (count[s] ?? 0),
-          0,
-        ),
-    columns: kanban ? STATUSES.filter((s) => statuses.includes(s)) : [],
-  };
+  const { page, ...rest } = await statusList<
+    QuotationListItem,
+    QuotationStatus
+  >(context.get(apiContext), state, {
+    path: '/quotations',
+    flow: STATUSES,
+    open: BOARD,
+    picked: STATUSES.filter((s) => state.filters.includes(key(s))),
+  });
+  return { state, quotations: page, ...rest };
 }
 
 const customer = (q: QuotationListItem) => q.customer.name ?? q.customer.email;

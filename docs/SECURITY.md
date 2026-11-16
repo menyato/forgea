@@ -334,7 +334,8 @@ A quotation is emailed with a link that opens it without an account (`/q/<token>
 token (its own audience, never accepted as a sign-in, reset or verification token) naming the
 quotation and the address it was sent to. Editing the quotation to another address retires
 older links; a draft never opens; the link stays readable 60 days past the validity date, and
-accepting an expired quotation is refused. The link only reads: accepting places an order,
+accepting an expired quotation is refused. The link reads, and lets its holder decline (which
+commits them to nothing; the studio can send it again): accepting places an order,
 which needs a signed-in customer account whose address is the one it was sent to (a forwarded
 link is not enough), and the API refuses team addresses as quotation customers. The page sends
 no referrer and is not indexed. Everything typed into a quotation is escaped in the email.

@@ -360,9 +360,11 @@ describe('3MF products and own prices (e2e)', () => {
     await as(designer.cookie)
       .put(`/products/${p.id}`, asDto(p, { priceOverride: '10' }))
       .expect(403);
+    // They are not shown the price, so a save without it keeps it.
     await as(designer.cookie)
       .put(`/products/${p.id}`, asDto(p, { priceOverride: undefined }))
-      .expect(403);
+      .expect(200);
+    expect((await manage()).priceOverride).toBe('30.00');
     await as(designer.cookie).put(`/products/${p.id}`, asDto(p)).expect(200);
     await as(designer.cookie)
       .post('/products', {

@@ -18,6 +18,7 @@ import {
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
 import { STUDIO_TIME_ZONE, studioDate } from '~/lib/studio-time';
+import { statusList } from '~/features/admin/status-list.server';
 import type { Route } from './+types/route';
 
 /** The filters: orders by what the studio has to do next; several together add up. */
@@ -64,34 +65,20 @@ const month = (iso: string) =>
   });
 
 export async function loader({ url, context }: Route.LoaderArgs) {
-  const api = context.get(apiContext);
   const state = listState(url.searchParams, DEFAULTS);
-  const kanban = state.view === 'kanban';
-  const picked = FILTERS.filter((f) => state.filters.includes(f.key)).flatMap(
-    (f) => f.statuses,
-  );
-  const statuses = picked.length > 0 ? picked : kanban ? OPEN : [];
-  const query = pageQuery(state, kanban ? 100 : 50);
-  if (statuses.length > 0) query.set('statuses', statuses.join(','));
-  const [r, counts] = await Promise.all([
-    api.get<Page<OrderListItem>>(`/orders?${query}`),
-    api.get<Partial<Record<OrderStatus, number>>>('/orders/counts'),
-  ]);
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const count = counts.ok ? counts.data : {};
-  return {
+  const { page, ...rest } = await statusList<OrderListItem, OrderStatus>(
+    context.get(apiContext),
     state,
-    orders: r.data,
-    counts: count,
-    // How many the pager can promise: known by status, not for a search.
-    total: state.q
-      ? undefined
-      : (statuses.length > 0 ? statuses : FLOW).reduce(
-          (n, s) => n + (count[s] ?? 0),
-          0,
-        ),
-    columns: kanban ? FLOW.filter((s) => statuses.includes(s)) : [],
-  };
+    {
+      path: '/orders',
+      flow: FLOW,
+      open: OPEN,
+      picked: FILTERS.filter((f) => state.filters.includes(f.key)).flatMap(
+        (f) => f.statuses,
+      ),
+    },
+  );
+  return { state, orders: page, ...rest };
 }
 
 /** A card dragged to another column on the kanban: the same step its page's buttons take. */
