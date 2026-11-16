@@ -396,4 +396,32 @@ describe('3MF quotations and custom requests (e2e)', () => {
     ).body.estimate as { exact: boolean };
     expect(range.exact).toBe(false);
   });
+
+  it('a sliced file whose numbers were edited down is not quoted at once: the studio prices it', async () => {
+    await prisma.storeSettings.update({
+      where: { id: 1 },
+      data: { autoQuoteSlicedFiles: true },
+    });
+    const me = as((await signedInCustomer(app)).cookie);
+    const key = (
+      await me
+        .upload(
+          '/custom-requests/files',
+          bambuThreeMf({ sliced: true, doctored: true }),
+          'cheap.gcode.3mf',
+        )
+        .expect(201)
+    ).body.key as string;
+    const request = (
+      await me
+        .post('/custom-requests', {
+          title: 'Two-colour piece',
+          description: 'Printed as my sliced file says.',
+          quantity: 1,
+          fileKey: key,
+        })
+        .expect(201)
+    ).body as CustomRequestView;
+    expect(request.status).toBe('SUBMITTED');
+  });
 });

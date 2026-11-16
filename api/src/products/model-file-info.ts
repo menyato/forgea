@@ -101,6 +101,28 @@ export class ModelFileInfoService {
     }
   }
 
+  /**
+   * What the file's own shapes would take, guessed from their volume whatever its slicer
+   * says: the check on numbers a customer's file brings. Null when the file holds no shape
+   * to measure, or can't be read.
+   */
+  async meshEstimate(
+    key: string,
+    materialId: string,
+    solidityPercent: number,
+  ): Promise<{ grams: string; printHours: string } | null> {
+    const material = await this.products.material(materialId);
+    if (!material) return null;
+    try {
+      const file = await this.read(key);
+      const volume = file.colours.reduce((n, c) => n + c.volumeMm3, 0);
+      return volume > 0 ? fromVolume(volume, material, solidityPercent) : null;
+    } catch (error) {
+      if (error instanceof BadRequestException) return null;
+      throw error;
+    }
+  }
+
   /** The file's size, grams per colour and time, in a material. */
   async measure(
     key: string,
@@ -126,19 +148,7 @@ export class ModelFileInfoService {
         .toFixed(2);
     } else {
       const volume = file.colours.reduce((n, c) => n + c.volumeMm3, 0);
-      let estimate;
-      try {
-        estimate = estimatePrint({
-          volumeMm3: volume.toFixed(0),
-          densityGPerCm3: material.densityGPerCm3.toString(),
-          solidityPercent,
-          gramsPerHour: material.gramsPerHour.toString(),
-        });
-      } catch (error) {
-        if (error instanceof PricingError)
-          throw new BadRequestException(error.message);
-        throw error;
-      }
+      const estimate = fromVolume(volume, material, solidityPercent);
       grams = new Prisma.Decimal(estimate.grams);
       printHours = estimate.printHours;
       byColour = file.colours.map((c) =>
@@ -284,3 +294,23 @@ const rgb = (hex: string): [number, number, number] => [
   parseInt(hex.slice(3, 5), 16),
   parseInt(hex.slice(5, 7), 16),
 ];
+
+/** Grams and hours guessed from a volume (400 when the numbers can't make a print). */
+function fromVolume(
+  volumeMm3: number,
+  material: { densityGPerCm3: Prisma.Decimal; gramsPerHour: Prisma.Decimal },
+  solidityPercent: number,
+) {
+  try {
+    return estimatePrint({
+      volumeMm3: volumeMm3.toFixed(0),
+      densityGPerCm3: material.densityGPerCm3.toString(),
+      solidityPercent,
+      gramsPerHour: material.gramsPerHour.toString(),
+    });
+  } catch (error) {
+    if (error instanceof PricingError)
+      throw new BadRequestException(error.message);
+    throw error;
+  }
+}

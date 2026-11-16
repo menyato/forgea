@@ -80,7 +80,9 @@ const COLUMNS: ListColumn<QuotationListItem>[] = [
     key: 'number',
     label: 'Number',
     sort: 'number',
-    cell: (q) => <span className="font-mono">{q.number}</span>,
+    cell: (q) => (
+      <span className="font-mono whitespace-nowrap">{q.number}</span>
+    ),
   },
   {
     key: 'customer',

@@ -142,7 +142,9 @@ const COLUMNS: ListColumn<JournalEntryView>[] = [
     key: 'number',
     label: 'Number',
     sort: 'number',
-    cell: (e) => <span className="font-mono">{e.number}</span>,
+    cell: (e) => (
+      <span className="font-mono whitespace-nowrap">{e.number}</span>
+    ),
   },
   { key: 'date', label: 'Date', sort: 'date', cell: (e) => e.date },
   {
@@ -154,7 +156,9 @@ const COLUMNS: ListColumn<JournalEntryView>[] = [
   {
     key: 'order',
     label: 'Order',
-    cell: (e) => <span className="font-mono">{e.orderNumber ?? ''}</span>,
+    cell: (e) => (
+      <span className="font-mono whitespace-nowrap">{e.orderNumber ?? ''}</span>
+    ),
   },
   {
     key: 'amount',

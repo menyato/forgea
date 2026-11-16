@@ -112,7 +112,9 @@ const COLUMNS: ListColumn<OrderListItem>[] = [
   {
     key: 'order',
     label: 'Order',
-    cell: (o) => <span className="font-mono">{o.orderNumber}</span>,
+    cell: (o) => (
+      <span className="font-mono whitespace-nowrap">{o.orderNumber}</span>
+    ),
   },
   { key: 'customer', label: 'Customer', cell: (o) => o.customerEmail },
   {

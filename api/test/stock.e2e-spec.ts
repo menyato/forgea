@@ -1,5 +1,6 @@
 import type {
   Page,
+  FilamentChoice,
   StockItemView,
   StockMovementCounts,
   StockMovementView,
@@ -346,6 +347,28 @@ describe('Filament stock (e2e)', () => {
       needsRestock: false,
       suggestSpools: 0,
     });
+  });
+
+  it('forms list the filaments in use exactly as the overview shows them', async () => {
+    const overview = (await as(staff.cookie).get('/stock').expect(200))
+      .body as StockOverview;
+    const choices = (await as(staff.cookie).get('/stock/filaments').expect(200))
+      .body as FilamentChoice[];
+    expect(choices).toEqual(
+      overview.items
+        .filter((i) => i.active)
+        .map((i) => ({
+          id: i.id,
+          material: i.material.code,
+          colour: i.colour,
+          swatchHex: i.swatchHex,
+          costPerGram: i.costPerGram,
+          stockGrams: i.stockGrams,
+        })),
+    );
+    await as((await signedInCustomer(app)).cookie)
+      .get('/stock/filaments')
+      .expect(403);
   });
 
   it('only the team sees stock; changing it needs stock.manage', async () => {

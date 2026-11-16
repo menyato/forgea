@@ -17,6 +17,7 @@ import type {
   StockItemView,
   StockMovementCounts,
   StockMovementView,
+  FilamentChoice,
   StockOverview,
   StockPrintable,
 } from '@forgea/types';
@@ -55,6 +56,12 @@ const key = (materialId: string, colour: string) =>
   `${materialId}\u0000${colour}`;
 
 /** Filament on the shelf, what open orders will take, how fast it goes and what to buy. */
+/** What a gram of a stock line costs: its own spools' price, else its material's. */
+const costPerGramOf = (r: {
+  ownPricePerGram: string | null;
+  pricePerGram: string;
+}) => new Prisma.Decimal(r.ownPricePerGram ?? r.pricePerGram).toFixed(4);
+
 @Injectable()
 export class StockService {
   constructor(
@@ -103,6 +110,27 @@ export class StockService {
   }
 
   /**
+   * The filaments in use, for forms that choose one (a product's colour, a shop colour, a
+   * print run): the shelf's own rows, without the advice and reports of the overview.
+   */
+  async filaments(today: string): Promise<FilamentChoice[]> {
+    const [rows, swatches] = await Promise.all([
+      this.stock.rows(today),
+      this.stock.swatches(),
+    ]);
+    return rows
+      .filter((r) => r.active)
+      .map((r) => ({
+        id: r.id,
+        material: r.code,
+        colour: r.colour,
+        swatchHex: r.hex ?? swatches.get(r.colour) ?? null,
+        costPerGram: costPerGramOf(r),
+        stockGrams: r.stock,
+      }));
+  }
+
+  /**
    * Every stock line with its advice. A line exists once filament came in or went out for that
    * material and colour (a delivery, or the first order of it going into production).
    */
@@ -146,9 +174,7 @@ export class StockService {
         colour: r.colour,
         swatchHex: r.hex ?? swatches.get(r.colour) ?? null,
         hex: r.hex,
-        costPerGram: new Prisma.Decimal(
-          r.ownPricePerGram ?? r.pricePerGram,
-        ).toFixed(4),
+        costPerGram: costPerGramOf(r),
         active: r.active,
         stockGrams: r.stock,
         committedGrams,

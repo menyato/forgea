@@ -27,6 +27,12 @@ import { CustomRequestsRepository } from './custom-requests.repository.js';
  * around that price (the owner's spread); a sliced 3MF's own grams and time make the price itself
  * the quote when sliced files are quoted at once. Other files are quoted by hand.
  */
+/**
+ * A sliced file prints lighter than the volume guess (thin walls, little infill), never by
+ * this much: under half of it, the file's own numbers are not believed.
+ */
+const SLICED_FLOOR = 0.5;
+
 @Injectable()
 export class RequestEstimator {
   constructor(
@@ -142,17 +148,44 @@ export class RequestEstimator {
     });
     const cents = Math.round(Number(unitPrice) * 100) * quantity;
     const total = (cents / 100).toFixed(2);
+    // A customer's file says what it likes about itself: its numbers price it at once only
+    // when the model inside bears them out. Otherwise the studio quotes it by hand.
+    const exact =
+      printFile.sliced &&
+      (await this.borneOut(printFile, rules.estimateSolidityPercent));
     return {
       estimate: {
         ...priceRange(total, rules.estimateSpreadPercent),
         price: total,
-        exact: printFile.sliced,
+        exact,
         grams: printFile.grams,
         printHours: printFile.printHours,
         material: { code: material.code, name: material.name },
       },
       printFile,
     };
+  }
+
+  /**
+   * Whether a sliced file's grams and hours are each at least `SLICED_FLOOR` of what the
+   * shapes in it would be estimated at from their volume (a price would hide a forged
+   * weight behind the labour and packaging every piece carries). A file with no shapes to
+   * measure is not.
+   */
+  private async borneOut(
+    printFile: PrintFile,
+    solidityPercent: number,
+  ): Promise<boolean> {
+    const mesh = await this.files.meshEstimate(
+      printFile.fileKey,
+      printFile.materialId,
+      solidityPercent,
+    );
+    return (
+      mesh !== null &&
+      Number(printFile.grams) >= Number(mesh.grams) * SLICED_FLOOR &&
+      Number(printFile.printHours) >= Number(mesh.printHours) * SLICED_FLOOR
+    );
   }
 
   private async stl(

@@ -60,6 +60,9 @@ export function ModelField({
     }
   }, [uploaded, onModelKey]);
 
+  // A side over two metres is no print: the file isn't in millimetres, so nothing it
+  // says can size or price a piece.
+  const unreal = measured?.sizeMm.some((mm) => mm > 2000) ?? false;
   let estimate: { grams: string; printHours: string } | null = null;
   if (measured && material) {
     try {
@@ -181,7 +184,12 @@ export function ModelField({
             />
             % (walls and infill; 30–50% is typical)
           </label>
-          {estimate && material ? (
+          {unreal ? (
+            <p className="text-warning">
+              That is larger than any printer: the file is probably not in
+              millimetres. Export it in mm, or type the grams and time yourself.
+            </p>
+          ) : estimate && material ? (
             <p className="flex flex-wrap items-center gap-3">
               <span>
                 Suggested in {material.code}:{' '}

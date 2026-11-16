@@ -88,7 +88,9 @@ const COLUMNS: ListColumn<InvoiceListItem>[] = [
     key: 'number',
     label: 'Number',
     sort: 'number',
-    cell: (i) => <span className="font-mono">{i.number}</span>,
+    cell: (i) => (
+      <span className="font-mono whitespace-nowrap">{i.number}</span>
+    ),
   },
   {
     key: 'kind',
@@ -99,7 +101,9 @@ const COLUMNS: ListColumn<InvoiceListItem>[] = [
   {
     key: 'order',
     label: 'Order',
-    cell: (i) => <span className="font-mono">{i.orderNumber ?? ''}</span>,
+    cell: (i) => (
+      <span className="font-mono whitespace-nowrap">{i.orderNumber ?? ''}</span>
+    ),
   },
   { key: 'customer', label: 'Customer', cell: customerOf },
   {

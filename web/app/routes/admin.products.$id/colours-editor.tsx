@@ -1,4 +1,5 @@
 import {
+  type FilamentChoice,
   type OptionGroupView,
   type ProductColourView,
   startingChoice,
@@ -9,13 +10,7 @@ import { SelectField } from '~/components/ui/field';
 import { Swatch } from '~/features/stock/stock-ui';
 
 /** A filament on the shelf, as bought: its material, name, look and cost per gram. */
-export interface Filament {
-  id: string;
-  material: string;
-  colour: string;
-  swatchHex: string | null;
-  costPerGram: string;
-}
+export type Filament = FilamentChoice;
 
 /**
  * A multi-colour product (from its 3MF): the grams each filament colour takes for one piece.

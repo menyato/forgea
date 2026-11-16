@@ -369,3 +369,11 @@ never trusts a total sent by the browser.
   with `overrides` in `pnpm-workspace.yaml` (currently `multer` ≥ 2.5.0, GHSA-q7qp-rjg7-q26m).
 - **Install scripts are blocked** unless a package is explicitly approved in `allowBuilds`.
 - **Exact pins** for security-relevant packages (Prisma, auth libraries).
+
+## A customer's sliced file (2026-11-16)
+
+A sliced 3MF says its own grams and print time, and anyone can edit them. A custom request is
+quoted at once from those numbers only when the shapes in the file bear them out: each must be
+at least half of what the model's volume would be estimated at (`RequestEstimator.borneOut`).
+A file that fails, or holds no shapes to measure, waits for the studio's own quote. Files the
+team uploads (products, quotation lines) are trusted as before.

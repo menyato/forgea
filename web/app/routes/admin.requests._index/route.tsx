@@ -90,7 +90,9 @@ const COLUMNS: ListColumn<CustomRequestListItem>[] = [
   {
     key: 'number',
     label: 'Number',
-    cell: (r) => <span className="font-mono">{r.requestNumber}</span>,
+    cell: (r) => (
+      <span className="font-mono whitespace-nowrap">{r.requestNumber}</span>
+    ),
   },
   { key: 'customer', label: 'Customer', cell: (r) => r.customerEmail },
   { key: 'file', label: 'File', cell: (r) => (r.hasFile ? 'Attached' : '—') },

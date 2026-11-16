@@ -154,7 +154,10 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 function RemoveTestOrder({ preview: r }: { preview: OrderRemovalPreview }) {
   const fetcher = useFetcher<SaveResult>();
   return (
-    <Panel title="Remove this test order">
+    <Panel
+      title="Remove this test order"
+      fold={{ open: false, holds: 'admins only' }}
+    >
       <p className="text-sm text-text-muted">
         Only for an order that never really happened. Real orders are cancelled,
         never removed. This removes the order and everything it made:

@@ -9,6 +9,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
   useNavigation,
   useRouteLoaderData,
   type ShouldRevalidateFunctionArgs,
@@ -88,6 +89,7 @@ export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRouteLoaderData<typeof loader>('root');
   const theme = useOptimisticTheme(data?.theme ?? 'auto');
+  const inDashboard = useLocation().pathname.startsWith('/admin');
   return (
     // The tokens' CSS switches palettes on data-theme; without it, the device setting wins.
     <html lang="en" data-theme={theme === 'auto' ? undefined : theme}>
@@ -116,7 +118,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <PageLoading />
         <div id="main">{children}</div>
-        <SiteFooter store={data?.store ?? null} />
+        {/* The dashboard is a workplace: the shop's footer stays with the shop. */}
+        {!inDashboard && <SiteFooter store={data?.store ?? null} />}
         <ScrollRestoration />
         <Scripts />
       </body>

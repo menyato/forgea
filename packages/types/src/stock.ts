@@ -23,6 +23,19 @@ export const STOCK_MOVEMENT_LABELS: Readonly<
   RETURNED: 'Back from a cancelled order',
 };
 
+/** A filament on the shelf, as a form lists it to choose from (GET /stock/filaments). */
+export interface FilamentChoice {
+  id: string;
+  /** Its material's code ("PLA"). */
+  material: string;
+  /** The reel's name as bought; "" when no colour was chosen. */
+  colour: string;
+  swatchHex: string | null;
+  /** What a gram of it costs, USD. */
+  costPerGram: string;
+  stockGrams: number;
+}
+
 /** One material in one colour (GET /stock): what is left, how fast it goes, what to buy. */
 export interface StockItemView {
   id: string;

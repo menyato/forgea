@@ -10,6 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import type {
+  FilamentChoice,
   Page,
   StockMovementCounts,
   StockMovementView,
@@ -52,6 +53,13 @@ export class StockController {
       from: q.from ?? daysAgo(29),
       to: q.to ?? today(),
     });
+  }
+
+  /** The filaments in use, for forms that choose one. */
+  @RequirePermission('materials.view')
+  @Get('filaments')
+  filaments(): Promise<FilamentChoice[]> {
+    return this.stock.filaments(today());
   }
 
   /** Every movement, newest first (or one line's), searchable and paged. */

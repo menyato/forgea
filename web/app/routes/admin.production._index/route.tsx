@@ -134,7 +134,9 @@ const COLUMNS: ListColumn<PrintJobListItem>[] = [
   {
     key: 'order',
     label: 'Order',
-    cell: (j) => <span className="font-mono">{j.orderNumber}</span>,
+    cell: (j) => (
+      <span className="font-mono whitespace-nowrap">{j.orderNumber}</span>
+    ),
   },
   { key: 'what', label: 'Prints', cell: what },
   {

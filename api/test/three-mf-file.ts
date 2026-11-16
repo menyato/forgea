@@ -45,7 +45,21 @@ function box(size: number): string {
  * file. `sliced`: with the slicer's plate (1 h 30, 10.25 g + 2.25 g), as "Export plate sliced
  * file" makes it.
  */
-export function bambuThreeMf({ sliced }: { sliced: boolean }): Buffer {
+export function bambuThreeMf({
+  sliced,
+  doctored = false,
+}: {
+  sliced: boolean;
+  /** Its slicer's numbers edited down by hand (a minute, a hundredth of a gram). */
+  doctored?: boolean;
+}): Buffer {
+  const claims = (text: string) =>
+    doctored
+      ? text
+          .replace('value="5400"', 'value="60"')
+          .replace('used_g="10.25"', 'used_g="0.01"')
+          .replace('used_g="2.25"', 'used_g="0.01"')
+      : text;
   return Buffer.from(
     zipTextFiles([
       {
@@ -86,7 +100,9 @@ export function bambuThreeMf({ sliced }: { sliced: boolean }): Buffer {
         ? [
             {
               name: 'Metadata/slice_info.config',
-              text: '<?xml version="1.0"?><config><plate><metadata key="index" value="1"/><metadata key="prediction" value="5400"/><metadata key="weight" value="12.5"/><metadata key="support_used" value="true"/><object identify_id="1" name="piece &lt;b&gt;" skipped="false" /><object identify_id="2" name="left out" skipped="true" /><filament id="1" type="PLA" color="#AA2222" used_m="3" used_g="10.25"/><filament id="2" type="PLA" color="#B87333" used_m="1" used_g="2.25"/></plate></config>',
+              text: claims(
+                '<?xml version="1.0"?><config><plate><metadata key="index" value="1"/><metadata key="prediction" value="5400"/><metadata key="weight" value="12.5"/><metadata key="support_used" value="true"/><object identify_id="1" name="piece &lt;b&gt;" skipped="false" /><object identify_id="2" name="left out" skipped="true" /><filament id="1" type="PLA" color="#AA2222" used_m="3" used_g="10.25"/><filament id="2" type="PLA" color="#B87333" used_m="1" used_g="2.25"/></plate></config>',
+              ),
             },
             {
               name: 'Metadata/plate_1.gcode',

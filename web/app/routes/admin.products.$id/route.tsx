@@ -11,7 +11,6 @@ import type {
   PrintFilesTotal,
   ProductRealCost,
   ProfitKind,
-  StockOverview,
   UploadedFile,
 } from '@forgea/types';
 import {
@@ -30,6 +29,7 @@ import type { ApiClient } from '~/lib/api-client.server';
 import { allPages } from '~/lib/all-pages.server';
 import { apiContext } from '~/lib/request.server';
 import { DeleteRecord } from '~/features/admin/delete-record';
+import { filamentChoices } from '~/features/production/choices.server';
 import type { Route } from './+types/route';
 import { ProductForm } from './product-form';
 
@@ -69,7 +69,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
           `/print-jobs/products/${encodeURIComponent(params.id)}/cost`,
         ),
     // The filaments on the shelf (others get 403 and no list).
-    api.get<StockOverview>('/stock'),
+    filamentChoices(api),
   ]);
   if (product && !product.ok)
     throw new Response(product.message, { status: product.status });
@@ -85,17 +85,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     realCost: realCost?.ok ? realCost.data : null,
     // The filaments on the shelf a colour may be printed from (none for someone who can't
     // see the stock).
-    filaments: stock.ok
-      ? stock.data.items
-          .filter((i) => i.active && i.colour !== '')
-          .map((i) => ({
-            id: i.id,
-            material: i.material.code,
-            colour: i.colour,
-            swatchHex: i.swatchHex,
-            costPerGram: i.costPerGram,
-          }))
-      : [],
+    filaments: stock.filter((i) => i.colour !== ''),
     others: list
       .filter((p) => p.id !== params.id)
       .map((p) => ({ id: p.id, name: p.name })),

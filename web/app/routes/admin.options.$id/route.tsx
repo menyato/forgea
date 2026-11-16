@@ -2,7 +2,6 @@ import {
   type MaterialView,
   OptionKind,
   type OptionGroupView,
-  type StockOverview,
 } from '@forgea/types';
 import { SaveOptionGroupDto, SaveOptionValueDto } from '@forgea/validation';
 import { useCan } from '~/features/admin/access';
@@ -12,6 +11,7 @@ import { GroupForm, kindLabel } from '~/features/admin-options/group-form';
 import { groupValues } from '~/features/admin-options/group-values.server';
 import { apiContext } from '~/lib/request.server';
 import { DeleteRecord } from '~/features/admin/delete-record';
+import { filamentChoices } from '~/features/production/choices.server';
 import type { Route } from './+types/route';
 import { ValueForm } from './value-form';
 
@@ -22,7 +22,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     api.get<OptionGroupView[]>('/option-groups'),
     api.get<MaterialView[]>('/materials'),
     // The filaments a colour may be printed from (none for someone who can't see the stock).
-    api.get<StockOverview>('/stock'),
+    filamentChoices(api),
   ]);
   if (!groups.ok) throw new Response(groups.message, { status: groups.status });
   if (!materials.ok)
@@ -32,15 +32,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
   return {
     group,
     materials: materials.data,
-    filaments: stock.ok
-      ? stock.data.items
-          .filter((i) => i.active && i.colour !== '')
-          .map((i) => ({
-            id: i.id,
-            material: i.material.code,
-            colour: i.colour,
-          }))
-      : [],
+    filaments: stock.filter((i) => i.colour !== ''),
   };
 }
 

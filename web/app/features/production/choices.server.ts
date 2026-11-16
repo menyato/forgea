@@ -1,9 +1,17 @@
-import type { PrinterView, StockOverview } from '@forgea/types';
+import type { FilamentChoice, PrinterView } from '@forgea/types';
 import type { ApiClient } from '~/lib/api-client.server';
 
 export interface Choice {
   id: string;
   label: string;
+}
+
+/** The filaments on the shelf a form may choose from; none for someone who can't see the stock. */
+export async function filamentChoices(
+  api: ApiClient,
+): Promise<FilamentChoice[]> {
+  const r = await api.get<FilamentChoice[]>('/stock/filaments');
+  return r.ok ? r.data : [];
 }
 
 /**
@@ -15,7 +23,7 @@ export async function productionChoices(
 ): Promise<{ printers: Choice[]; reels: Choice[] }> {
   const [printers, stock] = await Promise.all([
     api.get<PrinterView[]>('/printers'),
-    api.get<StockOverview>('/stock'),
+    filamentChoices(api),
   ]);
   return {
     printers: printers.ok
@@ -23,13 +31,9 @@ export async function productionChoices(
           .filter((p) => p.active)
           .map((p) => ({ id: p.id, label: `${p.name} (${p.watts} W)` }))
       : [],
-    reels: stock.ok
-      ? stock.data.items
-          .filter((i) => i.active)
-          .map((i) => ({
-            id: i.id,
-            label: `${i.material.code} · ${i.colour || 'no colour'} · ${i.stockGrams} g on the shelf`,
-          }))
-      : [],
+    reels: stock.map((i) => ({
+      id: i.id,
+      label: `${i.material} · ${i.colour || 'no colour'} · ${i.stockGrams} g on the shelf`,
+    })),
   };
 }

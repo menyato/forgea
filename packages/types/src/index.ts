@@ -101,6 +101,7 @@ export type {
   ProductFilamentUse,
   GramsCost,
   StockCosts,
+  FilamentChoice,
   StockItemView,
   StockPrintable,
   StockMovementCounts,
