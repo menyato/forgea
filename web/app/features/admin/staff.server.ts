@@ -70,6 +70,26 @@ export async function save<T extends object>(
     : data<SaveResult>({ error: r.message }, { status: r.status });
 }
 
+/**
+ * A save that makes a record and then opens it: `save`, and on success a redirect to the
+ * address `to` gives for what the API answered (nothing: stay, as after an ordinary save).
+ */
+export async function saveNew<T extends object, R>(
+  dto: new () => T,
+  values: Record<string, unknown>,
+  send: (value: T) => Promise<ApiResult<R>>,
+  to: (created: R) => string | null | undefined,
+) {
+  let open: string | null | undefined;
+  const result = await save(dto, values, async (value) => {
+    const r = await send(value);
+    if (r.ok) open = to(r.data);
+    return r;
+  });
+  if (open) throw redirect(open);
+  return result;
+}
+
 /** Reads a checkbox: browsers send "on" when ticked and nothing otherwise. */
 export const checked = (form: FormData, name: string): boolean =>
   form.get(name) === 'on';

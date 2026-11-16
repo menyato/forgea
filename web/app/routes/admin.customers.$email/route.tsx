@@ -15,6 +15,7 @@ import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import { accountText } from '~/features/customers/account-text';
 import { apiContext } from '~/lib/request.server';
+import { STUDIO_TIME_ZONE } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -79,7 +80,7 @@ const when = (iso: string) =>
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Asia/Beirut',
+    timeZone: STUDIO_TIME_ZONE,
   });
 
 const date = (iso: string) =>
@@ -87,6 +88,7 @@ const date = (iso: string) =>
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: STUDIO_TIME_ZONE,
   });
 
 /** One kind of record they have, newest first, each opening its own page. */

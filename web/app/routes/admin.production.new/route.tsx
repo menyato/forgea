@@ -6,7 +6,7 @@ import type {
   StaffOrder,
 } from '@forgea/types';
 import { CreatePrintJobDto } from '@forgea/validation';
-import { Form, redirect, useFetcher } from 'react-router';
+import { Form, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
@@ -16,7 +16,7 @@ import {
   SaveStatus,
   ViewOnly,
 } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { type SaveResult, saveNew, text } from '~/features/admin/staff.server';
 import { PrinterField, ReelField } from '~/features/production/choice-fields';
 import { productionChoices } from '~/features/production/choices.server';
 import { apiContext } from '~/lib/request.server';
@@ -50,8 +50,7 @@ export async function loader({ url, context }: Route.LoaderArgs) {
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const when = text(form, 'scheduledDate');
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     CreatePrintJobDto,
     {
       orderId: text(form, 'orderId'),
@@ -70,16 +69,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       ...(when ? { scheduledDate: fromStudioInput(when) } : {}),
       requestKey: text(form, 'requestKey'),
     },
-    async (dto) => {
-      const r = await context
-        .get(apiContext)
-        .post<PrintJobListItem>('/print-jobs', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+    (dto) => context.get(apiContext).post<PrintJobListItem>('/print-jobs', dto),
+    (created) => `/admin/production/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/production/${createdId}`);
-  return result;
 }
 
 export default function NewPrintJob({ loaderData }: Route.ComponentProps) {

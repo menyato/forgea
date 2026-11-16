@@ -41,5 +41,7 @@ model Upload {
   leads Lead[]
 
   @@index([status, createdAt])
+  // A person's daily upload allowance.
+  @@index([uploadedById, createdAt])
   @@map("uploads")
 }

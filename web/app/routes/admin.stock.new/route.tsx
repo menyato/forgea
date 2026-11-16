@@ -1,13 +1,13 @@
 import type { MaterialView } from '@forgea/types';
 import { CreateStockItemDto } from '@forgea/validation';
-import { redirect, useFetcher } from 'react-router';
+import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
-  save,
+  saveNew,
   text,
 } from '~/features/admin/staff.server';
 import { ColourLook } from '~/features/stock/stock-ui';
@@ -26,8 +26,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 /** A new filament on the shelf, with nothing on it yet; opens its page. */
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     CreateStockItemDto,
     {
       materialId: text(form, 'materialId'),
@@ -40,16 +39,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       coverDays: text(form, 'coverDays'),
       active: checked(form, 'active'),
     },
-    async (dto) => {
-      const r = await context
-        .get(apiContext)
-        .post<{ id: string }>('/stock/items', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+    (dto) => context.get(apiContext).post<{ id: string }>('/stock/items', dto),
+    (created) => `/admin/stock/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/stock/${createdId}`);
-  return result;
 }
 
 export default function NewFilament({ loaderData }: Route.ComponentProps) {

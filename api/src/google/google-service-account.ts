@@ -65,6 +65,8 @@ export class GoogleServiceAccount {
 
     const res = await this.fetchImpl(TOKEN_URL, {
       method: 'POST',
+      // Email and calendar wait on this: a stalled connection must not hold them open.
+      signal: AbortSignal.timeout(8_000),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',

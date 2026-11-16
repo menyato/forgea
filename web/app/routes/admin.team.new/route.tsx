@@ -1,10 +1,10 @@
 import { Role, type UserListItem } from '@forgea/types';
 import { AddTeamMemberDto } from '@forgea/validation';
-import { redirect, useFetcher } from 'react-router';
+import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { type SaveResult, saveNew, text } from '~/features/admin/staff.server';
 import { ROLE_LABELS, TEAM_ROLES } from '~/features/team/roles';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -12,24 +12,16 @@ import type { Route } from './+types/route';
 /** A new team member; opens their page. */
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     AddTeamMemberDto,
     {
       email: text(form, 'email'),
       name: text(form, 'name'),
       role: text(form, 'role'),
     },
-    async (dto) => {
-      const r = await context
-        .get(apiContext)
-        .post<UserListItem>('/users/team', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+    (dto) => context.get(apiContext).post<UserListItem>('/users/team', dto),
+    (created) => `/admin/team/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/team/${createdId}`);
-  return result;
 }
 
 export default function NewTeamMember() {

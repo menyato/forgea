@@ -2,7 +2,7 @@ import type { PrinterView } from '@forgea/types';
 import { SavePrinterDto } from '@forgea/validation';
 import { redirect } from 'react-router';
 import { AdminHeader } from '~/features/admin/admin-ui';
-import { save } from '~/features/admin/staff.server';
+import { saveNew } from '~/features/admin/staff.server';
 import { PrinterForm } from '~/features/production/printer-form';
 import { printerValues } from '~/features/production/printer-values.server';
 import { apiContext } from '~/lib/request.server';
@@ -26,23 +26,18 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const form = await request.formData();
   const api = context.get(apiContext);
   const isNew = params.id === 'new';
-  let created: string | undefined;
-  const result = await save(
+  return saveNew(
     SavePrinterDto,
     printerValues(form),
-    async (dto) => {
-      const r = isNew
-        ? await api.post<PrinterView>('/printers', dto)
-        : await api.put<PrinterView>(
+    (dto) =>
+      isNew
+        ? api.post<PrinterView>('/printers', dto)
+        : api.put<PrinterView>(
             `/printers/${encodeURIComponent(params.id)}`,
             dto,
-          );
-      if (isNew && r.ok) created = r.data.id;
-      return r;
-    },
+          ),
+    (saved) => (isNew ? `/admin/printers/${saved.id}` : null),
   );
-  if (created) throw redirect(`/admin/printers/${created}`);
-  return result;
 }
 
 export default function Printer({ loaderData }: Route.ComponentProps) {

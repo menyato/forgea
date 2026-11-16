@@ -53,6 +53,11 @@ export class PieceListQuery extends CursorPageQuery {
   @IsUUID()
   holderId?: string;
 
+  /** Only one order's pieces (the order's page). */
+  @IsOptional()
+  @IsUUID()
+  orderId?: string;
+
   /** Name, product, who has it, the note or the order number. */
   @IsOptional()
   @Trim()

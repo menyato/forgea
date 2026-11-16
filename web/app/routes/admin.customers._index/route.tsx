@@ -10,6 +10,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { STUDIO_TIME_ZONE } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 /** With an account, or known only by email (the website form, a quotation sent to them). */
@@ -47,6 +48,7 @@ const date = (iso: string) =>
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: STUDIO_TIME_ZONE,
   });
 
 const COLUMNS: ListColumn<CustomerListItem>[] = [

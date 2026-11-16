@@ -16,6 +16,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { studioDate } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 const LABELS: Record<QuotationStatus, string> = {
@@ -126,9 +127,7 @@ const COLUMNS: ListColumn<QuotationListItem>[] = [
     label: 'Written',
     sort: 'createdAt',
     cell: (q) => (
-      <span className="text-text-muted">
-        {new Date(q.createdAt).toLocaleDateString('en-GB')}
-      </span>
+      <span className="text-text-muted">{studioDate(q.createdAt)}</span>
     ),
   },
 ];

@@ -24,7 +24,7 @@ import { data, Form, redirect } from 'react-router';
 import { buttonClass } from '~/components/ui/button';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, ViewOnly } from '~/features/admin/admin-ui';
-import { checked, save, text } from '~/features/admin/staff.server';
+import { checked, saveNew, text } from '~/features/admin/staff.server';
 import { jsonField, validateForm } from '~/lib/forms.server';
 import type { ApiClient } from '~/lib/api-client.server';
 import { allPages } from '~/lib/all-pages.server';
@@ -209,8 +209,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   }
 
   const isNew = params.id === 'new';
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     SaveProductDto,
     {
       slug: text(form, 'slug'),
@@ -238,20 +237,16 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       priceOverride: text(form, 'priceOverride'),
       extraCosts: jsonField(form, 'extraCosts') ?? [],
     },
-    async (dto) => {
-      const r = isNew
-        ? await api.post<AdminProduct>('/products', dto)
-        : await api.put<AdminProduct>(
+    (dto) =>
+      isNew
+        ? api.post<AdminProduct>('/products', dto)
+        : api.put<AdminProduct>(
             `/products/${encodeURIComponent(params.id)}`,
             dto,
-          );
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+          ),
+    // A new product gets its own address, so reloading the page edits it instead of copying it.
+    (saved) => (isNew ? `/admin/products/${saved.id}` : null),
   );
-  // A new product gets its own address, so reloading the page edits it instead of copying it.
-  if (isNew && createdId) throw redirect(`/admin/products/${createdId}`);
-  return result;
 }
 
 /**

@@ -14,6 +14,7 @@ import {
 import { apiContext } from '~/lib/request.server';
 import { ShownColours } from '~/features/admin/shown-colours';
 import { ProductPreview } from './product-preview';
+import { studioDate } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 const FILTERS = [
@@ -80,9 +81,7 @@ const COLUMNS: ListColumn<AdminProductListItem>[] = [
     key: 'changed',
     label: 'Last changed',
     cell: (p) => (
-      <span className="text-text-muted">
-        {new Date(p.updatedAt).toLocaleDateString('en-GB')}
-      </span>
+      <span className="text-text-muted">{studioDate(p.updatedAt)}</span>
     ),
   },
 ];

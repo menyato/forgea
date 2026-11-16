@@ -4,6 +4,11 @@ How to record everything the studio does on forgea-lab.com, so stock, costs, mon
 stay right. Every screen is in the **Dashboard** (top bar, once signed in with your Forgea
 Google account).
 
+The Dashboard opens on **Needs attention**: what is waiting (orders to confirm, requests to
+quote, unpaid invoices, low stock…), each card opening its list. The row of buttons above the
+cards starts the everyday jobs in one click: New quotation, New lead, Plan a print run, Printed
+for the studio, Failed print, Spools received, Vendor bill, New product.
+
 ## 1. Set up once (and when something changes)
 
 | What | Where | Why it matters |

@@ -92,6 +92,10 @@ model StockMovement {
   @@index([stockItemId, createdAt])
   @@index([createdAt])
   @@index([orderItemId])
+  // An order's page reads its runs' movements; deletion checks count the other two.
+  @@index([printJobId])
+  @@index([pieceId])
+  @@index([productId])
   @@map("stock_movements")
 }
 

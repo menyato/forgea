@@ -17,6 +17,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { STUDIO_TIME_ZONE, studioDate } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 /** The filters: orders by what the studio has to do next; several together add up. */
@@ -59,7 +60,7 @@ const month = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', {
     month: 'long',
     year: 'numeric',
-    timeZone: 'UTC',
+    timeZone: STUDIO_TIME_ZONE,
   });
 
 export async function loader({ url, context }: Route.LoaderArgs) {
@@ -145,9 +146,7 @@ const COLUMNS: ListColumn<OrderListItem>[] = [
     label: 'Placed',
     sort: 'createdAt',
     cell: (o) => (
-      <span className="text-text-muted">
-        {new Date(o.createdAt).toLocaleDateString('en-GB')}
-      </span>
+      <span className="text-text-muted">{studioDate(o.createdAt)}</span>
     ),
   },
 ];

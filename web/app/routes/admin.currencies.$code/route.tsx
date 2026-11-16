@@ -12,6 +12,7 @@ import {
 } from '~/features/admin/admin-ui';
 import { type SaveResult, save, text } from '~/features/admin/staff.server';
 import { apiContext } from '~/lib/request.server';
+import { studioDateTime } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
@@ -63,7 +64,7 @@ export default function Currency({ loaderData }: Route.ComponentProps) {
               {c.rateEffectiveFrom && (
                 <span className="text-sm text-text-muted">
                   {' '}
-                  since {new Date(c.rateEffectiveFrom).toLocaleString('en-GB')}
+                  since {studioDateTime(c.rateEffectiveFrom)}
                 </span>
               )}
             </p>
@@ -106,7 +107,7 @@ export default function Currency({ loaderData }: Route.ComponentProps) {
                       className="border-t border-border"
                     >
                       <td className="py-1.5 pr-6">
-                        {new Date(h.effectiveFrom).toLocaleString('en-GB')}
+                        {studioDateTime(h.effectiveFrom)}
                       </td>
                       <td className="py-1.5 pr-6 text-right tabular-nums">
                         {Number(h.rate).toLocaleString('en-US')}

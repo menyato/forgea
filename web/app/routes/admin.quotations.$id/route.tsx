@@ -27,7 +27,7 @@ import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
-  save,
+  saveNew,
   text,
 } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
@@ -43,7 +43,7 @@ import { LinePrintFile, type PrintFileResult } from './line-print-file';
 export async function loader({ params, url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const isNew = params.id === 'new';
-  const [products, quotation] = await Promise.all([
+  const [products, quotation, related] = await Promise.all([
     // Every product, launched in the shop or not: a piece made for one client is quoted
     // like any other.
     api.get<QuotableProduct[]>('/products/quotable'),
@@ -52,6 +52,7 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
       : api.get<QuotationDetail>(
           `/quotations/${encodeURIComponent(params.id)}`,
         ),
+    isNew ? [] : relatedOf(api, 'quotation', params.id),
   ]);
   if (quotation && !quotation.ok)
     throw new Response(quotation.message, { status: quotation.status });
@@ -60,7 +61,7 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
     .slice(0, 10);
   return {
     quotation: quotation?.ok ? quotation.data : null,
-    related: isNew ? [] : await relatedOf(api, 'quotation', params.id),
+    related,
     products: products.ok ? products.data : [],
     // Coming from a lead: who it's for.
     prefill: {
@@ -96,8 +97,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       ...(intent === 'confirm' ? { order: r.data as CheckoutResult } : {}),
     });
   }
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     SaveQuotationDto,
     {
       customerEmail: text(form, 'customerEmail'),
@@ -112,17 +112,12 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       addressLine: text(form, 'addressLine'),
       lines: jsonField(form, 'lines') ?? [],
     },
-    async (dto) => {
-      const r =
-        params.id === 'new'
-          ? await api.post<{ id: string }>('/quotations', dto)
-          : await api.put<{ id: string }>(base, dto);
-      if (r.ok && params.id === 'new') createdId = r.data.id;
-      return r;
-    },
+    (dto) =>
+      params.id === 'new'
+        ? api.post<{ id: string }>('/quotations', dto)
+        : api.put<{ id: string }>(base, dto),
+    (saved) => (params.id === 'new' ? `/admin/quotations/${saved.id}` : null),
   );
-  if (createdId) throw redirect(`/admin/quotations/${createdId}`);
-  return result;
 }
 
 async function printFile(api: ApiClient, form: FormData) {

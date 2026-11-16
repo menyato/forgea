@@ -60,3 +60,12 @@ export function fromStudioInput(value: string): string {
 /** Dates and times as the studio reads them. */
 export const studioFormat = (options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('en-GB', { ...options, timeZone: STUDIO_TIME_ZONE });
+
+const dayAndTime = studioFormat({ dateStyle: 'short', timeStyle: 'medium' });
+const dayOnly = studioFormat({ dateStyle: 'short' });
+
+/** "16/11/2026, 09:53:30" in the studio's time: the same on the server and in any browser. */
+export const studioDateTime = (iso: string) => dayAndTime.format(new Date(iso));
+
+/** "16/11/2026", the studio's day at `iso`. */
+export const studioDate = (iso: string) => dayOnly.format(new Date(iso));

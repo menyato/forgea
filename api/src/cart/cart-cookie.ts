@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { HTTP } from '@forgea/types';
 import type { CookieOptions, Request, Response } from 'express';
-import type { EnvironmentVariables } from '../config/environment.js';
 
 export const CART_COOKIE = HTTP.CART_COOKIE;
 const UUID = /^[0-9a-f-]{36}$/;
@@ -14,18 +12,14 @@ const UUID = /^[0-9a-f-]{36}$/;
  */
 @Injectable()
 export class CartCookie {
-  private readonly options: CookieOptions;
-
-  constructor(config: ConfigService<EnvironmentVariables, true>) {
-    this.options = {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'lax',
-      path: '/',
-      signed: true,
-      maxAge: 30 * 86_400_000,
-    };
-  }
+  private readonly options: CookieOptions = {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    signed: true,
+    maxAge: 30 * 86_400_000,
+  };
 
   read(req: Request): string | undefined {
     const signed: unknown = req.signedCookies;

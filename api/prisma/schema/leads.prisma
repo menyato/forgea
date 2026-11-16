@@ -88,6 +88,9 @@ model Lead {
 
   @@index([stageId, id])
   @@index([closedAt])
+  // The customers list counts each person's leads by address or account.
+  @@index([email])
+  @@index([customerId])
   @@map("leads")
 }
 

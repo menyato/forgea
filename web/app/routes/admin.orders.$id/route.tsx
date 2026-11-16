@@ -28,6 +28,7 @@ import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
 import { apiContext } from '~/lib/request.server';
+import { studioDateTime } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
 import { OrderFigures } from './order-figures';
@@ -35,7 +36,7 @@ import { ProductionPanel } from './production-panel';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [r, related, jobs, production, removal] = await Promise.all([
+  const [r, related, jobs, production, removal, pieces] = await Promise.all([
     api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
     relatedOf(api, 'order', params.id),
     // Only for staff who run production (others get a 403 and no panel).
@@ -49,21 +50,19 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     api.get<OrderRemovalPreview>(
       `/orders/${encodeURIComponent(params.id)}/removal`,
     ),
+    // Where its pieces are now (the "Where it is" board), for whoever sees the stock.
+    api.get<Page<PieceView>>(
+      `/pieces?limit=50&orderId=${encodeURIComponent(params.id)}`,
+    ),
   ]);
   if (!r.ok) throw new Response(r.message, { status: r.status });
-  // Where its pieces are now (the "Where it is" board), for whoever sees the stock.
-  const pieces = await api.get<Page<PieceView>>(
-    `/pieces?limit=50&q=${encodeURIComponent(r.data.orderNumber)}`,
-  );
   return {
     order: r.data,
     related,
     jobs: jobs.ok ? jobs.data.items : null,
     production: production.ok ? production.data : null,
     removal: removal.ok ? removal.data : null,
-    pieces: pieces.ok
-      ? pieces.data.items.filter((p) => p.orderNumber === r.data.orderNumber)
-      : null,
+    pieces: pieces.ok ? pieces.data.items : null,
     // A fresh one-time key per load (after a save too): a payment sent twice counts once.
     requestKey: randomUUID(),
   };
@@ -240,7 +239,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
         trail={[{ label: 'Orders', to: '/admin/orders' }]}
         related={loaderData.related}
         title={o.orderNumber}
-        intro={`${ORDER_STATUS_LABELS[o.status].title} · placed ${new Date(o.createdAt).toLocaleString('en-GB')}`}
+        intro={`${ORDER_STATUS_LABELS[o.status].title} · placed ${studioDateTime(o.createdAt)}`}
         action={
           <Link
             to="/admin/orders"
@@ -537,7 +536,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                     {ORDER_STATUS_LABELS[h.status].title}
                   </p>
                   <p className="text-text-muted">
-                    {new Date(h.changedAt).toLocaleString('en-GB')}
+                    {studioDateTime(h.changedAt)}
                     {h.changedBy ? ` · ${h.changedBy}` : ''}
                   </p>
                   {h.note && <p>{h.note}</p>}

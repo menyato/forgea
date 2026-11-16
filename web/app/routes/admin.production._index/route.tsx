@@ -22,7 +22,7 @@ import {
 } from '~/features/admin/views';
 import { PRINT_JOB_ORDER } from '~/features/production/print-job-steps';
 import { apiContext } from '~/lib/request.server';
-import { studioFormat } from '~/lib/studio-time';
+import { studioDate, studioFormat } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 const DEFAULTS = { sorts: ['createdAt'], view: 'kanban' } as const;
@@ -190,9 +190,7 @@ const COLUMNS: ListColumn<PrintJobListItem>[] = [
     label: 'Added',
     sort: 'createdAt',
     cell: (j) => (
-      <span className="text-text-muted">
-        {new Date(j.createdAt).toLocaleDateString('en-GB')}
-      </span>
+      <span className="text-text-muted">{studioDate(j.createdAt)}</span>
     ),
   },
 ];

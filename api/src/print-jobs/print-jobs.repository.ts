@@ -459,22 +459,24 @@ export class PrintJobsRepository {
     const cost = Prisma.sql`(coalesce(j."materialCost", 0) + coalesce(j."electricityCost", 0) + coalesce(j."wearCost", 0))`;
     const finished = Prisma.sql`j."status" IN ('DONE', 'FAILED')
       AND j."finishedAt" >= ${start} AND j."finishedAt" < ${end}`;
-    const [totals] = await this.prisma.$queryRaw<
-      {
-        done: number;
-        failed: number;
-        good: number;
-        spare: number;
-        lostPieces: number;
-        gramsUsed: Prisma.Decimal;
-        gramsLost: Prisma.Decimal;
-        hours: Prisma.Decimal;
-        hoursLost: Prisma.Decimal;
-        kwh: Prisma.Decimal;
-        costGood: Prisma.Decimal;
-        costLost: Prisma.Decimal;
-      }[]
-    >`
+    const [[totals], printers, [cancelled], [studio], [shelf], [moved]] =
+      await Promise.all([
+        this.prisma.$queryRaw<
+          {
+            done: number;
+            failed: number;
+            good: number;
+            spare: number;
+            lostPieces: number;
+            gramsUsed: Prisma.Decimal;
+            gramsLost: Prisma.Decimal;
+            hours: Prisma.Decimal;
+            hoursLost: Prisma.Decimal;
+            kwh: Prisma.Decimal;
+            costGood: Prisma.Decimal;
+            costLost: Prisma.Decimal;
+          }[]
+        >`
       SELECT
         count(*) FILTER (WHERE j."status" = 'DONE')::int AS "done",
         count(*) FILTER (WHERE j."status" = 'FAILED')::int AS "failed",
@@ -490,18 +492,18 @@ export class PrintJobsRepository {
         coalesce(sum(${cost} * (1 - ${lostShare})), 0) AS "costGood",
         coalesce(sum(${cost} * ${lostShare}), 0) AS "costLost"
       FROM "print_jobs" j
-      WHERE ${finished}`;
-    const printers = await this.prisma.$queryRaw<
-      {
-        id: string;
-        name: string;
-        runs: number;
-        failed: number;
-        hours: Prisma.Decimal;
-        kwh: Prisma.Decimal;
-        lostCost: Prisma.Decimal;
-      }[]
-    >`
+      WHERE ${finished}`,
+        this.prisma.$queryRaw<
+          {
+            id: string;
+            name: string;
+            runs: number;
+            failed: number;
+            hours: Prisma.Decimal;
+            kwh: Prisma.Decimal;
+            lostCost: Prisma.Decimal;
+          }[]
+        >`
       SELECT p."id", p."name",
         count(*)::int AS "runs",
         count(*) FILTER (WHERE j."status" = 'FAILED')::int AS "failed",
@@ -512,39 +514,38 @@ export class PrintJobsRepository {
       JOIN "printers" p ON p."id" = j."printerId"
       WHERE ${finished}
       GROUP BY p."id", p."name"
-      ORDER BY p."name"`;
-    const [cancelled] = await this.prisma.$queryRaw<{ n: number }[]>`
+      ORDER BY p."name"`,
+        this.prisma.$queryRaw<{ n: number }[]>`
       SELECT count(*)::int AS "n" FROM "print_jobs"
-      WHERE "status" = 'CANCELLED' AND "updatedAt" >= ${start} AND "updatedAt" < ${end}`;
-    // Studio prints that failed, recorded from the stock page (no print job).
-    const [studio] = await this.prisma.$queryRaw<
-      { grams: number; cost: Prisma.Decimal }[]
-    >`
+      WHERE "status" = 'CANCELLED' AND "updatedAt" >= ${start} AND "updatedAt" < ${end}`,
+        // Studio prints that failed, recorded from the stock page (no print job).
+        this.prisma.$queryRaw<{ grams: number; cost: Prisma.Decimal }[]>`
       SELECT coalesce(-sum(s."grams"), 0)::int AS "grams",
              coalesce(sum(coalesce(s."cost", -s."grams" * s."costPerGram")), 0) AS "cost"
       FROM "stock_movements" s
       WHERE s."kind" = 'FAILED_PRINT' AND s."printJobId" IS NULL
-        AND s."createdAt" >= ${start} AND s."createdAt" < ${end}`;
-    const [shelf] = await this.prisma.$queryRaw<
-      { pieces: number; value: Prisma.Decimal }[]
-    >`SELECT coalesce(sum("onHand"), 0)::int AS "pieces",
+        AND s."createdAt" >= ${start} AND s."createdAt" < ${end}`,
+        this.prisma.$queryRaw<
+          { pieces: number; value: Prisma.Decimal }[]
+        >`SELECT coalesce(sum("onHand"), 0)::int AS "pieces",
              coalesce(sum("onHand" * "unitCost"), 0) AS "value"
-      FROM "ready_pieces"`;
-    const [moved] = await this.prisma.$queryRaw<
-      {
-        added: number;
-        sold: number;
-        usedOrScrapped: number;
-        scrappedCost: Prisma.Decimal;
-      }[]
-    >`
+      FROM "ready_pieces"`,
+        this.prisma.$queryRaw<
+          {
+            added: number;
+            sold: number;
+            usedOrScrapped: number;
+            scrappedCost: Prisma.Decimal;
+          }[]
+        >`
       SELECT
         coalesce(sum("quantity") FILTER (WHERE "kind" IN ('PRINTED', 'LEFT_OVER', 'ADDED')), 0)::int AS "added",
         coalesce(-sum("quantity") FILTER (WHERE "kind" = 'SOLD'), 0)::int AS "sold",
         coalesce(-sum("quantity") FILTER (WHERE "kind" IN ('USED', 'SCRAPPED')), 0)::int AS "usedOrScrapped",
         coalesce(sum(-"quantity" * "unitCost") FILTER (WHERE "kind" = 'SCRAPPED'), 0) AS "scrappedCost"
       FROM "ready_piece_movements"
-      WHERE "createdAt" >= ${start} AND "createdAt" < ${end}`;
+      WHERE "createdAt" >= ${start} AND "createdAt" < ${end}`,
+      ]);
     return {
       totals: totals!,
       printers,

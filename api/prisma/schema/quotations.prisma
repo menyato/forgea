@@ -80,6 +80,7 @@ model QuotationLine {
   printFile       Json?
 
   @@index([quotationId])
+  @@index([productId])
   @@map("quotation_lines")
 }
 

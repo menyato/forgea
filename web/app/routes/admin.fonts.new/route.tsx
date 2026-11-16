@@ -1,10 +1,10 @@
 import type { FontView, UploadedFile } from '@forgea/types';
 import { SaveFontDto } from '@forgea/validation';
-import { data, redirect, useFetcher } from 'react-router';
+import { data, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { type SaveResult, saveNew, text } from '~/features/admin/staff.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
@@ -23,18 +23,12 @@ export async function action({ request, context }: Route.ActionArgs) {
       { error: uploaded.message },
       { status: uploaded.status },
     );
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     SaveFontDto,
     { fileKey: uploaded.data.key, name: text(form, 'name') },
-    async (dto) => {
-      const r = await api.post<FontView>('/fonts', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+    (dto) => api.post<FontView>('/fonts', dto),
+    (created) => `/admin/fonts/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/fonts/${createdId}`);
-  return result;
 }
 
 export default function NewFont() {

@@ -4,6 +4,7 @@ import type { EnvironmentVariables } from '../config/environment.js';
 import { GoogleServiceAccount } from './google-service-account.js';
 
 const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const GOOGLE_TIMEOUT_MS = 8_000;
 
 export interface CalendarEvent {
   summary: string;
@@ -79,6 +80,8 @@ export class GoogleCalendar {
     const token = await this.google.accessToken(SCOPE);
     const res = await this.fetchImpl(url, {
       ...init,
+      // A stalled connection must not hold a print-job change open.
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',

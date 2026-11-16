@@ -14,6 +14,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { studioDate } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 /** The filters: new requests, those waiting on the customer, then the rest; they add up. */
@@ -105,9 +106,7 @@ const COLUMNS: ListColumn<CustomRequestListItem>[] = [
     label: 'Sent',
     sort: 'createdAt',
     cell: (r) => (
-      <span className="text-text-muted">
-        {new Date(r.createdAt).toLocaleDateString('en-GB')}
-      </span>
+      <span className="text-text-muted">{studioDate(r.createdAt)}</span>
     ),
   },
 ];

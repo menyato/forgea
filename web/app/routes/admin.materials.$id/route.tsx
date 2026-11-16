@@ -7,15 +7,18 @@ import { MaterialForm } from '~/features/admin-materials/material-form';
 import { materialValues } from '~/features/admin-materials/material-values.server';
 import { apiContext } from '~/lib/request.server';
 import { DeleteRecord } from '~/features/admin/delete-record';
+import { oneOf } from '~/features/admin/related.server';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  // The API sends materials as one list.
-  const r = await context.get(apiContext).get<MaterialView[]>('/materials');
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const material = r.data.find((m) => m.id === params.id);
-  if (!material) throw new Response('No such material', { status: 404 });
-  return { material };
+  return {
+    material: await oneOf<MaterialView>(
+      context.get(apiContext),
+      '/materials',
+      params.id,
+      'material',
+    ),
+  };
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {

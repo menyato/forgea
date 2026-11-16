@@ -305,6 +305,12 @@ describe('Where it is: pieces, extra costs, the shelf, test orders (e2e)', () =>
       grams: 210,
       holderAccount: { id: customer.user.id },
     });
+    // The order's page asks for exactly its own pieces.
+    const own = (
+      (await as(admin.cookie).get(`/pieces?orderId=${order.id}`).expect(200))
+        .body as Page<PieceView>
+    ).items;
+    expect(own.map((p) => p.id)).toEqual([pieces[0]!.id]);
   });
 
   it('an order says when a colour it needs has no reel on the shelf', async () => {

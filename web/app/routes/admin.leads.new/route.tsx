@@ -1,17 +1,16 @@
 import { SaveLeadDto } from '@forgea/validation';
-import { redirect, useFetcher } from 'react-router';
+import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, TextAreaField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { type SaveResult, saveNew, text } from '~/features/admin/staff.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 
 /** A lead the team adds; opens its page. */
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     SaveLeadDto,
     {
       name: text(form, 'name'),
@@ -21,16 +20,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       expectedRevenue: text(form, 'expectedRevenue'),
       deadline: text(form, 'deadline'),
     },
-    async (dto) => {
-      const r = await context
-        .get(apiContext)
-        .post<{ id: string }>('/leads/manual', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+    (dto) => context.get(apiContext).post<{ id: string }>('/leads/manual', dto),
+    (created) => `/admin/leads/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/leads/${createdId}`);
-  return result;
 }
 
 export default function NewLead() {

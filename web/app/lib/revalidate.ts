@@ -13,6 +13,8 @@ const ASKS = new Set([
   'print-file',
   'upload-model',
   'upload-image',
+  // A custom request's estimate.
+  'estimate',
 ]);
 
 /**

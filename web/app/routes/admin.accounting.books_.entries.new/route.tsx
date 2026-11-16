@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AccountView, JournalEntryView } from '@forgea/types';
 import { ManualEntryDto } from '@forgea/validation';
 import { useState } from 'react';
-import { redirect, useFetcher } from 'react-router';
+import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Field, SelectField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
@@ -12,7 +12,7 @@ import {
   SaveStatus,
   ViewOnly,
 } from '~/features/admin/admin-ui';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import { type SaveResult, saveNew, text } from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -33,8 +33,7 @@ export async function loader({ context }: Route.LoaderArgs) {
 /** Posts the entry and opens it. */
 export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
-  let createdId: string | undefined;
-  const result = await save(
+  return saveNew(
     ManualEntryDto,
     {
       date: text(form, 'date'),
@@ -42,16 +41,12 @@ export async function action({ request, context }: Route.ActionArgs) {
       lines: jsonField(form, 'lines') ?? [],
       requestKey: text(form, 'requestKey'),
     },
-    async (dto) => {
-      const r = await context
+    (dto) =>
+      context
         .get(apiContext)
-        .post<JournalEntryView>('/accounting/entries', dto);
-      if (r.ok) createdId = r.data.id;
-      return r;
-    },
+        .post<JournalEntryView>('/accounting/entries', dto),
+    (created) => `/admin/accounting/books/entries/${created.id}`,
   );
-  if (createdId) throw redirect(`/admin/accounting/books/entries/${createdId}`);
-  return result;
 }
 
 interface Line {

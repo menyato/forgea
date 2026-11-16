@@ -61,12 +61,16 @@ export interface PieceChange {
 
 /** The board's filters (all but the page and the sort). */
 function pieceWhere(
-  q: Pick<PieceListQuery, 'stages' | 'from' | 'to' | 'holderId' | 'q'>,
+  q: Pick<
+    PieceListQuery,
+    'stages' | 'from' | 'to' | 'holderId' | 'orderId' | 'q'
+  >,
 ): Prisma.PieceWhereInput {
   const has = { contains: q.q ?? '', mode: 'insensitive' } as const;
   return {
     ...(q.stages?.length ? { stage: { in: q.stages } } : {}),
     ...(q.holderId ? { holderId: q.holderId } : {}),
+    ...(q.orderId ? { orderItem: { orderId: q.orderId } } : {}),
     ...(q.from || q.to
       ? {
           printedAt: {

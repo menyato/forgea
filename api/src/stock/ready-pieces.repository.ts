@@ -35,9 +35,6 @@ const movementInclude = {
   order: { select: { id: true, orderNumber: true } },
   createdBy: { select: { email: true, name: true } },
 } as const satisfies Prisma.ReadyPieceMovementInclude;
-type ReadyPieceMovementRow = Prisma.ReadyPieceMovementGetPayload<{
-  include: typeof movementInclude;
-}>;
 
 /**
  * The shelf of pieces printed and not sold yet. Every change is a movement (append-only); a

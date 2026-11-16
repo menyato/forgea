@@ -6,14 +6,18 @@ import { StageForm } from '~/features/pipeline/pipeline-forms';
 import { stageValues } from '~/features/pipeline/pipeline-values.server';
 import { apiContext } from '~/lib/request.server';
 import { DeleteRecord } from '~/features/admin/delete-record';
+import { oneOf } from '~/features/admin/related.server';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  const r = await context.get(apiContext).get<LeadStageView[]>('/lead-stages');
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const stage = r.data.find((s) => s.id === params.id);
-  if (!stage) throw new Response('No such stage', { status: 404 });
-  return { stage };
+  return {
+    stage: await oneOf<LeadStageView>(
+      context.get(apiContext),
+      '/lead-stages',
+      params.id,
+      'stage',
+    ),
+  };
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {

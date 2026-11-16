@@ -93,6 +93,8 @@ model Product {
 
   @@index([active, id])
   @@index([categoryId])
+  // Every model a visitor loads is checked against its product.
+  @@index([modelFileKey])
   @@map("products")
 }
 

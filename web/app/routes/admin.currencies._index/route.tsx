@@ -9,6 +9,7 @@ import {
   ListView,
 } from '~/features/admin/views';
 import { apiContext } from '~/lib/request.server';
+import { studioDateTime } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 
 const DEFAULTS = { sorts: ['code', 'name', 'since'], order: 'asc' } as const;
@@ -50,9 +51,7 @@ const COLUMNS: ListColumn<CurrencyQuote & { id: string }>[] = [
     sort: 'since',
     cell: (c) => (
       <span className="text-text-muted">
-        {c.rateEffectiveFrom
-          ? new Date(c.rateEffectiveFrom).toLocaleString('en-GB')
-          : '—'}
+        {c.rateEffectiveFrom ? studioDateTime(c.rateEffectiveFrom) : '—'}
       </span>
     ),
   },

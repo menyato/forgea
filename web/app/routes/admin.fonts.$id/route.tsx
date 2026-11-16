@@ -20,15 +20,18 @@ import {
 import { FontSample, scriptsOf } from '~/features/admin-fonts/font-sample';
 import { useFontFaces } from '~/features/text-studio/use-font-faces';
 import { apiContext } from '~/lib/request.server';
+import { oneOf } from '~/features/admin/related.server';
 import type { Route } from './+types/route';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
-  // The API sends fonts as one list.
-  const r = await context.get(apiContext).get<FontView[]>('/fonts');
-  if (!r.ok) throw new Response(r.message, { status: r.status });
-  const font = r.data.find((f) => f.id === params.id);
-  if (!font) throw new Response('No such font', { status: 404 });
-  return { font };
+  return {
+    font: await oneOf<FontView>(
+      context.get(apiContext),
+      '/fonts',
+      params.id,
+      'font',
+    ),
+  };
 }
 
 export async function action({ request, params, context }: Route.ActionArgs) {

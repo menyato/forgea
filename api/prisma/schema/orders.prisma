@@ -73,6 +73,8 @@ model Order {
 
   @@index([userId, id])
   @@index([status, id])
+  // Report periods (the Business page) read orders by the day they were placed.
+  @@index([createdAt])
   @@map("orders")
 }
 
@@ -105,6 +107,7 @@ model OrderItem {
   piece          Piece?
 
   @@index([orderId])
+  @@index([productId])
   @@map("order_items")
 }
 

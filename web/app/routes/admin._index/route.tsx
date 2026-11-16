@@ -47,6 +47,7 @@ export async function loader({ context }: Route.LoaderArgs) {
     materials,
     products,
     customers,
+    setup,
   ] = await Promise.all([
     may('orders.view')
       ? api.get<Partial<Record<OrderStatus, number>>>('/orders/counts').then(ok)
@@ -82,12 +83,12 @@ export async function loader({ context }: Route.LoaderArgs) {
     may('customers.view')
       ? api.get<CustomerSummary>('/customers/summary').then(ok)
       : null,
+    // What the server's settings leave undone (no email in production…): admins only.
+    may('store.manage')
+      ? api.get<string[]>('/store-settings/setup-warnings').then(ok)
+      : null,
   ]);
-  // What the server's settings leave undone (no email in production…): admins only.
-  const warnings = may('store.manage')
-    ? ((await api.get<string[]>('/store-settings/setup-warnings').then(ok)) ??
-      [])
-    : [];
+  const warnings = setup ?? [];
 
   const cards: Card[] = [];
   if (orders) {
@@ -170,7 +171,7 @@ export async function loader({ context }: Route.LoaderArgs) {
       key: 'stock',
       count: low.length,
       label: 'materials low on stock',
-      detail: low.length ? low.map((m) => m.code).join(', ') : undefined,
+      detail: low.length ? someOf(low.map((m) => m.code)) : undefined,
       to: '/admin/materials?filter=active,low',
       urgent: low.length > 0,
     });
@@ -185,11 +186,59 @@ export async function loader({ context }: Route.LoaderArgs) {
       urgent: false,
     });
   }
-  return { cards, customers, warnings, name: staff.name ?? staff.email };
+  return {
+    cards,
+    customers,
+    warnings,
+    name: staff.name ?? staff.email,
+    // The everyday jobs, one click away: only the ones this person may do.
+    actions: ACTIONS.filter((a) => may(a.needs)).map(({ label, to }) => ({
+      label,
+      to,
+    })),
+  };
 }
 
+/** The first few names, then how many more: a card stays a card however long the list. */
+const someOf = (names: string[], shown = 6) =>
+  names.length > shown
+    ? `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`
+    : names.join(', ');
+
+/** What the studio does every day, in the order a sale goes: sell, make, stock, get paid. */
+const ACTIONS: {
+  label: string;
+  to: string;
+  needs: Parameters<typeof can>[1];
+}[] = [
+  {
+    label: 'New quotation',
+    to: '/admin/quotations/new',
+    needs: 'quotations.manage',
+  },
+  { label: 'New lead', to: '/admin/leads/new', needs: 'leads.manage' },
+  {
+    label: 'Plan a print run',
+    to: '/admin/production/new',
+    needs: 'production.manage',
+  },
+  {
+    label: 'Printed for the studio',
+    to: '/admin/stock/print',
+    needs: 'stock.manage',
+  },
+  { label: 'Failed print', to: '/admin/stock/failed', needs: 'stock.manage' },
+  {
+    label: 'Spools received',
+    to: '/admin/stock/receive',
+    needs: 'stock.manage',
+  },
+  { label: 'Vendor bill', to: '/admin/stock/purchase', needs: 'stock.manage' },
+  { label: 'New product', to: '/admin/products/new', needs: 'catalog.manage' },
+];
+
 export default function Overview({ loaderData }: Route.ComponentProps) {
-  const { cards, customers, warnings, name } = loaderData;
+  const { cards, customers, warnings, name, actions } = loaderData;
   const waiting = cards.filter((c) => c.urgent);
   return (
     <>
@@ -212,12 +261,28 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
           ))}
         </div>
       )}
+      {actions.length > 0 && (
+        <nav
+          aria-label="Record something"
+          className="mb-6 flex flex-wrap gap-2"
+        >
+          {actions.map((a) => (
+            <Link
+              key={a.to}
+              to={a.to}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:border-accent"
+            >
+              {a.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
           <Link
             key={c.key}
             to={c.to}
-            className={`grid gap-1 rounded-lg border p-5 hover:border-accent ${
+            className={`grid content-start gap-1 rounded-lg border p-5 hover:border-accent ${
               c.urgent && c.count > 0
                 ? 'border-accent bg-surface'
                 : 'border-border bg-surface'
