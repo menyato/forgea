@@ -17,7 +17,7 @@ import {
   type LogoDetail,
 } from '@forgea/types';
 import type { DesignSlot } from '@forgea/text3d/design';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { ColoursEditor, type Filament } from './colours-editor';
 import { PricePanel } from './price-panel';
@@ -100,6 +100,9 @@ export function ProductForm({
   const [text, setText] = useState<ProductTextSettings | null>(
     product?.text ?? null,
   );
+  // A studio-only piece is never in the shop: "Visible" stays off while it is ticked.
+  const [visible, setVisible] = useState(product?.active ?? true);
+  const [studioOnly, setStudioOnly] = useState(product?.studioOnly ?? false);
   const [profit, setProfit] = useState<ProfitValue>(
     product?.profit
       ? { kind: product.profit.kind, value: product.profit.value }
@@ -118,6 +121,15 @@ export function ProductForm({
     product?.partColourGroupId ?? '',
   );
   const [pricing, setPricing] = useState(false);
+  // Clicked while a price was on its way: saved as soon as it is back (never lost).
+  const [saveWhenPriced, setSaveWhenPriced] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const { submit } = fetcher;
+  useEffect(() => {
+    if (!saveWhenPriced || pricing || !form.current) return;
+    setSaveWhenPriced(false);
+    void submit(form.current);
+  }, [saveWhenPriced, pricing, submit]);
   const [slots, setSlots] = useState<DesignSlot[]>(product?.slots ?? []);
   const [printFiles, setPrintFiles] = useState<PrintFileRef[]>(
     (product?.printFiles ?? []).map((p) => ({ key: p.fileKey, name: p.name })),
@@ -307,7 +319,18 @@ export function ProductForm({
         </Panel>
       </div>
 
-      <fetcher.Form method="post" className="grid content-start gap-6">
+      <fetcher.Form
+        ref={form}
+        method="post"
+        className="grid content-start gap-6"
+        onSubmit={(e) => {
+          // A save sent while a price request is out would have its move to the saved
+          // product cut short by the answer: it goes the moment the price is back.
+          if (!pricing) return;
+          e.preventDefault();
+          setSaveWhenPriced(true);
+        }}
+      >
         <input type="hidden" name="intent" value="save" />
         <input type="hidden" name="modelFileKey" value={modelKey ?? ''} />
         <input
@@ -403,8 +426,17 @@ export function ProductForm({
           <CheckboxField
             label="Visible in the shop"
             name="active"
-            defaultChecked={product?.active ?? true}
+            checked={visible && !studioOnly}
+            disabled={studioOnly}
+            onChange={(e) => setVisible(e.currentTarget.checked)}
             hint="Off: only the studio sees it, and it can still be sold on a quotation"
+          />
+          <CheckboxField
+            label="Studio only (never sold)"
+            name="studioOnly"
+            checked={studioOnly}
+            onChange={(e) => setStudioOnly(e.currentTarget.checked)}
+            hint="For private pieces and tests: printed and costed, never in the shop, a quotation or an order"
           />
           <CheckboxField
             label="Made to order"
@@ -553,7 +585,7 @@ export function ProductForm({
         <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-3 border-t border-border bg-background/95 px-1 py-3 backdrop-blur">
           <Button
             type="submit"
-            disabled={fetcher.state !== 'idle' || pricing}
+            disabled={fetcher.state !== 'idle' || saveWhenPriced}
             className="px-6 py-2.5"
           >
             {product ? 'Save product' : 'Create product'}

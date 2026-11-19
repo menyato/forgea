@@ -145,6 +145,8 @@ export interface AdminProduct {
   /** "Designed by …", when the product credits a designer. */
   designer: string | null;
   active: boolean;
+  /** Never sold: studio prints and cost tracking only. */
+  studioOnly: boolean;
   modelFileKey: string | null;
   imageKeys: string[];
   options: ProductOptionConfig[];

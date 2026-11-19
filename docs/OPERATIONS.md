@@ -68,7 +68,8 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    **Add an extra cost** for parts besides the print (a key ring, a lamp's cable and bulb
    holder): it counts in what one piece costs you, so your profit applies to it too.
 6. Leave **Visible in the shop** off until it is ready; a product not in the shop can still be
-   sold on a quotation.
+   sold on a quotation. Tick **Studio only (never sold)** for private pieces and tests (the car
+   logos): they are printed and costed, but never shown, quoted or ordered.
 7. **A name or a logo on it** (any product with an STL or 3MF model): the **Text and logos**
    section. Choose **Colours they print in** (a colour option with swatches), then **Add text**
    or **Add a logo**. Put each one on a side (**Front**, **Back**, **Left**, **Right**, **Top**)

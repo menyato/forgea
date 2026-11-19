@@ -379,7 +379,7 @@ export class ProductsService {
       this.pricing.costCalculator(),
     ]);
     return all
-      .filter((p) => p.textStyle === null)
+      .filter((p) => p.textStyle === null && !p.studioOnly)
       .map((p) => ({
         id: p.id,
         slug: p.slug,
@@ -524,6 +524,10 @@ export class ProductsService {
 
   /** The product's set-up checked; its text and logo slots as they will be saved. */
   private async checkSetup(dto: SaveProductDto): Promise<SaveProductDto> {
+    if (dto.studioOnly && dto.active)
+      throw new BadRequestException(
+        'A studio-only product is never sold: untick "Visible in the shop"',
+      );
     if (dto.text) {
       if (dto.text.style === 'MONOGRAM' && dto.text.maxChars > 3)
         throw new BadRequestException('Curved initials take up to 3 letters');
@@ -721,6 +725,7 @@ export class ProductsService {
       isCustom: p.isCustom,
       designer: p.designer,
       active: p.active,
+      studioOnly: p.studioOnly,
       modelFileKey: p.modelFileKey,
       imageKeys: p.imageKeys,
       text: this.studio.settingsView(p),

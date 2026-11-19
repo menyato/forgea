@@ -82,6 +82,9 @@ model Product {
   /// "Designed by …" on the product page: a studio or guest designer, by name.
   designer  String?
   active    Boolean  @default(true)
+  /// Never sold: studio prints and cost tracking only (private pieces, tests). Never shown in
+  /// the shop (CHECK), never quoted or ordered.
+  studioOnly Boolean @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 

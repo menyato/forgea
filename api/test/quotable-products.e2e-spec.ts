@@ -1,9 +1,13 @@
-import type { QuotableProduct, QuotableSize } from '@forgea/types';
+import type {
+  AdminProduct,
+  QuotableProduct,
+  QuotableSize,
+} from '@forgea/types';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { Role } from '../src/generated/prisma/enums.js';
-import { signedInAs } from './commerce-helpers.js';
+import { CSRF, signedInAs } from './commerce-helpers.js';
 import { createApp } from './create-app.js';
 import { createStudio, type Studio } from './studio-helpers.js';
 
@@ -68,5 +72,76 @@ describe('Quotable products, hidden ones too (e2e)', () => {
       .get(`/products/quotable/${studio.product.slug}/sizes`)
       .set('Cookie', customer.cookie)
       .expect(403);
+  });
+
+  it('a studio-only product is never sold: not quotable, never shown, never on a quotation', async () => {
+    const admin = await signedInAs(app, Role.ADMIN);
+    const other = await createStudio(app);
+    const id = other.product.id;
+    const product = (
+      await http()
+        .get(`/products/manage/${id}`)
+        .set('Cookie', admin.cookie)
+        .expect(200)
+    ).body as AdminProduct;
+    expect(product.studioOnly).toBe(false);
+    const put = (body: object) =>
+      http()
+        .put(`/products/${id}`)
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .send({
+          slug: product.slug,
+          name: product.name,
+          description: product.description,
+          materialId: product.materialId,
+          grams: product.grams,
+          printHours: product.printHours,
+          isCustom: false,
+          imageKeys: [],
+          options: [],
+          sizes: [],
+          ...body,
+        });
+    // Shown in the shop and studio only at once: refused, by the API and the database.
+    await put({ active: true, studioOnly: true }).expect(400);
+    await expect(
+      app.get(PrismaService).product.update({
+        where: { id },
+        data: { studioOnly: true, active: true },
+      }),
+    ).rejects.toThrow();
+    const saved = (await put({ active: false, studioOnly: true }).expect(200))
+      .body as AdminProduct;
+    expect(saved).toMatchObject({ studioOnly: true, active: false });
+
+    const list = (
+      await http()
+        .get('/products/quotable')
+        .set('Cookie', admin.cookie)
+        .expect(200)
+    ).body as QuotableProduct[];
+    expect(list.some((p) => p.id === id)).toBe(false);
+    await http()
+      .post('/quotations')
+      .set(CSRF)
+      .set('Cookie', admin.cookie)
+      .send({
+        customerEmail: `studio-only-${other.tag}@example.com`,
+        validUntil: '2099-12-31',
+        customerName: 'Test',
+        phone: '70 111 222',
+        paymentMethod: 'TRANSFER',
+        delivery: false,
+        lines: [
+          {
+            productId: id,
+            description: 'A piece',
+            quantity: 1,
+            unitPrice: '5.00',
+          },
+        ],
+      })
+      .expect(400);
   });
 });

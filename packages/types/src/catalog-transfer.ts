@@ -89,6 +89,8 @@ export interface CatalogProduct {
   isCustom: boolean;
   designer: string | null;
   active: boolean;
+  /** Never sold (absent in older files: false). */
+  studioOnly?: boolean;
   model: CatalogAsset | null;
   images: CatalogAsset[];
   options: {

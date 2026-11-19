@@ -324,6 +324,7 @@ const fields = (dto: SaveProductDto) => ({
   isCustom: dto.isCustom,
   designer: dto.designer ?? null,
   active: dto.active,
+  studioOnly: dto.studioOnly ?? false,
   modelFileKey: dto.modelFileKey ?? null,
   imageKeys: dto.imageKeys,
   sizeXcm: dto.sizeXcm ?? null,

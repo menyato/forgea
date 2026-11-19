@@ -272,6 +272,7 @@ export class CatalogImporter {
             'isCustom',
             'active',
           ]),
+          studioOnly: p.studioOnly ?? false,
           ...(category ? { categoryId: category.id } : {}),
           materialId: materialId(p.material, 'material'),
           ...(p.designer ? { designer: p.designer } : {}),

@@ -306,8 +306,11 @@ export class QuotationsRepository {
     });
   }
 
-  productsExist(ids: string[]): Promise<number> {
-    return this.prisma.product.count({ where: { id: { in: ids } } });
+  /** How many of these products may be sold (they exist and are not studio only). */
+  productsForSale(ids: string[]): Promise<number> {
+    return this.prisma.product.count({
+      where: { id: { in: ids }, studioOnly: false },
+    });
   }
 
   leadExists(id: string): Promise<boolean> {

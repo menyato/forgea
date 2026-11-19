@@ -107,6 +107,7 @@ function product(): ConfigurableProduct {
     isCustom: false,
     designer: null,
     active: true,
+    studioOnly: false,
     createdAt: now,
     updatedAt: now,
     optionGroups: [

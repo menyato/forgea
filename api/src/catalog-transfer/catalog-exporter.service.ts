@@ -134,6 +134,7 @@ export class CatalogExporter {
           isCustom: p.isCustom,
           designer: p.designer,
           active: p.active,
+          studioOnly: p.studioOnly,
           // A generated sample (personalised products) is made again where it is imported.
           model:
             p.modelFileKey &&

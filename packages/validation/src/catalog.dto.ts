@@ -385,6 +385,11 @@ export class SaveProductDto {
   @IsBoolean()
   active!: boolean;
 
+  /** Never sold: studio prints and cost tracking only; can't be shown in the shop. */
+  @IsOptional()
+  @IsBoolean()
+  studioOnly?: boolean;
+
   @IsOptional()
   @Matches(STORAGE_KEY_PATTERN, { message: 'Upload the model again' })
   modelFileKey?: string;

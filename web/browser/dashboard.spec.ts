@@ -157,3 +157,19 @@ test('customers cannot open the dashboard', async ({ page }) => {
     page.getByRole('heading', { name: 'Not allowed' }),
   ).toBeVisible();
 });
+
+test('a studio-only product can never be shown in the shop', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/products/new');
+  const visible = page.getByLabel('Visible in the shop');
+  await expect(visible).toBeChecked();
+  await page.getByLabel('Studio only (never sold)').check();
+  await expect(visible).not.toBeChecked();
+  await expect(visible).toBeDisabled();
+  await page.getByLabel('Studio only (never sold)').uncheck();
+  await expect(visible).toBeChecked();
+});

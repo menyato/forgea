@@ -497,9 +497,11 @@ export class QuotationsService {
       ...new Set(dto.lines.flatMap((l) => (l.productId ? [l.productId] : []))),
     ];
     if (
-      (await this.quotations.productsExist(productIds)) !== productIds.length
+      (await this.quotations.productsForSale(productIds)) !== productIds.length
     ) {
-      throw new BadRequestException('One of the products does not exist');
+      throw new BadRequestException(
+        'One of the products does not exist or is studio only (never sold)',
+      );
     }
     const halfSized = dto.lines.findIndex(
       (l) => [l.sizeXcm, l.sizeYcm, l.sizeZcm].filter(Boolean).length % 3 !== 0,
