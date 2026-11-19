@@ -31,6 +31,16 @@ export function glbProblem(data: Uint8Array): string | null {
       ? number(meshopt['count']) * number(meshopt['byteStride'])
       : number(view['byteLength']);
   }
+  // And every accessor's own data: one with no buffer view is filled with zeros, a sparse
+  // or Draco-compressed one is unpacked to its count, whatever the buffers hold.
+  for (const accessor of list(json['accessors'])) {
+    declared +=
+      number(accessor['count']) *
+      (COMPONENTS[String(accessor['type'])] ?? Number.MAX_SAFE_INTEGER) *
+      (COMPONENT_BYTES[number(accessor['componentType'])] ??
+        Number.MAX_SAFE_INTEGER);
+    if (!Number.isSafeInteger(declared)) declared = Number.MAX_SAFE_INTEGER;
+  }
   const limit = Math.min(
     MAX_DECLARED_BYTES,
     Math.max(MIN_ALLOWANCE, data.byteLength * MAX_EXPANSION),
@@ -39,6 +49,26 @@ export function glbProblem(data: Uint8Array): string | null {
     ? 'This GLB file declares more data than it can hold'
     : null;
 }
+
+/** Values per element, by accessor type. */
+const COMPONENTS: Record<string, number> = {
+  SCALAR: 1,
+  VEC2: 2,
+  VEC3: 3,
+  VEC4: 4,
+  MAT2: 4,
+  MAT3: 9,
+  MAT4: 16,
+};
+/** Bytes per value, by glTF component type. */
+const COMPONENT_BYTES: Record<number, number> = {
+  5120: 1,
+  5121: 1,
+  5122: 2,
+  5123: 2,
+  5125: 4,
+  5126: 4,
+};
 
 /** Geometry may decompress to at most this many times the file's size (meshopt: ~10×). */
 const MAX_EXPANSION = 64;

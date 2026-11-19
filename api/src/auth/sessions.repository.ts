@@ -47,10 +47,20 @@ export class SessionsRepository {
 
   /**
    * A second session from a token rotated a moment ago (two tabs refreshing together), only
-   * while its login is still live: one of its sessions not ended. False otherwise.
+   * while its login is still live (one of its sessions not ended) and only once per rotated
+   * token. False otherwise.
    */
-  async sibling(familyId: string, replacement: NewSession): Promise<boolean> {
+  async sibling(
+    rotatedId: string,
+    familyId: string,
+    replacement: NewSession,
+  ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.session.updateMany({
+        where: { id: rotatedId, graceUsedAt: null },
+        data: { graceUsedAt: new Date() },
+      });
+      if (count !== 1) return false;
       const live = await tx.session.count({
         where: { familyId, revokedAt: null, expiresAt: { gt: new Date() } },
       });

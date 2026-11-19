@@ -26,6 +26,7 @@ import { paymentState, splitTaxIncluded, type Amount } from './ledger-math.js';
 import { Ledger, type NewLine } from './ledger.service.js';
 import { studioToday } from '../common/studio-day.js';
 import { claimRequestKey } from '../common/request-key.js';
+import { lock } from '../common/advisory-lock.js';
 
 const withLines = {
   customer: { select: { id: true, email: true, name: true } },
@@ -48,10 +49,6 @@ type EntryRow = Prisma.JournalEntryGetPayload<{ include: typeof withLines }>;
 
 const D = (v: Amount) => new Prisma.Decimal(v);
 
-/** A lock held until the transaction ends, on one order or invoice (by name). */
-async function lock(tx: Prisma.TransactionClient, name: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${name}, 0))`;
-}
 const today = () => studioToday();
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -512,6 +509,13 @@ export class Invoicing {
     const id = await this.prisma.$transaction(async (tx) => {
       // The order's invoices one at a time: a final invoice being made now waits (or this).
       if (invoice.orderId) await lock(tx, `order:${invoice.orderId}`);
+      // And this invoice's payments: one being recorded now is either done (and the credit
+      // note covers what is left) or waits, and then sees nothing left to pay.
+      await lock(tx, `invoice:${invoice.id}`);
+      if (
+        await tx.journalEntry.count({ where: { reversedEntryId: invoice.id } })
+      )
+        throw new ConflictException('This invoice already has a credit note');
       // The final invoice already took the deposit off what is owed: crediting the deposit
       // as well would take it off twice. Credit the final invoice first.
       if (invoice.invoiceKind === InvoiceKind.DEPOSIT && invoice.orderId) {

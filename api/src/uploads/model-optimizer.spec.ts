@@ -170,6 +170,24 @@ describe('ModelOptimizer', () => {
     );
   });
 
+  it('refuses a GLB whose accessors claim data no buffer holds (zero-filled, sparse, Draco)', () => {
+    const zeros = glb({
+      asset: { version: '2.0' },
+      accessors: [{ count: 300_000_000, type: 'VEC3', componentType: 5126 }],
+    });
+    expect(glbProblem(zeros)).toMatch(/declares more data/);
+    const unknown = glb({
+      asset: { version: '2.0' },
+      accessors: [{ count: 10, type: 'VEC9', componentType: 5126 }],
+    });
+    expect(glbProblem(unknown)).toMatch(/declares more data/);
+    const small = glb({
+      asset: { version: '2.0' },
+      accessors: [{ count: 1000, type: 'VEC3', componentType: 5126 }],
+    });
+    expect(glbProblem(small)).toBeNull();
+  });
+
   it('refuses a GLB that points to other files or sites', () => {
     const linked = glb({
       asset: { version: '2.0' },

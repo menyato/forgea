@@ -14,10 +14,14 @@ class FakeSessions {
       id: `s${++this.seq}`,
       revokedAt: null,
       rotatedAt: null,
+      graceUsedAt: null,
       createdAt: new Date(),
     });
   }
-  sibling = async (familyId: string, next: NewSession) => {
+  sibling = async (rotatedId: string, familyId: string, next: NewSession) => {
+    const rotated = this.rows.find((r) => r.id === rotatedId);
+    if (!rotated || rotated.graceUsedAt) return false;
+    rotated.graceUsedAt = new Date();
     if (!this.rows.some((s) => s.familyId === familyId && !s.revokedAt))
       return false;
     this.insert(next);

@@ -71,23 +71,35 @@ export class SessionService {
     return { userId: current.userId, token: next.token };
   }
 
-  /** A sibling session for a token just rotated by the same browser; null otherwise. */
+  /**
+   * A sibling session for a token just rotated by the same browser (same user agent and
+   * address): one, once, so a copied token replayed in that moment gains nothing more; null
+   * otherwise.
+   */
   private async graceSibling(
     current: {
+      id: string;
       userId: string;
       familyId: string;
       rotatedAt: Date | null;
       userAgent: string | null;
+      ipAddress: string | null;
     },
     ctx: RequestContext,
   ): Promise<{ userId: string; token: string } | null> {
     const recent =
       current.rotatedAt !== null &&
       Date.now() - current.rotatedAt.getTime() < ROTATION_GRACE_MS &&
-      current.userAgent === ctx.userAgent;
+      current.userAgent === ctx.userAgent &&
+      // Where both addresses are known they must be the same.
+      (current.ipAddress === null ||
+        ctx.ip === null ||
+        current.ipAddress === ctx.ip);
     if (!recent) return null;
     const next = this.newSession(current.userId, current.familyId, ctx);
-    if (!(await this.sessions.sibling(current.familyId, next.session)))
+    if (
+      !(await this.sessions.sibling(current.id, current.familyId, next.session))
+    )
       return null;
     return { userId: current.userId, token: next.token };
   }

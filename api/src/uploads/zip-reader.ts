@@ -5,7 +5,8 @@ export interface ZipEntry {
   name: string;
   /** Size once unpacked, as the archive declares it (checked again while unpacking). */
   size: number;
-  read(): Buffer;
+  /** Unpacks it, refusing more than `maxBytes` (the archive's own limit by default). */
+  read(maxBytes?: number): Buffer;
 }
 
 /** Limits that keep a hostile archive (a zip bomb, millions of entries) cheap to refuse. */
@@ -13,6 +14,8 @@ export interface ZipLimits {
   maxEntries: number;
   /** The most one entry may unpack to. */
   maxEntryBytes: number;
+  /** The most all the entries read from one archive may unpack to, together. */
+  maxTotalBytes: number;
 }
 
 const EOCD = 0x06054b50;
@@ -32,6 +35,14 @@ export function zipEntries(data: Uint8Array, limits: ZipLimits): ZipEntry[] {
   let at = buf.readUInt32LE(end + 16);
   if (count > limits.maxEntries) throw new Error('Too many files in the 3MF');
   const entries: ZipEntry[] = [];
+  // What this archive has unpacked so far: a few bombs inside one file stop here too.
+  let unpacked = 0;
+  const counted = (out: Buffer) => {
+    unpacked += out.byteLength;
+    if (unpacked > limits.maxTotalBytes)
+      throw new Error('The 3MF unpacks to too much data');
+    return out;
+  };
   for (let i = 0; i < count; i++) {
     if (at + 46 > buf.length || buf.readUInt32LE(at) !== CENTRAL) {
       throw new Error('Not a readable 3MF (zip) file');
@@ -55,10 +66,10 @@ export function zipEntries(data: Uint8Array, limits: ZipLimits): ZipEntry[] {
     entries.push({
       name,
       size,
-      read: () => {
-        if (size > limits.maxEntryBytes) {
-          throw new Error(`${name} is too large to read`);
-        }
+      read: (maxBytes = limits.maxEntryBytes) => {
+        if (size > maxBytes) throw new Error(`${name} is too large to read`);
+        if (unpacked + size > limits.maxTotalBytes)
+          throw new Error('The 3MF unpacks to too much data');
         if (localAt + 30 > buf.length || buf.readUInt32LE(localAt) !== LOCAL) {
           throw new Error('Not a readable 3MF (zip) file');
         }
@@ -71,13 +82,13 @@ export function zipEntries(data: Uint8Array, limits: ZipLimits): ZipEntry[] {
           throw new Error('The 3MF file is cut short');
         }
         const raw = buf.subarray(start, start + compressed);
-        if (method === 0) return Buffer.from(raw);
+        if (method === 0) return counted(Buffer.from(raw));
         if (method !== 8)
           throw new Error(`${name} uses an unknown compression`);
         // Stops at the limit even if the header lied about the size.
-        return inflateRawSync(raw, {
-          maxOutputLength: Math.max(limits.maxEntryBytes, 1),
-        });
+        return counted(
+          inflateRawSync(raw, { maxOutputLength: Math.max(maxBytes, 1) }),
+        );
       },
     });
   }

@@ -78,7 +78,11 @@ const LIMITS = {
   maxEntries: 10_000,
   // A model file is read as text: V8 strings stop a little past 500 MB.
   maxEntryBytes: 400 * 1024 * 1024,
+  // Every file read from one 3MF, together.
+  maxTotalBytes: 600 * 1024 * 1024,
 };
+/** A settings or metadata file: a few hundred kilobytes in a real project. */
+const MAX_SETTINGS_BYTES = 16 * 1024 * 1024;
 /** More than any printable model has. */
 const MAX_TRIANGLES = 3_000_000;
 /** How deep components may nest (a loop in a hostile file stops here). */
@@ -565,8 +569,8 @@ function modelSettings(
   const entry =
     entries.get('Metadata/model_settings.config') ??
     entries.get('Metadata/Slic3r_PE_model.config');
-  if (!entry || entry.size > 64 * 1024 * 1024) return result;
-  const xml = entry.read().toString('utf8');
+  if (!entry || entry.size > MAX_SETTINGS_BYTES) return result;
+  const xml = entry.read(MAX_SETTINGS_BYTES).toString('utf8');
   for (const m of xml.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
     const id = attributes(`<o ${m[1]}>`)['id'];
     if (!id) continue;
@@ -621,12 +625,11 @@ function projectSettings(entries: Map<string, ZipEntry>): {
     profile: null,
   };
   const entry = entries.get('Metadata/project_settings.config');
-  if (!entry || entry.size > 64 * 1024 * 1024) return none;
+  if (!entry || entry.size > MAX_SETTINGS_BYTES) return none;
   try {
-    const json = JSON.parse(entry.read().toString('utf8')) as Record<
-      string,
-      unknown
-    >;
+    const json = JSON.parse(
+      entry.read(MAX_SETTINGS_BYTES).toString('utf8'),
+    ) as Record<string, unknown>;
     const list = (key: string) =>
       Array.isArray(json[key])
         ? (json[key] as unknown[]).map((v) => String(v))
@@ -687,7 +690,7 @@ function sliceInfo(entries: Map<string, ZipEntry>): {
       objects,
     };
   }
-  const xml = entry.read().toString('utf8');
+  const xml = entry.read(MAX_SETTINGS_BYTES).toString('utf8');
   let seconds: number | null = null;
   let plates = 0;
   let supports = false;
@@ -720,7 +723,7 @@ function sliceInfo(entries: Map<string, ZipEntry>): {
 function rootModelPath(entries: Map<string, ZipEntry>): string {
   const rels = entries.get('_rels/.rels');
   if (rels && rels.size < 1024 * 1024) {
-    const xml = rels.read().toString('utf8');
+    const xml = rels.read(1024 * 1024).toString('utf8');
     for (const m of xml.matchAll(/<Relationship\b[^>]*>/g)) {
       const a = attributes(m[0]);
       if (a['Type']?.endsWith('/3dmodel') && a['Target']) {

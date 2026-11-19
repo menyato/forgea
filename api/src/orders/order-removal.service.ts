@@ -7,6 +7,7 @@ import {
 import type { OrderRemovalPreview } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { lock } from '../common/advisory-lock.js';
 
 /**
  * Removes a test order entirely, admin only: the order, its print runs, the filament they took
@@ -25,7 +26,8 @@ export class OrderRemoval {
 
   async remove(orderId: string, confirm: string): Promise<OrderRemovalPreview> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'order:' + orderId}))`;
+      // The same lock as the order's invoices and status changes.
+      await lock(tx, `order:${orderId}`);
       const plan = await this.plan(tx, orderId);
       if (confirm.trim() !== plan.orderNumber)
         throw new BadRequestException(

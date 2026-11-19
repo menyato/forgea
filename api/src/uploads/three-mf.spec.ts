@@ -297,6 +297,7 @@ describe('zipEntries', () => {
     const [entry] = zipEntries(archive, {
       maxEntries: 10,
       maxEntryBytes: 1024 * 1024,
+      maxTotalBytes: 1024 * 1024,
     });
     expect(() => entry!.read()).toThrow();
   });
@@ -306,7 +307,36 @@ describe('zipEntries', () => {
       Array.from({ length: 5 }, (_, i) => ({ name: `${i}.txt`, text: 'x' })),
     );
     expect(() =>
-      zipEntries(data, { maxEntries: 4, maxEntryBytes: 100 }),
+      zipEntries(data, {
+        maxEntries: 4,
+        maxEntryBytes: 100,
+        maxTotalBytes: 100,
+      }),
     ).toThrow(/Too many files/);
+  });
+
+  it('stops an archive whose entries together unpack past its total', () => {
+    const data = zipTextFiles(
+      Array.from({ length: 3 }, (_, i) => ({
+        name: `${i}.txt`,
+        text: 'x'.repeat(40),
+      })),
+    );
+    const entries = zipEntries(data, {
+      maxEntries: 10,
+      maxEntryBytes: 100,
+      maxTotalBytes: 100,
+    });
+    expect(entries[0]!.read().length).toBe(40);
+    expect(entries[1]!.read().length).toBe(40);
+    expect(() => entries[2]!.read()).toThrow(/too much data/);
+    // And a caller's own smaller limit for one entry.
+    expect(() =>
+      zipEntries(data, {
+        maxEntries: 10,
+        maxEntryBytes: 100,
+        maxTotalBytes: 1000,
+      })[0]!.read(10),
+    ).toThrow(/too large/);
   });
 });

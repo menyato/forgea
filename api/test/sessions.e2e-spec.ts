@@ -41,4 +41,35 @@ describe('Sessions (e2e)', () => {
         200,
       );
   });
+
+  // These two ask the service directly: the refresh endpoint's rate limit is per app.
+  it('a refresh token replayed again in that moment, or from elsewhere, opens nothing more', async () => {
+    const { user } = await signedInCustomer(app);
+    const sessions = app.get(SessionService);
+    const browser = { ip: null, userAgent: 'Replay test browser' };
+    const token = await sessions.start(user.id, browser);
+    // The browser itself refreshes (rotates), and a second tab rides the grace once.
+    await expect(sessions.rotate(token, browser)).resolves.toBeDefined();
+    await expect(sessions.rotate(token, browser)).resolves.toBeDefined();
+    // A third use of the same old token is a copy: refused, and the login ends.
+    await expect(sessions.rotate(token, browser)).rejects.toThrow(
+      /sign in again/,
+    );
+  });
+
+  it('a just-rotated token from another browser or address is refused', async () => {
+    const { user } = await signedInCustomer(app);
+    const sessions = app.get(SessionService);
+    const owner = { ip: '198.51.100.7', userAgent: 'The owner browser' };
+    const first = await sessions.start(user.id, owner);
+    await sessions.rotate(first, owner);
+    await expect(
+      sessions.rotate(first, { ...owner, userAgent: 'Someone else' }),
+    ).rejects.toThrow(/sign in again/);
+    const second = await sessions.start(user.id, owner);
+    await sessions.rotate(second, owner);
+    await expect(
+      sessions.rotate(second, { ...owner, ip: '203.0.113.9' }),
+    ).rejects.toThrow(/sign in again/);
+  });
 });

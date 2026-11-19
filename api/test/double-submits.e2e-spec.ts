@@ -164,6 +164,77 @@ describe('Double submits (e2e)', () => {
     );
   });
 
+  it('a payment and a credit note on one invoice at once: every payment is matched, the note made once', async () => {
+    const staff = await signedInAs(app, Role.ADMIN);
+    const customer = await signedInCustomer(app);
+    const product = await createProduct(app, { isCustom: true });
+    await http()
+      .post('/cart/items')
+      .set(CSRF)
+      .set('Cookie', customer.cookie)
+      .send({ productId: product.id, quantity: 1 })
+      .expect(201);
+    const placed = await http()
+      .post('/orders/checkout')
+      .set(CSRF)
+      .set('Cookie', customer.cookie)
+      .send({
+        idempotencyKey: randomUUID(),
+        name: 'Rana Khoury',
+        phone: '70 123 456',
+        paymentMethod: 'TRANSFER',
+        delivery: false,
+      })
+      .expect(201);
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { orderNumber: placed.body.orderNumber },
+    });
+    const invoice = (
+      await http()
+        .post(`/accounting/orders/${order.id}/deposit-invoice`)
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send({})
+        .expect(201)
+    ).body as { id: string; total: string };
+    const credit = () =>
+      http()
+        .post(`/accounting/invoices/${invoice.id}/credit-note`)
+        .set(CSRF)
+        .set('Cookie', staff.cookie);
+    const [paid, credited, again] = await Promise.all([
+      http()
+        .post('/accounting/payments')
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send({
+          invoiceId: invoice.id,
+          amount: (Number(invoice.total) / 2).toFixed(2),
+          method: 'BANK',
+          date: studioDay(),
+          requestKey: randomUUID(),
+        }),
+      credit(),
+      credit(),
+    ]);
+    // The second credit note is refused cleanly, never a server error.
+    expect([credited.status, again.status].sort((a, b) => a - b)).toEqual([
+      201, 409,
+    ]);
+    // The payment came first and is matched, or after and was refused: never posted unmatched.
+    expect([201, 400]).toContain(paid.status);
+    const payments = await prisma.journalEntry.findMany({
+      where: { orderId: order.id, type: 'PAYMENT' },
+      include: { lines: { include: { asCredit: true } } },
+    });
+    for (const p of payments) {
+      const matched = p.lines
+        .flatMap((l) => l.asCredit)
+        .reduce((n, m) => n + Number(m.amount), 0);
+      expect(matched).toBeGreaterThan(0);
+    }
+  });
+
   it('two admins taking away each other’s admin role at once keep one admin', async () => {
     // A fresh pair, with every other admin switched off for the moment.
     const others = await prisma.user.findMany({
