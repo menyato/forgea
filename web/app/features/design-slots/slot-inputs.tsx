@@ -1,6 +1,7 @@
 import type { SlotChoice } from '@forgea/text3d/design';
 import { slotState } from '@forgea/text3d/design';
-import type { ProductSlotsOffer } from '@forgea/types';
+import type { CustomerLogoView, ProductSlotsOffer } from '@forgea/types';
+import { OwnLogoField } from '~/features/own-logo/own-logo-field';
 import {
   fontFamilyOf,
   useFontFaces,
@@ -8,16 +9,20 @@ import {
 
 /**
  * What a customer may change on a product's text and logos: the owner's editable slots only
- * (their text, font and colour; a logo on or off). The rest prints as the owner set it.
+ * (their text, font and colour; a logo on or off, or their own logo instead). The rest prints
+ * as the owner set it.
  */
 export function SlotInputs({
   offer,
   choices,
   onChange,
+  onLogo,
 }: {
   offer: ProductSlotsOffer;
   choices: Readonly<Record<string, SlotChoice>>;
   onChange: (next: Record<string, SlotChoice>) => void;
+  /** A logo the customer brought: the page shows it in 3D. */
+  onLogo: (logo: CustomerLogoView) => void;
 }) {
   useFontFaces(offer.fonts);
   const editable = offer.slots.filter((s) => s.editable);
@@ -74,16 +79,31 @@ export function SlotInputs({
                 )}
               </>
             ) : (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  id={field}
-                  name={field}
-                  type="checkbox"
-                  checked={state.on}
-                  onChange={(e) => set(s.id, { on: e.currentTarget.checked })}
+              <>
+                {state.logoId && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      id={field}
+                      name={field}
+                      type="checkbox"
+                      checked={state.on}
+                      onChange={(e) =>
+                        set(s.id, { on: e.currentTarget.checked })
+                      }
+                    />
+                    Show the logo
+                  </label>
+                )}
+                <OwnLogoField
+                  label={
+                    s.logoId ? 'Or put your own logo here' : 'Add your logo'
+                  }
+                  onLogo={(logo) => {
+                    onLogo(logo);
+                    set(s.id, { logoId: logo.id, on: true });
+                  }}
                 />
-                Show the logo
-              </label>
+              </>
             )}
             {offer.colours.length > 1 && (
               <div

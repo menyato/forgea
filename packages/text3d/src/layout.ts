@@ -495,7 +495,7 @@ function footOf(
 
 /**
  * A keychain's face: the name, and a logo after it (the end of the reading, away from the
- * ring), a little taller than the capitals, in the letters' colour.
+ * ring), a little taller than the capitals, in the letters' colour; or the logo alone.
  */
 function keychainFace(
   fonts: FontSet,
@@ -503,14 +503,21 @@ function keychainFace(
   h: number,
   logos: ReadonlyMap<string, readonly Region[]>,
 ): Placed[] {
-  const name = run(
-    fonts,
-    design.fontId,
-    design.text.trim(),
-    h,
-    design.textColour,
-  );
+  const text = design.text.trim();
   const logo = design.logoId ? logos.get(design.logoId) : undefined;
+  // A logo alone (no name): the logo is the face, twice the letters' height.
+  if (text === '') {
+    const lb = logo && logo.length ? boundsOf(logo) : null;
+    if (!logo || !lb) return [];
+    const k = (h * 2) / Math.max(1e-6, lb.maxY - lb.minY);
+    return [
+      {
+        regions: moved(logo, -lb.minX * k, -lb.minY * k, k),
+        colour: design.textColour,
+      },
+    ];
+  }
+  const name = run(fonts, design.fontId, text, h, design.textColour);
   if (!logo || logo.length === 0) return [name];
   const b = boundsOf(name.regions)!;
   const lb = boundsOf(logo)!;

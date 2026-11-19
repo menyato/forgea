@@ -28,6 +28,7 @@ const STARTS: Record<
     | 'decor'
     | 'shapes'
     | 'logoIds'
+    | 'ownLogo'
   >
 > = {
   KEYCHAIN: {
@@ -147,6 +148,7 @@ export function TextSettingsPanel({
                   decor: null,
                   shapes: [],
                   logoIds: [],
+                  ownLogo: false,
                   ...STARTS.KEYCHAIN,
                 }
               : null,
@@ -172,6 +174,7 @@ export function TextSettingsPanel({
                 // Shapes and logos belong to keychains.
                 shapes: style === 'KEYCHAIN' ? value.shapes : [],
                 logoIds: style === 'KEYCHAIN' ? value.logoIds : [],
+                ownLogo: style === 'KEYCHAIN' ? value.ownLogo : false,
               });
               setSizesText(STARTS[style].sizesMm.join(', '));
             }}
@@ -227,6 +230,15 @@ export function TextSettingsPanel({
                 ))}
               </div>
             </fieldset>
+          )}
+          {value.style === 'KEYCHAIN' && (
+            <CheckboxField
+              label="Customers may bring their own logo"
+              name="text-own-logo"
+              checked={value.ownLogo}
+              onChange={(e) => set({ ownLogo: e.currentTarget.checked })}
+              hint="They drop a picture or an SVG; it is traced into a raised logo, beside their name or alone"
+            />
           )}
           {value.style === 'KEYCHAIN' && logos.some((l) => l.active) && (
             <fieldset className="grid gap-2">

@@ -66,6 +66,9 @@ model Product {
   textShapes           String[]     @default([])
   /// Name keychains: the studio's logos customers may add beside their name.
   textLogoIds          String[]     @default([]) @db.Uuid
+  /// Name keychains: customers may bring their own logo (a picture or drawing), beside their
+  /// name or alone.
+  textOwnLogo          Boolean      @default(false)
   /// Added for every colour beyond the first (a multi-colour print), USD.
   textExtraColourPrice Decimal      @default(0) @db.Decimal(10, 2)
 

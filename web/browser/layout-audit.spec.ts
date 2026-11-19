@@ -78,6 +78,7 @@ const SHOP = [
   '/products/baby-initial-name',
   '/products/couple-names',
   '/products/twist-vase',
+  '/design',
   '/custom',
   '/contact',
   '/privacy',

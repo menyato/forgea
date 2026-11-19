@@ -75,8 +75,9 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    or **Add a logo**. Put each one on a side (**Front**, **Back**, **Left**, **Right**, **Top**)
    or press **Place it where I click** and click the model; **Turn it** turns it a quarter.
    Set its height, widest size, how far it stands out and its colour. Tick **Customers may
-   change it** to let them type their own name, pick a font and a colour, or turn the logo
-   off; without the tick it always prints as you set it. The 3D view shows it as it prints,
+   change it** to let them type their own name, pick a font and a colour, turn the logo off
+   or put **their own logo** there; a logo place with **Logo: None** stays empty until the
+   customer adds theirs. Without the tick it always prints as you set it. The 3D view shows it as it prints,
    and the price counts its filament. On an order, **Download with their text (3MF)** gives
    the model with the customer's name already in place, a part per colour.
 
@@ -85,7 +86,15 @@ Illustrator, Inkscape, Canva or Figma). Everything drawn prints solid; shapes in
 holes. Switch one off to stop offering it (orders keep it).
 
 **Name keychains**: in **Personalised text**, a keychain can offer **shapes** (a rounded tag, an
-oval, a heart) and **logos** beside the name; customers pick them on the product page.
+oval, a heart) and **logos** beside the name; customers pick them on the product page. Tick
+**Customers may bring their own logo** and they drop a PNG, JPEG or SVG: their browser traces
+a picture into an outline (a plain background works best), shown raised in 3D beside their
+name, or alone when they leave the name empty. Only the outline is kept, never their file;
+orders show it as "Your logo" and print from it like any other.
+
+**Design yours** (the shop's menu, `/design`) lists the pieces customers make from their own
+logo (keychains with the tick above), then every piece they make theirs: personalised text
+pieces and products with a name or logo place they may change.
 
 ## 4. Selling
 

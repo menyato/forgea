@@ -40,7 +40,11 @@ export function designProblem(
   design: TextDesign,
   settings: TextSettings,
 ): string | null {
-  const problem = textProblem(design.text, settings);
+  const problem = textProblem(
+    design.text,
+    settings,
+    settings.style === 'KEYCHAIN' && Boolean(design.logoId),
+  );
   if (problem) return problem;
   const missing = new Set<string>();
   if (PER_LETTER_STYLES.includes(settings.style)) {

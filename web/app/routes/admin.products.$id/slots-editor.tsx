@@ -198,7 +198,12 @@ export function SlotsEditor({
       colour: colours[0]?.id ?? '',
       ...(kind === 'TEXT'
         ? { defaultText: '', maxChars: 12, defaultFontId: fonts[0]?.id ?? '' }
-        : { logoId: logos.find((l) => l.active)?.id ?? '', defaultOn: true }),
+        : {
+            ...(logos.some((l) => l.active)
+              ? { logoId: logos.find((l) => l.active)!.id }
+              : {}),
+            defaultOn: true,
+          }),
     };
     onChange([...value, slot]);
   };
@@ -213,8 +218,8 @@ export function SlotsEditor({
         Add a name or a logo on the model. Put each one on a side, or press{' '}
         <strong>Place it where I click</strong> and click the model. Tick{' '}
         <strong>Customers may change it</strong> to let them type their own
-        name, pick the font and colour, or turn the logo off; the rest always
-        prints as you set it.
+        name, pick the font and colour, turn the logo off or add their own logo;
+        the rest always prints as you set it.
       </p>
       <SelectField
         label="Colours they print in"
@@ -327,14 +332,12 @@ export function SlotsEditor({
                   label="Logo"
                   name={`slot-logo-${s.id}`}
                   value={s.logoId ?? ''}
-                  onChange={(e) => set(s.id, { logoId: e.currentTarget.value })}
-                  hint={
-                    logos.length === 0
-                      ? undefined
-                      : 'Add more on the Logos page'
+                  onChange={(e) =>
+                    set(s.id, { logoId: e.currentTarget.value || undefined })
                   }
+                  hint="Customers who may change it can also add their own logo here; add yours on the Logos page"
                 >
-                  {logos.length === 0 && <option value="">No logos yet</option>}
+                  <option value="">None: customers add their own</option>
                   {logos
                     .filter((l) => l.active || l.id === s.logoId)
                     .map((l) => (
@@ -448,13 +451,13 @@ export function SlotsEditor({
         <Button
           variant="secondary"
           onClick={() => add('LOGO')}
-          disabled={value.length >= 8 || logos.length === 0}
+          disabled={value.length >= 8}
         >
           Add a logo
         </Button>
         {logos.length === 0 && (
           <Link to="/admin/logos/new" className="self-center text-sm underline">
-            Add a logo first
+            Add your logos (or leave the place to customers)
           </Link>
         )}
       </div>

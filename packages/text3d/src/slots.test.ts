@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   buildDesign,
   buildSlots,
+  designProblem,
   KEYCHAIN_SHAPES,
   type DesignSlot,
   FontSet,
@@ -169,5 +170,63 @@ describe('keychain shapes and logo', () => {
         .filter((p) => p.colour === 'white')
         .reduce((n, p) => n + p.volumeMm3, 0);
     expect(letters(withLogo)).toBeGreaterThan(letters(plain));
+  });
+
+  it('a logo alone, no name: the logo raised on its plate, with the ring', () => {
+    const logos = new Map([['square', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+    const alone = { ...design, text: '', logoId: 'square' };
+    expect(designProblem(fonts, alone, settings)).toBeNull();
+    // Without a logo, a name is still needed.
+    expect(designProblem(fonts, { ...design, text: '' }, settings)).toBe(
+      'Type the text',
+    );
+    for (const shape of KEYCHAIN_SHAPES) {
+      const built = buildDesign(fonts, { ...alone, shape }, settings, logos);
+      expect(
+        built.parts.find((p) => p.colour === 'white')!.volumeMm3,
+      ).toBeGreaterThan(0);
+      expect(
+        built.parts.find((p) => p.colour === 'black')!.volumeMm3,
+      ).toBeGreaterThan(0);
+      // Twice the letters' height: a 20 mm logo.
+      expect(built.size.y).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe("a customer's own logo in a slot", () => {
+  const place: DesignSlot = {
+    id: 'logo',
+    kind: 'LOGO',
+    label: 'Your logo',
+    editable: true,
+    placement: { origin: [50, 0, 20], normal: [0, -1, 0], up: [0, 0, 1] },
+    heightMm: 15,
+    maxWidthMm: 40,
+    depthMm: 1,
+    colour: 'white',
+    defaultOn: true,
+  };
+  const logos = new Map([['theirs', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+
+  it('shows nothing until the customer adds theirs, then prints it', () => {
+    expect(slotState(place, undefined).on).toBe(false);
+    expect(buildSlots(fonts, [place], {}, logos)).toHaveLength(0);
+    const built = buildSlots(
+      fonts,
+      [place],
+      { logo: { logoId: 'theirs' } },
+      logos,
+    );
+    expect(built).toHaveLength(1);
+    expect(built[0]!.volumeMm3).toBeGreaterThan(0);
+  });
+
+  it('takes the place of the studio’s logo, and only where customers may change it', () => {
+    const studio = { ...place, logoId: 'studio' };
+    expect(slotState(studio, { logoId: 'theirs' }).logoId).toBe('theirs');
+    expect(
+      slotState({ ...studio, editable: false }, { logoId: 'theirs' }).logoId,
+    ).toBe('studio');
   });
 });

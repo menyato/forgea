@@ -90,6 +90,7 @@ export class TextStudio {
       decor: p.textDecor,
       shapes: p.textShapes as KeychainShape[],
       logoIds: p.textLogoIds,
+      ownLogo: p.textOwnLogo,
     };
   }
 
@@ -185,9 +186,11 @@ export class TextStudio {
     if (shape && !p.textShapes.includes(shape))
       throw new BadRequestException('Choose one of the shapes offered');
     const logos = keychain ? await this.keychainLogos(p) : [];
+    // One the product offers, or the customer's own where the product lets them bring one.
     const logo =
       keychain && design.logoId
-        ? logos.find((l) => l.id === design.logoId)
+        ? (logos.find((l) => l.id === design.logoId) ??
+          (p.textOwnLogo ? await this.customerLogo(design.logoId) : undefined))
         : undefined;
     if (keychain && design.logoId && !logo)
       throw new BadRequestException('Choose one of the logos offered');
@@ -290,6 +293,15 @@ export class TextStudio {
         },
       },
     };
+  }
+
+  /** A customer's own logo, named for the order, with its outline. */
+  private async customerLogo(
+    id: string,
+  ): Promise<{ id: string; name: string; outline: Region[] } | undefined> {
+    if (!(await this.logos.customerLogoIds([id])).has(id)) return undefined;
+    const [found] = await this.logos.outlines([id]);
+    return found ? { id, name: 'Your logo', outline: found[1] } : undefined;
   }
 
   /** The logos a keychain product offers (switched-off ones dropped), with their outlines. */

@@ -2,13 +2,14 @@ import { CurrencyConverter, type OrderSettings } from '@forgea/pricing';
 import {
   formatSizeCm,
   type CurrencyQuote,
+  type CustomerLogoView,
   OptionKind,
   type OptionSelection,
   type ProductDetail,
 } from '@forgea/types';
 import { CART_QUANTITY_MAX } from '@forgea/validation/constants';
 import { ProductPriceDto } from '@forgea/validation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { data, Link, useFetcher, useRouteLoaderData } from 'react-router';
 import { Busy } from '~/components/brand/busy';
 import { PAGE_WIDTH } from '~/components/layout/page-width';
@@ -153,8 +154,28 @@ function CatalogProduct({
     {},
   );
   const slotsJson = slotChoicesJson(slotChoices);
+  // Logos the customer brought: shown in 3D with the product's own.
+  const [ownLogos, setOwnLogos] = useState<CustomerLogoView[]>([]);
+  const addOwnLogo = useCallback(
+    (logo: CustomerLogoView) =>
+      setOwnLogos((all) =>
+        all.some((l) => l.id === logo.id) ? all : [...all, logo],
+      ),
+    [],
+  );
+  const slotsOffer = useMemo(
+    () =>
+      product.slots && {
+        ...product.slots,
+        logos: [
+          ...product.slots.logos,
+          ...ownLogos.map((l) => ({ id: l.id, outline: l.outline })),
+        ],
+      },
+    [product.slots, ownLogos],
+  );
   const { extras, problem: slotProblem } = useSlotExtras(
-    product.slots,
+    slotsOffer,
     slotChoices,
   );
 
@@ -270,11 +291,12 @@ function CatalogProduct({
           />
         ))}
 
-        {product.slots && (
+        {slotsOffer && (
           <SlotInputs
-            offer={product.slots}
+            offer={slotsOffer}
             choices={slotChoices}
             onChange={setSlotChoices}
+            onLogo={addOwnLogo}
           />
         )}
         {slotProblem && <p className="text-sm text-danger">{slotProblem}</p>}

@@ -77,6 +77,9 @@ function Links({ user, whatsappPhone, cartCount }: HeaderProps) {
       <NavLink to="/shop" className={navLink}>
         Shop
       </NavLink>
+      <NavLink to="/design" className={navLink}>
+        Design yours
+      </NavLink>
       <NavLink to="/custom" className={navLink}>
         Custom order
       </NavLink>

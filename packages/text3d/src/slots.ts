@@ -93,7 +93,7 @@ function slotRegions(
     regions = shaped.regions;
     unitHeight = shaped.referenceHeight;
   } else {
-    const logo = slot.logoId ? logos.get(slot.logoId) : undefined;
+    const logo = state.logoId ? logos.get(state.logoId) : undefined;
     if (!logo) return null;
     regions = [...logo];
     const b = boundsOf(regions);

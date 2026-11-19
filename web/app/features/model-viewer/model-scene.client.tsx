@@ -109,7 +109,10 @@ function Glb({
   const parts = !paintable && recolour !== undefined;
   const model = useMemo(() => {
     if (parts) return recolourable(gltf.scene);
-    if (!paintable) return gltf.scene;
+    // Its own copy (meshes shared): the loader caches one scene per file, and an object lives
+    // in one scene only. Two viewers of one model (a product's preview and its text editor)
+    // would otherwise share it, the second framing it with the first one's offset.
+    if (!paintable) return gltf.scene.clone();
     const painted = markPaintable(gltf.scene.clone());
     paint(painted, color);
     return painted;

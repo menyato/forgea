@@ -28,6 +28,7 @@ export const PRIVATE_PATHS = [
 const SITEMAP_PAGES = [
   '/',
   '/shop',
+  '/design',
   '/custom',
   '/contact',
   '/privacy',

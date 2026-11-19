@@ -86,7 +86,9 @@ test('a customer designs a name keychain in 3D, in English and Arabic; the studi
       .locator('canvas'),
   ).toBeVisible({ timeout: 20_000 });
   await expect(
-    page.getByRole('button', { name: 'Type your text first' }),
+    page.getByRole('button', {
+      name: /^Type your (text first|name or add your logo)$/,
+    }),
   ).toBeDisabled();
   // It starts in our colours: copper letters on black.
   await expect(

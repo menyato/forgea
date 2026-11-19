@@ -143,9 +143,11 @@ export const lettersOf = (text: string): string[] =>
 export function textProblem(
   text: string,
   settings: TextSettings,
+  /** A keychain carrying a logo may have no text: the logo alone. */
+  logoAlone = false,
 ): string | null {
   const t = text.trim();
-  if (t === '') return 'Type the text';
+  if (t === '') return logoAlone ? null : 'Type the text';
   if (settings.style === 'COUPLE') {
     const names = coupleNames(t);
     if (names.length !== 2 || names.some((n) => n === ''))
@@ -239,6 +241,8 @@ export interface SlotChoice {
   fontId?: string;
   on?: boolean;
   colour?: string;
+  /** An editable logo slot: the customer's own logo (uploaded) instead of the studio's. */
+  logoId?: string;
 }
 
 export const SLOT_LIMITS = {
@@ -251,15 +255,18 @@ export const SLOT_LIMITS = {
   maxChars: 40,
 } as const;
 
-/** What a slot shows for a choice: its text, font, whether it shows, its colour. */
+/** What a slot shows for a choice: its text, font, whether it shows, its colour, its logo. */
 export function slotState(slot: DesignSlot, choice: SlotChoice | undefined) {
   const own = slot.editable ? (choice ?? {}) : {};
+  const logoId = slot.kind === 'LOGO' ? (own.logoId ?? slot.logoId) : undefined;
   return {
+    logoId,
     text: (own.text ?? slot.defaultText ?? '').trim(),
     fontId: own.fontId ?? slot.defaultFontId ?? '',
     on:
       slot.kind === 'LOGO'
-        ? (own.on ?? slot.defaultOn ?? true)
+        ? logoId !== undefined &&
+          (own.on ?? (own.logoId ? true : (slot.defaultOn ?? true)))
         : (own.text ?? slot.defaultText ?? '').trim() !== '',
     colour: own.colour ?? slot.colour,
   };

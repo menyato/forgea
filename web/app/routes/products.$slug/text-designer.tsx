@@ -28,6 +28,7 @@ import { PAGE_WIDTH } from '~/components/layout/page-width';
 import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { useHydrated } from '~/features/model-viewer/model-viewer';
+import { OwnLogoField } from '~/features/own-logo/own-logo-field';
 import {
   fontFamilyOf,
   useFontFaces,
@@ -119,6 +120,15 @@ export function TextDesigner({
   // A keychain's plate shape and logo, among the ones the product offers.
   const [shape, setShape] = useState<KeychainShape>('OUTLINE');
   const [logoId, setLogoId] = useState('');
+  // Logos the customer brought (their picture or drawing), offered beside the studio's.
+  const [ownLogos, setOwnLogos] = useState<ProductTextOffer['logos']>([]);
+  const shownOffer = useMemo(
+    () => ({ ...offer, logos: [...offer.logos, ...ownLogos] }),
+    [offer, ownLogos],
+  );
+  const keychain = offer.style === 'KEYCHAIN';
+  // Something to make: a text, or on a keychain a logo alone.
+  const designed = typed !== '' || (keychain && logoId !== '');
   const [quantity, setQuantity] = useState(1);
   const [problem, setProblem] = useState<string | null>(null);
   const onProblem = useCallback((p: string | null) => setProblem(p), []);
@@ -152,7 +162,7 @@ export function TextDesigner({
       : {}),
   };
   const designJson = JSON.stringify(design);
-  const shown = typed
+  const shown = designed
     ? design
     : { ...design, text: SAMPLE[offer.style], letters: [] };
 
@@ -176,7 +186,7 @@ export function TextDesigner({
   // The design the latest answer is for: until the current one is priced, it shows as updating.
   const [pricedFor, setPricedFor] = useState<string | null>(null);
   useEffect(() => {
-    if (!typed || !font) return;
+    if (!designed || !font) return;
     const timer = setTimeout(
       () => {
         setPricedFor(designJson);
@@ -192,18 +202,18 @@ export function TextDesigner({
       measuredJson ? 250 : 2500,
     );
     return () => clearTimeout(timer);
-  }, [requestPrice, designJson, measuredJson, typed, font]);
+  }, [requestPrice, designJson, measuredJson, designed, font]);
   const stale = pricedFor !== designJson || pricing.state !== 'idle';
   const price =
-    typed && pricing.data?.unitPrice ? pricing.data.unitPrice : null;
+    designed && pricing.data?.unitPrice ? pricing.data.unitPrice : null;
   // A refusal counts only for the design on screen (the next change may fix it).
-  const priceError = typed && !stale ? pricing.data?.error : undefined;
+  const priceError = designed && !stale ? pricing.data?.error : undefined;
 
   const cart = useFetcher<{ ok?: boolean; error?: string }>();
   const [addedFor, setAddedFor] = useState<string | null>(null);
   const added =
     cart.state === 'idle' && cart.data?.ok === true && addedFor === designJson;
-  const blocked = !typed || !!problem || !!priceError || !font;
+  const blocked = !designed || !!problem || !!priceError || !font;
   const colourName = useMemo(
     () => new Map(offer.colours.map((c) => [c.id, c.label])),
     [offer.colours],
@@ -218,17 +228,17 @@ export function TextDesigner({
           {hydrated ? (
             <Suspense fallback={<Loading />}>
               <TextPreview
-                offer={offer}
+                offer={shownOffer}
                 design={shown}
-                label={`3D preview of ${product.name}: ${typed || 'a sample'}. Drag to turn it.`}
+                label={`3D preview of ${product.name}: ${typed || (designed ? 'your logo' : 'a sample')}. Drag to turn it.`}
                 onProblem={onProblem}
-                onMeasured={typed ? onMeasured : undefined}
+                onMeasured={designed ? onMeasured : undefined}
               />
             </Suspense>
           ) : (
             <Loading />
           )}
-          {!typed && (
+          {!designed && (
             <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-sm text-text-muted">
               A sample: type yours to see it
             </p>
@@ -330,7 +340,7 @@ export function TextDesigner({
             className="text-sm text-danger"
             aria-live="polite"
           >
-            {typed ? (problem ?? priceError ?? '') : ''}
+            {designed ? (problem ?? priceError ?? '') : ''}
           </span>
         </div>
 
@@ -461,7 +471,7 @@ export function TextDesigner({
             </div>
           </fieldset>
         )}
-        {offer.logos.length > 0 && (
+        {(offer.logos.length > 0 || offer.ownLogo) && (
           <fieldset className="grid gap-2">
             <legend className="mb-1 text-sm font-medium">Logo</legend>
             <div
@@ -469,7 +479,7 @@ export function TextDesigner({
               role="radiogroup"
               aria-label="Logo"
             >
-              {[{ id: '', name: 'No logo' }, ...offer.logos].map((l) => (
+              {[{ id: '', name: 'No logo' }, ...shownOffer.logos].map((l) => (
                 <label
                   key={l.id || 'none'}
                   className="relative cursor-pointer rounded-pill border border-border px-4 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:font-semibold"
@@ -485,6 +495,31 @@ export function TextDesigner({
                 </label>
               ))}
             </div>
+            {offer.ownLogo && (
+              <OwnLogoField
+                onLogo={(logo) => {
+                  setOwnLogos((all) =>
+                    all.some((l) => l.id === logo.id)
+                      ? all
+                      : [
+                          ...all,
+                          {
+                            id: logo.id,
+                            name: 'Your logo',
+                            outline: logo.outline,
+                          },
+                        ],
+                  );
+                  setLogoId(logo.id);
+                }}
+              />
+            )}
+            {keychain && offer.ownLogo && (
+              <p className="text-sm text-text-muted">
+                Your logo prints beside your name, or alone if you leave the
+                name empty.
+              </p>
+            )}
           </fieldset>
         )}
 
@@ -601,9 +636,9 @@ export function TextDesigner({
               </span>
             )}
           </p>
-          {typed && (
+          {designed && (
             <p className="text-sm text-text-muted">
-              {colourName.get(textColour)} letters
+              {colourName.get(textColour)} {typed ? 'letters' : 'logo'}
               {accented && accentColour
                 ? `, ${colourName.get(accentColour)} ${couple ? 'heart' : 'initial'}`
                 : ''}
@@ -643,8 +678,12 @@ export function TextDesigner({
             disabled={blocked || cart.state !== 'idle'}
             className="flex-1 py-2.5 text-base"
           >
-            {!typed ? (
-              'Type your text first'
+            {!designed ? (
+              keychain && offer.ownLogo ? (
+                'Type your name or add your logo'
+              ) : (
+                'Type your text first'
+              )
             ) : cart.state !== 'idle' ? (
               <Busy label="Adding…" />
             ) : added ? (

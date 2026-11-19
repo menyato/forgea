@@ -53,3 +53,16 @@ model Logo {
 
   @@map("logos")
 }
+
+/// A logo a customer brought (their picture traced in their browser, or their own SVG), read
+/// in the worker into print outlines like the studio's: only the outline is kept. Used by their
+/// keychain or a product's logo slot; never listed, never deleted once ordered.
+model CustomerLogo {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// Solid regions (@forgea/text3d Region[]), 1 across, centred on 0, 0.
+  outline   Json
+  points    Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("customer_logos")
+}

@@ -10,11 +10,18 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { LogoDetail, LogoView } from '@forgea/types';
+import { Throttle } from '@nestjs/throttler';
+import type { CustomerLogoView, LogoDetail, LogoView } from '@forgea/types';
 import { NewLogoDto, UpdateLogoDto } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
-import { RequirePermission } from '../authorization/decorators.js';
-import { LOGO_SVG_MAX_BYTES, LogosService } from './logos.service.js';
+import { Public, RequirePermission } from '../authorization/decorators.js';
+import { THROTTLE } from '../security/throttle-policies.js';
+import { UploadSlots } from '../uploads/upload-slots.interceptor.js';
+import {
+  CUSTOMER_LOGO_MAX_BYTES,
+  LOGO_SVG_MAX_BYTES,
+  LogosService,
+} from './logos.service.js';
 
 @Controller('logos')
 export class LogosController {
@@ -24,6 +31,26 @@ export class LogosController {
   @Get()
   list(): Promise<LogoView[]> {
     return this.logos.list();
+  }
+
+  /**
+   * A customer's own logo, for their keychain or a product's logo slot: an SVG (their own, or
+   * their picture traced in their browser), read into an outline; the file is never kept.
+   * Anyone may bring one: visitors design before they have an account.
+   */
+  @Public()
+  @Throttle(THROTTLE.upload)
+  @Post('yours')
+  @UseInterceptors(
+    UploadSlots,
+    FileInterceptor('file', {
+      limits: { fileSize: CUSTOMER_LOGO_MAX_BYTES, files: 1, fields: 0 },
+    }),
+  )
+  yours(
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<CustomerLogoView> {
+    return this.logos.createForCustomer(file?.buffer);
   }
 
   /** One logo with its outline (the dashboard draws it). */

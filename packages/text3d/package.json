@@ -13,6 +13,10 @@
     "./design": {
       "types": "./dist/design.d.ts",
       "default": "./dist/design.js"
+    },
+    "./trace": {
+      "types": "./dist/trace.d.ts",
+      "default": "./dist/trace.js"
     }
   },
   "files": [

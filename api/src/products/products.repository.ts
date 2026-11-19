@@ -38,6 +38,17 @@ export class ProductsRepository {
         : query.model === 'without'
           ? { modelFileKey: null }
           : {}),
+      ...(query.design === 'logo'
+        ? { textOwnLogo: true }
+        : query.design === 'yours'
+          ? {
+              OR: [
+                { textStyle: { not: null } },
+                // A slot customers may change (jsonb containment: any element with it).
+                { designSlots: { array_contains: [{ editable: true }] } },
+              ],
+            }
+          : {}),
     };
     return keysetPage<ConfigurableProduct>(
       {
@@ -349,6 +360,8 @@ const fields = (dto: SaveProductDto) => ({
   // Shapes and logos belong to name keychains only.
   textShapes: dto.text?.style === 'KEYCHAIN' ? dto.text.shapes : [],
   textLogoIds: dto.text?.style === 'KEYCHAIN' ? dto.text.logoIds : [],
+  textOwnLogo:
+    dto.text?.style === 'KEYCHAIN' ? (dto.text.ownLogo ?? false) : false,
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
   priceOverride: dto.priceOverride ?? null,

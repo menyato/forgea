@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
-import type { Logo, Prisma } from '../generated/prisma/client.js';
+import type { CustomerLogo, Logo, Prisma } from '../generated/prisma/client.js';
 
 const ORDER = [{ sortOrder: 'asc' as const }, { name: 'asc' as const }];
 
@@ -17,6 +17,20 @@ export class LogosRepository {
     return ids.length
       ? this.prisma.logo.findMany({ where: { id: { in: [...ids] } } })
       : Promise.resolve([]);
+  }
+
+  /** Customers' own logos, by id. */
+  customerByIds(ids: readonly string[]): Promise<CustomerLogo[]> {
+    return ids.length
+      ? this.prisma.customerLogo.findMany({ where: { id: { in: [...ids] } } })
+      : Promise.resolve([]);
+  }
+
+  createCustomer(data: {
+    outline: Prisma.InputJsonValue;
+    points: number;
+  }): Promise<CustomerLogo> {
+    return this.prisma.customerLogo.create({ data });
   }
 
   findByName(name: string): Promise<Logo | null> {

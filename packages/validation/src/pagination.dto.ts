@@ -88,6 +88,14 @@ export class ProductListQuery extends CursorPageQuery {
   @IsOptional()
   @IsIn(['with', 'without'])
   model?: 'with' | 'without';
+
+  /**
+   * The Design page: pieces made from the customer's own logo (`logo`), or every piece a
+   * customer makes theirs (`yours`: their text, or a name or logo the product lets them change).
+   */
+  @IsOptional()
+  @IsIn(['logo', 'yours'])
+  design?: 'logo' | 'yours';
 }
 
 export class OrderListQuery extends CursorPageQuery {

@@ -15,6 +15,8 @@ const ASKS = new Set([
   'upload-image',
   // A custom request's estimate.
   'estimate',
+  // A customer's own logo, read into an outline (POST /your-logo).
+  'own-logo',
 ]);
 
 /**

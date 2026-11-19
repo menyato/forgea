@@ -45,9 +45,9 @@ export class DesignLetterDto {
  * product: its length, the font having every letter, the colours being offered.
  */
 export class TextDesignDto {
+  /** May be empty only on a keychain carrying a logo (`designProblem` says so). */
   @Trim()
   @IsString()
-  @MinLength(1, { message: 'Type the text' })
   @MaxLength(TEXT_MAX_CHARS * 2)
   text!: string;
 
@@ -88,7 +88,7 @@ export class TextDesignDto {
   @IsIn(KEYCHAIN_SHAPES, { message: 'Choose one of the shapes offered' })
   shape?: KeychainShape;
 
-  /** A name keychain's logo beside the name (one the product offers). */
+  /** A name keychain's logo beside the name: one the product offers, or the customer's own. */
   @IsOptional()
   @IsUUID('all', { message: 'Choose one of the logos offered' })
   logoId?: string;
@@ -207,6 +207,11 @@ export class ProductTextDto {
   @ArrayMaxSize(12, { message: 'At most 12 logos' })
   @IsUUID('all', { each: true, message: 'Choose the logos offered' })
   logoIds: string[] = [];
+
+  /** Name keychains: customers may bring their own logo (beside their name or alone). */
+  @IsOptional()
+  @IsBoolean()
+  ownLogo?: boolean;
 }
 
 /** A new font, from an uploaded file (POST /uploads/font). */
@@ -359,6 +364,11 @@ export class SlotChoiceDto {
   @IsOptional()
   @IsUUID()
   colour?: string;
+
+  /** An editable logo slot: the customer's own logo (POST /logos/yours). */
+  @IsOptional()
+  @IsUUID()
+  logoId?: string;
 }
 
 /** A logo's name and order, or switched off (a logo is never deleted once used). */

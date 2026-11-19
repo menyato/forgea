@@ -40,6 +40,8 @@ export interface ProductTextSettings {
   shapes: KeychainShape[];
   /** Name keychains: the studio's logos customers may add beside their name. */
   logoIds: string[];
+  /** Name keychains: customers may bring their own logo (beside their name or alone). */
+  ownLogo: boolean;
 }
 
 /** What the product page offers a customer to design with. */
@@ -114,6 +116,16 @@ export interface LogoView {
   points: number;
   active: boolean;
   sortOrder: number;
+}
+
+/**
+ * A customer's own logo, read into a print outline (POST /logos/yours): its id goes in their
+ * design or slot choice, the outline shows it in 3D.
+ */
+export interface CustomerLogoView {
+  id: string;
+  outline: Region[];
+  points: number;
 }
 
 /** A logo with its print outline (1 across, centred): GET /logos/:id. */

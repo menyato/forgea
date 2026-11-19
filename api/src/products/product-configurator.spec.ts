@@ -83,6 +83,7 @@ function product(): ConfigurableProduct {
     designSlots: [],
     textShapes: [],
     textLogoIds: [],
+    textOwnLogo: false,
     partColourGroup: null,
     slicedFile: false,
     printFiles: [],

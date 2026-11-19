@@ -72,6 +72,7 @@ const PUBLIC = [
   '/products/curved-initials',
   '/products/baby-initial-name',
   '/products/couple-names',
+  '/design',
   '/custom',
   '/contact',
   '/privacy',
