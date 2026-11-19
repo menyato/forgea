@@ -537,7 +537,7 @@ export class ProductsService {
             dto.text.defaultColourId,
             dto.text.defaultBaseColourId,
             dto.text.defaultAccentColourId,
-          ].filter((id): id is string => id !== undefined),
+          ].filter((id): id is string => typeof id === 'string'),
         ),
       ];
       if (

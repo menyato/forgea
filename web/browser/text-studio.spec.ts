@@ -306,3 +306,29 @@ test("a baby's big initial with the name and flowers; two names and a heart", as
   await expect(couple.getByText(/heart Red/)).toBeVisible();
   expect(faults).toEqual([]);
 });
+
+test('the studio saves a personalised product and customers still design it', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  const studio = await newVisitor(browser);
+  const admin = await studio.newPage();
+  const faults = watch(admin);
+  await signInAsAdmin(studio, baseURL!);
+  await admin.goto('/admin/products?q=Single%20letters');
+  await admin.getByRole('link', { name: 'Single letters' }).first().click();
+  const textOn = admin.getByLabel('Customers design their own text');
+  await expect(textOn).toBeChecked();
+  // Saved as it is: its text settings go with it (they were once dropped).
+  await admin.getByRole('button', { name: 'Save product' }).click();
+  await expect(admin.getByText('Saved', { exact: true })).toBeVisible();
+  await admin.reload();
+  await expect(textOn).toBeChecked();
+  await expect(admin.getByLabel('What it is')).toHaveValue('LETTERS');
+  await studio.close();
+
+  await page.goto('/products/single-letters');
+  await expect(page.getByLabel(/Your text/)).toBeVisible();
+  expect(faults).toEqual([]);
+});

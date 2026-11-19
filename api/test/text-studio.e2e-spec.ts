@@ -42,6 +42,8 @@ describe('Text studio (e2e)', () => {
       http().post(url).set(CSRF).set('Cookie', cookie).send(body),
     patch: (url: string, body: object) =>
       http().patch(url).set(CSRF).set('Cookie', cookie).send(body),
+    put: (url: string, body: object) =>
+      http().put(url).set(CSRF).set('Cookie', cookie).send(body),
   });
   let admin: Awaited<ReturnType<typeof signedInAs>>;
   let restorePricing: () => Promise<void>;
@@ -152,6 +154,46 @@ describe('Text studio (e2e)', () => {
       .expect(409);
     // Fonts customers use are served to browsers (the live preview loads them).
     await http().get(`/media/${cairo.fileKey}`).expect(200);
+  });
+
+  it('the dashboard saves it as it sends it: starting colours it leaves empty are null', async () => {
+    const saved = await as(admin.cookie)
+      .put(`/products/${productId}`, {
+        slug,
+        name: `Name keychain ${tag}`,
+        description: 'Your name on a keychain, in 3D.',
+        materialId,
+        grams: '8',
+        printHours: '0.8',
+        isCustom: false,
+        active: true,
+        imageKeys: [],
+        options: [],
+        sizes: [],
+        text: {
+          style: 'KEYCHAIN',
+          maxChars: 12,
+          letterHeightMm: '10',
+          letterDepthMm: '1.6',
+          baseDepthMm: '2.4',
+          maxWidthMm: '75',
+          colourGroupId: groupId,
+          extraColourPrice: '1.00',
+          sizesMm: ['15'],
+          defaultColourId: colours.gold,
+          defaultBaseColourId: colours.white,
+          defaultAccentColourId: null,
+          decor: null,
+          shapes: ['HEART'],
+          logoIds: [],
+        },
+      })
+      .expect(200);
+    expect(saved.body.text).toMatchObject({
+      style: 'KEYCHAIN',
+      shapes: ['HEART'],
+      defaultColourId: colours.gold,
+    });
   });
 
   it('the product page offers the fonts and colours; a design is priced from the piece it makes', async () => {

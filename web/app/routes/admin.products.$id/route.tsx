@@ -232,6 +232,8 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       materialId: text(form, 'materialId'),
       grams: text(form, 'grams'),
       printHours: text(form, 'printHours'),
+      // Absent = a regular product: the API clears the text settings.
+      text: jsonField(form, 'text'),
       isCustom: checked(form, 'isCustom'),
       active: checked(form, 'active'),
       modelFileKey: text(form, 'modelFileKey'),
