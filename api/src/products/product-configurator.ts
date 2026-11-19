@@ -438,7 +438,7 @@ const sizeOf = (s: {
 /**
  * A price worked out from the costs, or, when the owner set their own price for the product,
  * that price plus what this configuration (`calculated`) changes against the product's own
- * grams and hours.
+ * grams and hours; either way rounded to the shop's price step (whole dollars by default).
  */
 export function withPriceOverride(
   calculator: UnitCostCalculator,
@@ -456,7 +456,7 @@ export function withPriceOverride(
   >,
   calculated: string,
 ): string {
-  if (product.priceOverride === null) return calculated;
+  if (product.priceOverride === null) return calculator.shopPrice(calculated);
   const base = configuredUnitPrice(
     calculator,
     {
@@ -469,10 +469,8 @@ export function withPriceOverride(
     [],
     profitOf(product),
   );
-  return overriddenUnitPrice(
-    product.priceOverride.toString(),
-    base,
-    calculated,
+  return calculator.shopPrice(
+    overriddenUnitPrice(product.priceOverride.toString(), base, calculated),
   );
 }
 

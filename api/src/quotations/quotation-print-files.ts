@@ -43,7 +43,7 @@ export class QuotationPrintFiles {
       this.files.printFile(key, material.id, solidity),
     ]);
     requireSliced(key, printFile);
-    const { unitPrice } = await this.pricing.unitPrice({
+    const unitPrice = await this.pricing.shopPrice({
       grams: printFile.grams,
       printHours: printFile.printHours,
       pricePerGram: material.pricePerGram.toString(),

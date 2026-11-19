@@ -217,6 +217,26 @@ describe('Easy pricing (e2e)', () => {
       })
       .expect(200);
     expect(await shopPrice()).toBe('17.00');
+    // Prices round half up to the shop's step: $17.40 sells at $17, $17.50 at $18.
+    const fixed = (profitValue: string, priceStep: string) =>
+      as(admin.cookie)
+        .put('/pricing/settings', {
+          ...ROUND_PRICING,
+          profitKind: 'FIXED',
+          profitValue,
+          priceStep,
+        })
+        .expect(200);
+    await fixed('4.40', '0.01');
+    expect(await shopPrice()).toBe('17.40');
+    await fixed('4.40', '1.00');
+    expect(await shopPrice()).toBe('17.00');
+    await fixed('4.50', '1.00');
+    expect(await shopPrice()).toBe('18.00');
+    // A step under a cent is refused (the engine and the database both check it).
+    await as(admin.cookie)
+      .put('/pricing/settings', { ...ROUND_PRICING, priceStep: '0' })
+      .expect(400);
     await as(admin.cookie).put('/pricing/settings', ROUND_PRICING).expect(200);
 
     // Its own rule: 50% → $19.50, whatever the shop's.

@@ -16,6 +16,7 @@ for the studio, Failed print, Spools received, Vendor bill, New product.
 | Your printers: name, watts, what it cost, the hours it lasts | Orders → Configuration → **Printers** (entered once, only there) | Print runs take their electricity and wear from the printer they ran on. |
 | Which printer prices come from, and the electricity price | Settings → **Pricing** → Printer time | Every price counts that printer's wear (price ÷ hours) and power; change the printer and prices follow. |
 | Default profit (a % of cost or a fixed amount) | Settings → **Pricing** | What the shop adds on top of the cost. |
+| What prices round to ($1.00: whole dollars) | Settings → **Pricing** → Your profit | $4.70 sells at $5, $4.40 at $4. Set 0.01 to keep cents. |
 | Filaments as bought (PLA Red, PETG Black…) | Catalog → Filament stock → **New filament** | Its colour (RGB) and its own price; spools come in later. |
 | Materials (PLA, PETG…) | Catalog → Configuration → **Materials** | Density and print speed; a reel's own price wins over the material's. |
 | Colours customers may choose | Catalog → Configuration → **Options** | Each colour: its swatch, its add-on price, and **Printed from filament** (the reel orders take it from). |

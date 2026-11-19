@@ -33,7 +33,7 @@ describe('Pricing (e2e)', () => {
 
   it('prices from the database settings end to end', async () => {
     const pricing = app.get(PricingService);
-    const unit = await pricing.unitPrice({
+    const unitPrice = await pricing.shopPrice({
       grams: '120',
       printHours: '4.5',
       pricePerGram: '0.12',
@@ -43,14 +43,14 @@ describe('Pricing (e2e)', () => {
         {
           id: 'x',
           name: 'Test part',
-          unitPrice: unit.unitPrice,
+          unitPrice,
           quantity: 1,
           isCustom: true,
         },
       ],
       { rush: false, delivery: false },
     );
-    expect(quote.total).toBe(unit.unitPrice);
+    expect(quote.total).toBe(unitPrice);
     expect(Number(quote.depositRequired)).toBeGreaterThan(0);
   });
 });

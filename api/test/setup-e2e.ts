@@ -19,4 +19,11 @@ export default function setup(): void {
     stdio: 'inherit',
     env: process.env,
   });
+  // Tests check the cost formulas to the cent; the shop's whole-dollar rounding (priceStep,
+  // $1.00 by default) has its own tests, which set it themselves.
+  execFileSync(process.execPath, [prisma, 'db', 'execute', '--stdin'], {
+    input: 'UPDATE "pricing_settings" SET "priceStep" = 0.01 WHERE "id" = 1;',
+    stdio: ['pipe', 'inherit', 'inherit'],
+    env: process.env,
+  });
 }

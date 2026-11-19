@@ -13,6 +13,8 @@ model PricingSettings {
   /// The shop's profit rule on top of cost; a product may set its own.
   profitKind              ProfitKind @default(PERCENT)
   profitValue             Decimal    @db.Decimal(10, 2)
+  /// What shop prices round to, half up (USD): 1.00 = whole dollars ($4.70 → $5, $4.40 → $4).
+  priceStep               Decimal    @default(1) @db.Decimal(10, 2)
 
   /// What a kWh of electricity costs the studio (USD): print jobs' electricity, and with the
   /// pricing printer the hourly cost of printer time.

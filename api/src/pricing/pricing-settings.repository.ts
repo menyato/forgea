@@ -99,6 +99,7 @@ export class PrismaPricingSettingsRepository extends PricingSettingsRepository {
         laborCostPerUnit: s.laborCostPerUnit.toString(),
         packagingCostPerUnit: s.packagingCostPerUnit.toString(),
         profit: { kind: s.profitKind, value: s.profitValue.toString() },
+        priceStep: s.priceStep.toString(),
       },
       order: {
         rushFeePercent: s.rushFeePercent.toString(),

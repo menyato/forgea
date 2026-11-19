@@ -19,6 +19,8 @@ export const ROUND_PRICING = {
   packagingCostPerUnit: '0.50',
   profitKind: 'PERCENT',
   profitValue: '100',
+  // Cents, so the cost formulas show exactly; whole-dollar rounding has its own test.
+  priceStep: '0.01',
   rushFeePercent: '20',
   deliveryFee: '4.00',
   depositPercent: '50',

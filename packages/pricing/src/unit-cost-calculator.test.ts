@@ -217,4 +217,28 @@ describe('UnitCostCalculator', () => {
       ).toThrow(PricingError);
     });
   });
+
+  describe('shopPrice', () => {
+    it('rounds half up to the shop step: whole dollars', () => {
+      const calc = new UnitCostCalculator({ ...settings, priceStep: '1.00' });
+      expect(calc.shopPrice('4.70')).toBe('5.00');
+      expect(calc.shopPrice('4.50')).toBe('5.00');
+      expect(calc.shopPrice('4.49')).toBe('4.00');
+      expect(calc.shopPrice('4.40')).toBe('4.00');
+      expect(calc.shopPrice('12.00')).toBe('12.00');
+    });
+
+    it('keeps cents without a step, and rounds to other steps too', () => {
+      expect(new UnitCostCalculator(settings).shopPrice('4.4449')).toBe('4.44');
+      const half = new UnitCostCalculator({ ...settings, priceStep: '0.50' });
+      expect(half.shopPrice('4.74')).toBe('4.50');
+      expect(half.shopPrice('4.75')).toBe('5.00');
+    });
+
+    it('refuses a step under a cent', () => {
+      expect(
+        () => new UnitCostCalculator({ ...settings, priceStep: '0' }),
+      ).toThrow(/priceStep must be at least 0.01/);
+    });
+  });
 });

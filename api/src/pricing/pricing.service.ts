@@ -11,7 +11,6 @@ import {
   splitPrinterCost,
   type ProfitRule,
   type UnitCostInput,
-  type UnitPriceBreakdown,
   UnitCostCalculator,
 } from '@forgea/pricing';
 import type { UpdatePricingSettingsDto } from '@forgea/validation';
@@ -58,6 +57,7 @@ export class PricingService {
         laborCostPerUnit: dto.laborCostPerUnit,
         packagingCostPerUnit: dto.packagingCostPerUnit,
         profit: { kind: dto.profitKind, value: dto.profitValue },
+        priceStep: dto.priceStep,
       },
       printer,
       pricingPrinterId: dto.pricingPrinterId ?? null,
@@ -90,12 +90,13 @@ export class PricingService {
     return (await this.stored.current()).order;
   }
 
-  /** Server-only: the unit price of a print, with its full cost breakdown. */
-  async unitPrice(
+  /** What the shop charges for a print: its unit price, rounded to the shop's price step. */
+  async shopPrice(
     input: UnitCostInput,
     profit?: ProfitRule | null,
-  ): Promise<UnitPriceBreakdown> {
-    return (await this.costCalculator()).price(input, profit);
+  ): Promise<string> {
+    const calculator = await this.costCalculator();
+    return calculator.shopPrice(calculator.price(input, profit).unitPrice);
   }
 
   /**

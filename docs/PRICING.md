@@ -57,6 +57,15 @@ calculated price: own price + (calculated price of the choice − calculated pri
 product as it is), never below zero (`overriddenUnitPrice` in `@forgea/pricing`). So a bigger
 size, a heavier option, an add-on or a longer personalised text still costs more.
 
+## Whole-dollar prices
+
+Every shop price (calculated or the owner's own, with the customer's choices, personalised
+text included) is rounded half up to the shop's step, `PricingSettings.priceStep` (Settings →
+Pricing → "Round prices to the nearest"; $1.00 by default): $4.70 sells at $5, $4.40 at $4.
+It is the last step of `withPriceOverride` (`UnitCostCalculator.shopPrice`), so cart, checkout,
+quotation lines and the dashboard all show the same price. Costs, fees, discounts and the cost
+breakdown stay in cents.
+
 ## Sliced 3MF files
 
 A sliced Bambu Studio file (`.gcode.3mf`) gives each filament's grams and the print time as

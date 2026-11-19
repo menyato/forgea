@@ -69,12 +69,27 @@ describe('PricingService', () => {
   });
 
   it('prices a unit from the stored cost settings', async () => {
-    const result = await service.unitPrice({
+    const price = await service.shopPrice({
       grams: 120,
       printHours: 4.5,
       pricePerGram: 0.12,
     });
-    expect(result.unitPrice).toBe('122.10');
+    expect(price).toBe('122.10');
+  });
+
+  it("rounds to the shop's price step", async () => {
+    repo.snapshot = {
+      ...repo.snapshot,
+      cost: { ...repo.snapshot.cost, priceStep: '1.00' },
+    };
+    // 122.10 → 122.
+    expect(
+      await service.shopPrice({
+        grams: 120,
+        printHours: 4.5,
+        pricePerGram: 0.12,
+      }),
+    ).toBe('122.00');
   });
 
   it('quotes an order from the stored order settings', async () => {
@@ -103,11 +118,11 @@ describe('PricingService', () => {
         profit: { kind: 'PERCENT', value: '100' },
       },
     };
-    const result = await service.unitPrice({
+    const price = await service.shopPrice({
       grams: 120,
       printHours: 4.5,
       pricePerGram: 0.12,
     });
-    expect(result.unitPrice).toBe('152.62');
+    expect(price).toBe('152.62');
   });
 });

@@ -1,4 +1,4 @@
-import type Big from 'big.js';
+import Big from 'big.js';
 import {
   type DecimalInput,
   money,
@@ -31,6 +31,11 @@ export interface CostSettings {
   packagingCostPerUnit: DecimalInput;
   /** The shop's default rule; a product may set its own. */
   profit: ProfitRule;
+  /**
+   * What shop prices round to, half up (USD): "1.00" makes $4.70 → $5 and $4.40 → $4.
+   * Absent: cents.
+   */
+  priceStep?: DecimalInput | undefined;
 }
 
 export interface UnitCostInput {
@@ -86,6 +91,7 @@ export class UnitCostCalculator {
   private readonly labor: Big;
   private readonly packaging: Big;
   private readonly profit: ProfitRule;
+  private readonly priceStep: Big;
 
   constructor(settings: CostSettings) {
     this.machineRate = requireNonNegative(
@@ -109,6 +115,17 @@ export class UnitCostCalculator {
       'packagingCostPerUnit',
     );
     this.profit = checkedProfit(settings.profit, 'profit');
+    this.priceStep = toBig(settings.priceStep ?? '0.01', 'priceStep');
+    if (this.priceStep.lt('0.01'))
+      throw new PricingError('priceStep must be at least 0.01');
+  }
+
+  /** A price as the shop charges it: rounded half up to the shop's step (`priceStep`). */
+  shopPrice(price: DecimalInput): string {
+    const steps = toBig(price, 'price')
+      .div(this.priceStep)
+      .round(0, Big.roundHalfUp);
+    return money(steps.times(this.priceStep));
   }
 
   /** `profit` is a product's own rule; without one, the shop's default applies. */

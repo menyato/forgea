@@ -87,6 +87,12 @@ export class UpdatePricingSettingsDto {
   })
   profitValue!: string;
 
+  /** What shop prices round to, half up (USD): 1.00 = whole dollars. */
+  @Matches(/^\d{1,4}(\.\d{1,2})?$/, {
+    message: 'Enter what prices round to, e.g. 1.00',
+  })
+  priceStep!: string;
+
   /**
    * The printer prices are worked out from: its own price, life and watts (Printers) with
    * `electricityPerKwh`. Empty: machineRatePerHour is typed directly.

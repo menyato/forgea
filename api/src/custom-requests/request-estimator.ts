@@ -139,7 +139,7 @@ export class RequestEstimator {
             : null) ?? null,
       })),
     );
-    const { unitPrice } = await this.pricing.unitPrice({
+    const unitPrice = await this.pricing.shopPrice({
       grams: printFile.grams,
       printHours: printFile.printHours,
       pricePerGram,
@@ -208,7 +208,7 @@ export class RequestEstimator {
       solidityPercent: rules.estimateSolidityPercent,
       gramsPerHour: material.gramsPerHour.toString(),
     });
-    const { unitPrice } = await this.pricing.unitPrice({
+    const unitPrice = await this.pricing.shopPrice({
       grams: print.grams,
       printHours: print.printHours,
       pricePerGram: material.pricePerGram.toString(),

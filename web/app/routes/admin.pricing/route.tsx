@@ -49,6 +49,7 @@ const FIELDS = [
   'packagingCostPerUnit',
   'profitKind',
   'profitValue',
+  'priceStep',
   'pricingPrinterId',
   'electricityPerKwh',
   'rushFeePercent',
@@ -244,6 +245,14 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
               onChange={setProfit}
               errors={errors}
             />
+          </div>
+          <div className="max-w-xs">
+            {number(
+              'priceStep',
+              'Round prices to the nearest (USD)',
+              cost.priceStep ?? '0.01',
+              '1.00: $4.70 sells at $5 and $4.40 at $4',
+            )}
           </div>
         </Panel>
         <Panel title="What customers pay on top">
