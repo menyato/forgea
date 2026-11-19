@@ -309,6 +309,14 @@ async function duplicate(api: ApiClient, id: string) {
         ? { partColourGroupId: p.partColourGroupId }
         : {}),
       slots: p.slots,
+      // Everything that makes it what it is: its personalised text, and (shown only to whoever
+      // manages pricing, so only theirs) its own profit, price and extra costs.
+      ...(p.text ? { text: p.text } : {}),
+      ...(p.profit
+        ? { profitKind: p.profit.kind, profitValue: p.profit.value }
+        : {}),
+      ...(p.priceOverride ? { priceOverride: p.priceOverride } : {}),
+      extraCosts: p.extraCosts,
     });
     if (created.ok) throw redirect(`/admin/products/${created.data.id}`);
     // The address is taken: try the next one.

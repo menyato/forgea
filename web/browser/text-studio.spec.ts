@@ -328,6 +328,12 @@ test('the studio saves a personalised product and customers still design it', as
   await admin.reload();
   await expect(textOn).toBeChecked();
   await expect(admin.getByLabel('What it is')).toHaveValue('LETTERS');
+  // A copy is the same personalised product (hidden until it is ready).
+  await admin.getByRole('button', { name: 'Duplicate' }).click();
+  await expect(admin.getByLabel('Name', { exact: true })).toHaveValue(
+    /Single letters \(copy/,
+  );
+  await expect(admin.getByLabel('What it is')).toHaveValue('LETTERS');
   await studio.close();
 
   await page.goto('/products/single-letters');

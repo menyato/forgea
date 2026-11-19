@@ -9,8 +9,10 @@ type Pt = [number, number];
 
 /**
  * Which pixels are the logo (1) and which the background (0), from RGBA pixels: on a picture
- * with transparency, the opaque pixels; otherwise light against dark (Otsu's threshold), the
- * logo being whichever side the picture's border is not.
+ * with transparency, the opaque pixels; otherwise every pixel that differs from the
+ * background's colour (the picture's border) by more than the border's own noise. Every part
+ * of a logo counts, light or dark (a pale letter on white is still the logo): the piece is
+ * its whole outline, raised in one colour.
  */
 export function inkMask(
   rgba: ArrayLike<number>,
@@ -25,60 +27,33 @@ export function inkMask(
     for (let i = 0; i < n; i++) mask[i] = rgba[i * 4 + 3]! >= 128 ? 1 : 0;
     return mask;
   }
-  const lum = new Uint8Array(n);
-  const histogram = new Array<number>(256).fill(0);
-  for (let i = 0; i < n; i++) {
-    const l = Math.round(
-      0.299 * rgba[i * 4]! +
-        0.587 * rgba[i * 4 + 1]! +
-        0.114 * rgba[i * 4 + 2]!,
+  const border: number[] = [];
+  for (let x = 0; x < width; x++) border.push(x, (height - 1) * width + x);
+  for (let y = 1; y < height - 1; y++)
+    border.push(y * width, y * width + width - 1);
+  // The background: the border's median colour (a stray logo pixel there doesn't move it).
+  const background = [0, 1, 2].map((c) =>
+    median(border.map((i) => rgba[i * 4 + c]!)),
+  ) as [number, number, number];
+  const distance = (i: number) =>
+    Math.hypot(
+      rgba[i * 4]! - background[0],
+      rgba[i * 4 + 1]! - background[1],
+      rgba[i * 4 + 2]! - background[2],
     );
-    lum[i] = l;
-    histogram[l]!++;
-  }
-  const t = otsu(histogram, n);
-  // The border is background: the logo is the side most of it is not on.
-  let darkBorder = 0;
-  let border = 0;
-  const edge = (x: number, y: number) => {
-    border++;
-    if (lum[y * width + x]! <= t) darkBorder++;
-  };
-  for (let x = 0; x < width; x++) {
-    edge(x, 0);
-    edge(x, height - 1);
-  }
-  for (let y = 1; y < height - 1; y++) {
-    edge(0, y);
-    edge(width - 1, y);
-  }
-  const inkIsDark = darkBorder * 2 < border;
-  for (let i = 0; i < n; i++) mask[i] = lum[i]! <= t === inkIsDark ? 1 : 0;
+  // How much the background itself varies (JPEG noise, paper texture): the logo stands out more.
+  const noise = percentile(border.map(distance), 0.95);
+  const threshold = Math.max(12, noise * 1.5 + 4);
+  for (let i = 0; i < n; i++) mask[i] = distance(i) > threshold ? 1 : 0;
   return mask;
 }
 
-/** The threshold that best splits the histogram in two (Otsu). */
-function otsu(histogram: readonly number[], total: number): number {
-  let sum = 0;
-  for (let i = 0; i < 256; i++) sum += i * histogram[i]!;
-  let sumB = 0;
-  let weightB = 0;
-  let best = 0;
-  let threshold = 127;
-  for (let i = 0; i < 256; i++) {
-    weightB += histogram[i]!;
-    if (weightB === 0) continue;
-    const weightF = total - weightB;
-    if (weightF === 0) break;
-    sumB += i * histogram[i]!;
-    const between =
-      weightB * weightF * (sumB / weightB - (sum - sumB) / weightF) ** 2;
-    if (between > best) {
-      best = between;
-      threshold = i;
-    }
-  }
-  return threshold;
+const median = (values: number[]) => percentile(values, 0.5);
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]!;
 }
 
 /**

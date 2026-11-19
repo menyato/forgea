@@ -77,6 +77,33 @@ describe('inkMask', () => {
     expect(inkMask(px, 10, 10).reduce((n, v) => n + v, 0)).toBe(16);
   });
 
+  it('every part of a logo counts, a pale letter on white too', () => {
+    // A near-white square (#EEF0F2) and a grey one on white paper: both are the logo.
+    const px = picture(
+      12,
+      12,
+      (x, y) => y > 2 && y < 9 && x > 1 && x < 10,
+      [238, 240, 242, 255],
+      [254, 254, 254, 255],
+    );
+    for (let y = 3; y < 9; y++)
+      for (let x = 6; x < 10; x++)
+        px.set([175, 176, 178, 255], (y * 12 + x) * 4);
+    expect(inkMask(px, 12, 12).reduce((n, v) => n + v, 0)).toBe(48);
+  });
+
+  it('JPEG-like noise in the background is not the logo', () => {
+    const px = picture(
+      20,
+      20,
+      (x, y) => x > 6 && x < 13 && y > 6 && y < 13,
+      [30, 30, 30, 255],
+      [250, 250, 250, 255],
+    );
+    for (let i = 0; i < 400; i += 7) px[i * 4] = 243;
+    expect(inkMask(px, 20, 20).reduce((n, v) => n + v, 0)).toBe(36);
+  });
+
   it('a transparent PNG: the opaque pixels, whatever their colour', () => {
     const px = picture(
       10,
