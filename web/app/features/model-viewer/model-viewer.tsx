@@ -9,6 +9,20 @@ import {
 export interface ModelMeasurement {
   volumeMm3: number;
   sizeMm: [number, number, number];
+  /** Where it sits, in the model file's millimetres (Z up): text is placed on its faces. */
+  box: { min: [number, number, number]; max: [number, number, number] };
+}
+
+/** A solid shown on the model (a slot's text or logo), in the model file's millimetres, Z up. */
+export interface ModelExtra {
+  geometry: import('three').BufferGeometry;
+  color: string;
+}
+
+/** A spot clicked on the model: where, and out of which face, in the file's millimetres. */
+export interface ModelPick {
+  origin: [number, number, number];
+  normal: [number, number, number];
 }
 
 import { PrintingLogo } from '~/components/brand/printing-logo';
@@ -39,6 +53,8 @@ export function ModelViewer({
   color = '#b87333',
   recolour,
   onMeasured,
+  extras,
+  onPick,
   className = '',
 }: {
   modelKey: string;
@@ -48,6 +64,10 @@ export function ModelViewer({
   /** A multi-colour (3MF) model's parts in other colours: file colour → chosen colour. */
   recolour?: Readonly<Record<string, string>> | undefined;
   onMeasured?: ((m: ModelMeasurement) => void) | undefined;
+  /** Text and logos to show on it, placed in the model file's frame. */
+  extras?: readonly ModelExtra[] | undefined;
+  /** Called with the spot clicked on the model (the dashboard places text there). */
+  onPick?: ((pick: ModelPick) => void) | undefined;
   className?: string;
 }) {
   const hydrated = useHydrated();
@@ -72,8 +92,11 @@ export function ModelViewer({
               {...modelSource(modelKey, onMeasured ? undefined : 'view')}
               color={color}
               recolour={recolour}
-              spin={!prefersReducedMotion()}
+              // Turning on its own would move what someone is about to click.
+              spin={!prefersReducedMotion() && !onPick}
               onMeasured={onMeasured}
+              extras={extras}
+              onPick={onPick}
             />
           </Suspense>
         </SceneBoundary>

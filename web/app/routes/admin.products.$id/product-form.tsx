@@ -13,13 +13,17 @@ import {
   type SizeCm,
   shownColours,
   startingChoice,
+  type FontView,
+  type LogoDetail,
 } from '@forgea/types';
+import type { DesignSlot } from '@forgea/text3d/design';
 import { useCallback, useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { ColoursEditor, type Filament } from './colours-editor';
 import { PricePanel } from './price-panel';
 import { type PrintFileRef, PrintFilesField } from './print-files-field';
 import { RealCostPanel } from './real-cost-panel';
+import { SlotsEditor } from './slots-editor';
 import { TextSettingsPanel } from './text-settings';
 import type { loader as productLoader } from './route';
 import { Money } from '~/components/money';
@@ -55,6 +59,8 @@ export function ProductForm({
   shopProfit,
   realCost,
   filaments,
+  fonts,
+  logos,
 }: {
   product: AdminProduct | null;
   /** The shop's profit rule; null when the editor may not manage pricing. */
@@ -68,6 +74,9 @@ export function ProductForm({
   groups: readonly OptionGroupView[];
   /** The filaments on the shelf a colour may be printed from. */
   filaments: readonly Filament[];
+  /** For text and logos on the model. */
+  fonts: readonly FontView[];
+  logos: readonly LogoDetail[];
 }) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
@@ -109,6 +118,7 @@ export function ProductForm({
     product?.partColourGroupId ?? '',
   );
   const [pricing, setPricing] = useState(false);
+  const [slots, setSlots] = useState<DesignSlot[]>(product?.slots ?? []);
   const [printFiles, setPrintFiles] = useState<PrintFileRef[]>(
     (product?.printFiles ?? []).map((p) => ({ key: p.fileKey, name: p.name })),
   );
@@ -267,6 +277,26 @@ export function ProductForm({
           />
         </Panel>
         <Panel
+          title="Text and logos"
+          fold={{
+            open: slots.length > 0,
+            holds: count(slots.length, 'place', 'places'),
+          }}
+        >
+          <SlotsEditor
+            modelKey={modelKey}
+            name={name}
+            value={slots}
+            onChange={setSlots}
+            groupId={partGroupId}
+            onGroupId={setPartGroupId}
+            groups={groups}
+            fonts={fonts}
+            logos={logos}
+            errors={errors}
+          />
+        </Panel>
+        <Panel
           title="Photos"
           fold={{
             open: isNew || imageKeys.length > 0,
@@ -287,6 +317,11 @@ export function ProductForm({
         />
         <input type="hidden" name="options" value={JSON.stringify(options)} />
         <input type="hidden" name="colours" value={JSON.stringify(colours)} />
+        <input type="hidden" name="slots" value={JSON.stringify(slots)} />
+        {/* The colours editor sends it while a part is recoloured; text and logos need it too. */}
+        {!colours.some((c) => c.part) && (
+          <input type="hidden" name="partColourGroupId" value={partGroupId} />
+        )}
         <input
           type="hidden"
           name="printFiles"
@@ -469,6 +504,7 @@ export function ProductForm({
             value={text}
             onChange={setText}
             groups={groups}
+            logos={logos}
             errors={errors}
           />
           {text && (

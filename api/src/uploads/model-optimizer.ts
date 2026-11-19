@@ -23,6 +23,7 @@ type Result =
       lite?: Uint8Array;
       volumeMm3?: number | null;
       info?: ThreeMfInfo;
+      project?: Uint8Array;
     }
   | { ok: false; message: string };
 
@@ -58,6 +59,23 @@ export class ModelOptimizer {
   async volume(load: Load): Promise<number | null> {
     const result = await this.run(load, (data) => ({ task: 'volume', data }));
     return result.volumeMm3 ?? null;
+  }
+
+  /** The model (STL or 3MF) with more parts placed on it, as one 3MF project. */
+  async project(
+    load: Load,
+    extension: string,
+    title: string,
+    extras: { label: string; hex: string | null; stl: Uint8Array }[],
+  ): Promise<Uint8Array> {
+    const result = await this.run(load, (data) => ({
+      task: 'project',
+      data,
+      extension,
+      title,
+      extras,
+    }));
+    return result.project!;
   }
 
   /** What a 3MF says about printing it: colours, volumes, the slicer's time and grams. */

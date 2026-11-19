@@ -129,8 +129,13 @@ export {
   SaveFontDto,
   TEXT_MAX_CHARS,
   DesignMeasurementDto,
+  DesignSlotDto,
+  NewLogoDto,
+  SlotChoiceDto,
+  SlotPlacementDto,
   TextDesignDto,
   UpdateFontDto,
+  UpdateLogoDto,
 } from './text-studio.dto.js';
 export {
   FinishPieceDto,

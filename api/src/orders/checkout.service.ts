@@ -118,6 +118,7 @@ export class CheckoutService {
         productId: l.productId,
         options: l.options,
         design: l.measurement,
+        slots: l.slotsOrdered,
       })),
       rush: dto.rush,
     });

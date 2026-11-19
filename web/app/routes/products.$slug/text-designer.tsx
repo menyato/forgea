@@ -4,6 +4,8 @@ import {
   isArabic,
   lettersOf,
   PER_LETTER_STYLES,
+  KEYCHAIN_SHAPE_LABELS,
+  type KeychainShape,
 } from '@forgea/text3d/design';
 import type {
   DesignMeasurement,
@@ -114,6 +116,9 @@ export function TextDesigner({
   const [letters, setLetters] = useState<
     { fontId?: string; colour?: string }[]
   >([]);
+  // A keychain's plate shape and logo, among the ones the product offers.
+  const [shape, setShape] = useState<KeychainShape>('OUTLINE');
+  const [logoId, setLogoId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [problem, setProblem] = useState<string | null>(null);
   const onProblem = useCallback((p: string | null) => setProblem(p), []);
@@ -127,6 +132,8 @@ export function TextDesigner({
     ...(accented && accentColour ? { accentColour } : {}),
     ...(initialFont ? { accentFontId: initialFont } : {}),
     ...(heightMm !== offer.letterHeightMm ? { heightMm } : {}),
+    ...(shape !== 'OUTLINE' ? { shape } : {}),
+    ...(logoId ? { logoId } : {}),
     ...(perLetter
       ? {
           letters: chars.map((_, i) => {
@@ -422,6 +429,59 @@ export function TextDesigner({
                   />
                   {Number(h)} mm{' '}
                   {offer.style === 'INITIAL_NAME' ? 'initial' : 'letters'}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        {offer.shapes.length > 0 && (
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-medium">Shape</legend>
+            <div
+              className="flex flex-wrap gap-2"
+              role="radiogroup"
+              aria-label="Shape"
+            >
+              {(['OUTLINE', ...offer.shapes] as KeychainShape[]).map((s) => (
+                <label
+                  key={s}
+                  className="relative cursor-pointer rounded-pill border border-border px-4 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:font-semibold"
+                >
+                  <input
+                    type="radio"
+                    name="design-shape"
+                    className="sr-only"
+                    checked={shape === s}
+                    onChange={() => setShape(s)}
+                  />
+                  {KEYCHAIN_SHAPE_LABELS[s]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        {offer.logos.length > 0 && (
+          <fieldset className="grid gap-2">
+            <legend className="mb-1 text-sm font-medium">Logo</legend>
+            <div
+              className="flex flex-wrap gap-2"
+              role="radiogroup"
+              aria-label="Logo"
+            >
+              {[{ id: '', name: 'No logo' }, ...offer.logos].map((l) => (
+                <label
+                  key={l.id || 'none'}
+                  className="relative cursor-pointer rounded-pill border border-border px-4 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:font-semibold"
+                >
+                  <input
+                    type="radio"
+                    name="design-logo"
+                    className="sr-only"
+                    checked={logoId === l.id}
+                    onChange={() => setLogoId(l.id)}
+                  />
+                  {l.name}
                 </label>
               ))}
             </div>

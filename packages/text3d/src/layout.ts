@@ -54,13 +54,14 @@ export function layoutDesign(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
+  logos: ReadonlyMap<string, readonly Region[]> = new Map(),
 ): Layout {
   // Too wide for the piece: laid out again with smaller letters (thicknesses stay).
   let h = settings.letterHeightMm;
-  let layout = layoutAt(fonts, design, settings);
+  let layout = layoutAt(fonts, design, settings, logos);
   for (let i = 0; i < 4 && layout.size.x > settings.maxWidthMm; i++) {
     h *= (settings.maxWidthMm / layout.size.x) * 0.995;
-    layout = layoutAt(fonts, design, { ...settings, letterHeightMm: h });
+    layout = layoutAt(fonts, design, { ...settings, letterHeightMm: h }, logos);
   }
   return layout;
 }
@@ -69,12 +70,15 @@ function layoutAt(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
+  logos: ReadonlyMap<string, readonly Region[]>,
 ): Layout {
   const h = settings.letterHeightMm;
   const margin = Math.max(1.5, h * 0.12);
   let placed: Placed[][];
   switch (settings.style) {
     case 'KEYCHAIN':
+      placed = [keychainFace(fonts, design, h, logos)];
+      break;
     case 'NAME':
       placed = [
         [run(fonts, design.fontId, design.text.trim(), h, design.textColour)],
@@ -111,7 +115,12 @@ function layoutAt(
   const parts: Part[] = [];
   for (const piece of scaled) {
     // A big initial holds its name and decorations itself: no bar along the baseline.
-    let backing = backingOf(piece, margin, settings.style !== 'INITIAL_NAME');
+    let backing =
+      settings.style === 'KEYCHAIN' &&
+      design.shape &&
+      design.shape !== 'OUTLINE'
+        ? shapedPlate(piece, margin, design.shape)
+        : backingOf(piece, margin, settings.style !== 'INITIAL_NAME');
     if (settings.style === 'KEYCHAIN') {
       backing = withRing(backing, h, isArabic(design.text));
     }
@@ -483,6 +492,103 @@ function footOf(
     z1: thickness / 2 + depth / 2,
   };
 }
+
+/**
+ * A keychain's face: the name, and a logo after it (the end of the reading, away from the
+ * ring), a little taller than the capitals, in the letters' colour.
+ */
+function keychainFace(
+  fonts: FontSet,
+  design: TextDesign,
+  h: number,
+  logos: ReadonlyMap<string, readonly Region[]>,
+): Placed[] {
+  const name = run(
+    fonts,
+    design.fontId,
+    design.text.trim(),
+    h,
+    design.textColour,
+  );
+  const logo = design.logoId ? logos.get(design.logoId) : undefined;
+  if (!logo || logo.length === 0) return [name];
+  const b = boundsOf(name.regions)!;
+  const lb = boundsOf(logo)!;
+  const k = (h * 1.25) / Math.max(1e-6, lb.maxY - lb.minY);
+  const width = (lb.maxX - lb.minX) * k;
+  const gap = h * 0.35;
+  const rightToLeft = isArabic(design.text);
+  // Centred on the letters' height, after the last letter.
+  const x = rightToLeft ? b.minX - gap - width : b.maxX + gap;
+  const cy = (b.minY + b.maxY) / 2;
+  return [
+    name,
+    {
+      regions: moved(
+        logo,
+        x - lb.minX * k,
+        cy - ((lb.minY + lb.maxY) / 2) * k,
+        k,
+      ),
+      colour: design.textColour,
+    },
+  ];
+}
+
+/** A keychain plate in a chosen shape, big enough to hold its letters (and logo). */
+function shapedPlate(
+  piece: Placed[],
+  margin: number,
+  shape: 'ROUNDED' | 'OVAL' | 'HEART',
+): Region[] {
+  const b = boundsOf(piece.flatMap((p) => p.regions))!;
+  const w = b.maxX - b.minX + margin * 2;
+  const hgt = b.maxY - b.minY + margin * 2;
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  switch (shape) {
+    case 'ROUNDED': {
+      const r = Math.min(w, hgt) * 0.3;
+      const corners: Point[] = [
+        [cx - w / 2 + r, cy - hgt / 2 + r],
+        [cx + w / 2 - r, cy - hgt / 2 + r],
+        [cx + w / 2 - r, cy + hgt / 2 - r],
+        [cx - w / 2 + r, cy + hgt / 2 - r],
+      ];
+      return union([
+        { outer: rectangle(cx, cy, w - 2 * r, hgt), holes: [] },
+        { outer: rectangle(cx, cy, w, hgt - 2 * r), holes: [] },
+        ...corners.map(([x, y]) => ({ outer: circle(x, y, r, 24), holes: [] })),
+      ]);
+    }
+    case 'OVAL': {
+      // The ellipse through the rectangle's corners.
+      const a = (w / 2) * Math.SQRT2;
+      const c = (hgt / 2) * Math.SQRT2;
+      const outer: Contour = Array.from({ length: 72 }, (_, i) => {
+        const t = (i / 72) * Math.PI * 2;
+        return [cx + a * Math.cos(t), cy + c * Math.sin(t)] as Point;
+      });
+      return [{ outer, holes: [] }];
+    }
+    case 'HEART': {
+      // The heart's widest band holds the text: sized so the letters fit across it.
+      const size = Math.max(w / 0.7, hgt / 0.45);
+      return mapRegions(motif('HEART', size), ([x, y]) => [
+        x + cx,
+        y + cy - size * 0.06,
+      ]);
+    }
+  }
+}
+
+/** A rectangle w x h centred on cx, cy. */
+const rectangle = (cx: number, cy: number, w: number, h: number): Contour => [
+  [cx - w / 2, cy - h / 2],
+  [cx + w / 2, cy - h / 2],
+  [cx + w / 2, cy + h / 2],
+  [cx - w / 2, cy + h / 2],
+];
 
 /** The keychain ring's outer radius for letters `h` mm tall. */
 const ringSize = (h: number) => Math.max(5, h * 0.45);

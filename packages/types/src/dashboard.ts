@@ -40,6 +40,8 @@ export interface StaffOrder {
     printProject: boolean;
     /** Its product's sliced print files, each downloadable from the order. */
     printFiles: { id: string; name: string }[];
+    /** Its text and logos as ordered (the model with them downloads as one 3MF). */
+    slots: import('./text-studio.js').SlotSummary[];
   }[];
   /** The labelled lines the customer saw (subtotal, rush fee, discounts, delivery…). */
   priceBreakdown: { label: string; amount: Money }[];

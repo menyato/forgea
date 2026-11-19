@@ -9,8 +9,11 @@ import {
   ACCENT_STYLES,
   COUPLE_JOIN,
   coupleNames,
+  KEYCHAIN_SHAPE_LABELS,
+  type KeychainShape,
   lettersOf,
   PER_LETTER_STYLES,
+  type Region,
   STANDING_STYLES,
   type TextSettings,
 } from '@forgea/text3d/design';
@@ -33,6 +36,7 @@ import { UploadsService } from '../uploads/uploads.service.js';
 import { FontsRepository } from './fonts.repository.js';
 import { sampleGlb } from './sample-glb.js';
 import { type Measured, TextShaper } from './text-shaper.js';
+import { LogosService } from './logos.service.js';
 
 /**
  * A personalised piece as measured: what it takes to print (server-only: grams and hours are
@@ -61,6 +65,7 @@ export class TextStudio {
     private readonly uploads: UploadsService,
     private readonly shaper: TextShaper,
     private readonly store: StoreSettingsService,
+    private readonly logos: LogosService,
   ) {}
 
   /** The product's settings as the dashboard edits them; null for a regular product. */
@@ -83,6 +88,8 @@ export class TextStudio {
         ? p.textDefaultAccentId
         : null,
       decor: p.textDecor,
+      shapes: p.textShapes as KeychainShape[],
+      logoIds: p.textLogoIds,
     };
   }
 
@@ -98,6 +105,7 @@ export class TextStudio {
         label: v.label,
         swatchHex: v.swatchHex,
       })),
+      logos: await this.keychainLogos(p),
       fonts: (await this.fonts.active()).map((f) => ({
         id: f.id,
         name: f.name,
@@ -168,6 +176,21 @@ export class TextStudio {
       if (id !== undefined && !fonts.has(id))
         throw new BadRequestException('Choose one of the fonts offered');
     }
+    // A keychain's shape and logo: only ones the product offers.
+    const keychain = settings.style === 'KEYCHAIN';
+    const shape =
+      keychain && design.shape && design.shape !== 'OUTLINE'
+        ? design.shape
+        : undefined;
+    if (shape && !p.textShapes.includes(shape))
+      throw new BadRequestException('Choose one of the shapes offered');
+    const logos = keychain ? await this.keychainLogos(p) : [];
+    const logo =
+      keychain && design.logoId
+        ? logos.find((l) => l.id === design.logoId)
+        : undefined;
+    if (keychain && design.logoId && !logo)
+      throw new BadRequestException('Choose one of the logos offered');
     // As made: letters only where they apply, a backing colour only when it differs.
     const clean: TextDesignInput = {
       // A couple's names always joined the same way ("Sara & Ali").
@@ -190,6 +213,8 @@ export class TextStudio {
         : {}),
       ...(height !== base.letterHeightMm ? { heightMm: String(height) } : {}),
       ...(perLetter ? { letters } : {}),
+      ...(shape ? { shape } : {}),
+      ...(logo ? { logoId: logo.id } : {}),
     };
     const used = new Set([
       clean.fontId,
@@ -205,6 +230,7 @@ export class TextStudio {
           })),
           clean,
           settings,
+          logo ? [[logo.id, logo.outline]] : [],
         );
     if (measured.problem !== null)
       throw new BadRequestException(measured.problem);
@@ -255,6 +281,8 @@ export class TextStudio {
             }))
           : null,
         letterHeightMm: height,
+        shape: shape ? KEYCHAIN_SHAPE_LABELS[shape] : null,
+        logo: logo?.name ?? null,
         sizeMm: {
           x: round1(measured.size.x),
           y: round1(measured.size.y),
@@ -262,6 +290,20 @@ export class TextStudio {
         },
       },
     };
+  }
+
+  /** The logos a keychain product offers (switched-off ones dropped), with their outlines. */
+  private async keychainLogos(
+    p: ConfigurableProduct,
+  ): Promise<{ id: string; name: string; outline: Region[] }[]> {
+    if (p.textStyle !== 'KEYCHAIN' || p.textLogoIds.length === 0) return [];
+    const named = await this.logos.named(p.textLogoIds);
+    const outlines = new Map(await this.logos.outlines(p.textLogoIds));
+    return p.textLogoIds.flatMap((id) => {
+      const logo = named.get(id);
+      const outline = outlines.get(id);
+      return logo?.active && outline ? [{ id, name: logo.name, outline }] : [];
+    });
   }
 
   /**
@@ -311,6 +353,7 @@ export class TextStudio {
       }),
       design,
       settings,
+      design.logoId ? await this.logos.outlines([design.logoId]) : [],
     );
     if ('problem' in files) throw new BadRequestException(files.problem);
     return files;

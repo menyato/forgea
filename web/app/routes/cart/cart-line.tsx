@@ -4,6 +4,7 @@ import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { DesignLines } from '~/features/text-studio/design-lines';
+import { SlotLines } from '~/features/design-slots/slot-lines';
 
 /** One line with inline quantity change and removal (no page navigation). */
 export function CartLineRow({ line }: { line: CartLine }) {
@@ -27,6 +28,7 @@ export function CartLineRow({ line }: { line: CartLine }) {
           </p>
         )}
         {line.design && <DesignLines design={line.design} />}
+        <SlotLines slots={line.slots} />
         <p className="text-sm text-text-muted">
           {line.materialCode} · <Money amount={line.unitPrice} /> each
           {line.isCustom && ' · made to order (50% deposit)'}

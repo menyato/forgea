@@ -18,6 +18,7 @@ import {
   OrdersRepository,
   type CustomerOrderRow,
 } from './orders.repository.js';
+import type { OrderedSlot } from '../text-studio/design-slots.js';
 
 /** Before the studio has started on it (and no deposit came in), the customer may cancel. */
 const CUSTOMER_CANCELLABLE: readonly OrderStatus[] = [
@@ -97,6 +98,7 @@ function toCustomerOrder(
       // A snapshot written at checkout: [{ group, value }].
       options: i.options as unknown as ChosenOption[],
       design: (i.design as Measurement | null)?.summary ?? null,
+      slots: ((i.slots as OrderedSlot[] | null) ?? []).map((s) => s.summary),
     })),
     history: o.statusHistory.map((h) => ({
       status: h.status,

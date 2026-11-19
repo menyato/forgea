@@ -35,3 +35,21 @@ enum TextDecor {
   STARS
   CROWN
 }
+
+/// A logo the studio adds to products (Dashboard → Logos): drawn from an SVG file, kept only
+/// as print outlines (the file itself is never stored or served: SVG can carry scripts).
+/// Never deleted once used: switched off instead.
+model Logo {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @unique
+  /// Solid regions (@forgea/text3d Region[]), 1 across, centred on 0, 0.
+  outline   Json
+  /// How many points the outline has (a guide to how detailed it is).
+  points    Int
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("logos")
+}

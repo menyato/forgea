@@ -10,7 +10,9 @@ const added = new Set<string>();
  * Registers the shop's fonts with the browser (FontFace), so the font picker shows each name
  * written in its own font. Each file is fetched once; the server renders with a fallback.
  */
-export function useFontFaces(fonts: ProductTextOffer['fonts']): void {
+export function useFontFaces(
+  fonts: readonly Pick<ProductTextOffer['fonts'][number], 'id' | 'fileKey'>[],
+): void {
   useEffect(() => {
     for (const f of fonts) {
       if (added.has(f.id)) continue;

@@ -61,7 +61,20 @@ export function volumeMm3(geometry: BufferGeometry): number {
 /** A binary STL (mm), as slicers read it: one file per colour, placed together. */
 export function stlBytes(geometry: BufferGeometry, name: string): Uint8Array {
   const p = geometry.getAttribute('position');
-  const triangles = p.count / 3;
+  return stlFromPositions(p.array, name);
+}
+
+/** A binary STL from triangle corners (x, y, z each, mm), as slicers read it. */
+export function stlFromPositions(
+  positions: ArrayLike<number>,
+  name: string,
+): Uint8Array {
+  const p = {
+    getX: (i: number) => positions[i * 3]!,
+    getY: (i: number) => positions[i * 3 + 1]!,
+    getZ: (i: number) => positions[i * 3 + 2]!,
+  };
+  const triangles = Math.floor(positions.length / 9);
   const out = new DataView(new ArrayBuffer(84 + triangles * 50));
   const header = new TextEncoder().encode(`Forgea ${name}`.slice(0, 80));
   new Uint8Array(out.buffer).set(header, 0);

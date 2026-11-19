@@ -68,6 +68,22 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    holder): it counts in what one piece costs you, so your profit applies to it too.
 6. Leave **Visible in the shop** off until it is ready; a product not in the shop can still be
    sold on a quotation.
+7. **A name or a logo on it** (any product with an STL or 3MF model): the **Text and logos**
+   section. Choose **Colours they print in** (a colour option with swatches), then **Add text**
+   or **Add a logo**. Put each one on a side (**Front**, **Back**, **Left**, **Right**, **Top**)
+   or press **Place it where I click** and click the model; **Turn it** turns it a quarter.
+   Set its height, widest size, how far it stands out and its colour. Tick **Customers may
+   change it** to let them type their own name, pick a font and a colour, or turn the logo
+   off; without the tick it always prints as you set it. The 3D view shows it as it prints,
+   and the price counts its filament. On an order, **Download with their text (3MF)** gives
+   the model with the customer's name already in place, a part per colour.
+
+**Logos** (Catalog → Configuration → **Logos**): add a logo as an SVG file (export it from
+Illustrator, Inkscape, Canva or Figma). Everything drawn prints solid; shapes inside shapes are
+holes. Switch one off to stop offering it (orders keep it).
+
+**Name keychains**: in **Personalised text**, a keychain can offer **shapes** (a rounded tag, an
+oval, a heart) and **logos** beside the name; customers pick them on the product page.
 
 ## 4. Selling
 

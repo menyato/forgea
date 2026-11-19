@@ -6,7 +6,13 @@ import {
   type OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { TextDesign, TextSettings } from '@forgea/text3d';
+import type {
+  DesignSlot,
+  Region,
+  SlotChoice,
+  TextDesign,
+  TextSettings,
+} from '@forgea/text3d';
 import type { TextJob, TextResult } from './text-worker.js';
 
 /** A design is a few letters: far less than this, unless something is wrong (or hostile). */
@@ -41,6 +47,23 @@ type Job =
       fonts: readonly FontRef[];
       design: TextDesign;
       settings: TextSettings;
+      logos: [string, Region[]][];
+    }
+  | { task: 'logo'; svg: string }
+  | {
+      task: 'slots' | 'slots-stl';
+      fonts: readonly FontRef[];
+      slots: DesignSlot[];
+      choices: Record<string, SlotChoice>;
+      logos: [string, Region[]][];
+    };
+
+/** A product's slots as chosen: each one's colour and volume, or why they can't be made. */
+export type MeasuredSlots =
+  | { problem: string }
+  | {
+      problem: null;
+      slots: { slotId: string; colour: string; volumeMm3: number }[];
     };
 
 interface Slot {
@@ -72,6 +95,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
   }));
   private readonly queue: { job: Job; done: (r: TextResult) => void }[] = [];
   private readonly measured = new Map<string, Measured>();
+  private readonly slotsMeasured = new Map<string, MeasuredSlots>();
   private next = 1;
 
   /** The workers start with the API: the first customer doesn't wait for them. */
@@ -94,11 +118,71 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     return r.ok && 'scripts' in r ? r.scripts : null;
   }
 
+  /** A logo's SVG as print outlines (1 across), or why it can't be read. */
+  async logo(
+    svg: string,
+  ): Promise<{ outline: Region[]; points: number } | { problem: string }> {
+    const r = await this.send({ task: 'logo', svg });
+    if (!r.ok) return { problem: r.message };
+    if ('outline' in r) return { outline: r.outline, points: r.points };
+    throw new Error('Unexpected answer from the text worker');
+  }
+
+  /** A product's text and logo slots as chosen: their volumes, remembered for a while. */
+  async measureSlots(
+    fonts: readonly FontRef[],
+    slots: DesignSlot[],
+    choices: Record<string, SlotChoice>,
+    logos: [string, Region[]][],
+  ): Promise<MeasuredSlots> {
+    const key = JSON.stringify([
+      'slots',
+      slots,
+      choices,
+      logos.map(([id]) => id),
+    ]);
+    const known = this.slotsMeasured.get(key);
+    if (known) {
+      this.slotsMeasured.delete(key);
+      this.slotsMeasured.set(key, known);
+      return known;
+    }
+    const r = await this.send({ task: 'slots', fonts, slots, choices, logos });
+    const result = toSlots(r);
+    this.slotsMeasured.set(key, result);
+    if (this.slotsMeasured.size > CACHE_SIZE)
+      this.slotsMeasured.delete(this.slotsMeasured.keys().next().value!);
+    return result;
+  }
+
+  /** A product's slots as print files: one STL per slot, in the model file's frame. */
+  async slotFiles(
+    fonts: readonly FontRef[],
+    slots: DesignSlot[],
+    choices: Record<string, SlotChoice>,
+    logos: [string, Region[]][],
+  ): Promise<
+    | { problem: string }
+    | { slotId: string; colour: string; bytes: Uint8Array }[]
+  > {
+    const r = await this.send({
+      task: 'slots-stl',
+      fonts,
+      slots,
+      choices,
+      logos,
+    });
+    const m = toSlots(r);
+    if (m.problem !== null) return { problem: m.problem };
+    return r.ok && 'slots' in r && r.files ? r.files : [];
+  }
+
   /** The design's solids by colour (volumes, mm³) and size, or why it can't be made. */
   async measure(
     fonts: readonly FontRef[],
     design: TextDesign,
     settings: TextSettings,
+    logos: [string, Region[]][] = [],
   ): Promise<Measured> {
     // Fonts never change once added (a new file is a new font), so the design says it all.
     const key = JSON.stringify([design, settings]);
@@ -110,7 +194,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
       return known;
     }
     const result = toMeasured(
-      await this.send({ task: 'measure', fonts, design, settings }),
+      await this.send({ task: 'measure', fonts, design, settings, logos }),
     );
     this.measured.set(key, result);
     if (this.measured.size > CACHE_SIZE)
@@ -123,8 +207,9 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     fonts: readonly FontRef[],
     design: TextDesign,
     settings: TextSettings,
+    logos: [string, Region[]][] = [],
   ): Promise<{ problem: string } | { colour: string; bytes: Uint8Array }[]> {
-    const r = await this.send({ task: 'stl', fonts, design, settings });
+    const r = await this.send({ task: 'stl', fonts, design, settings, logos });
     const m = toMeasured(r);
     if (m.problem !== null) return { problem: m.problem };
     return 'files' in r && r.ok && r.files ? r.files : [];
@@ -165,7 +250,12 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     try {
       const worker = this.workerFor(slot);
       let message: TextJob;
-      if (job.task === 'measure' || job.task === 'stl') {
+      if (
+        job.task === 'measure' ||
+        job.task === 'stl' ||
+        job.task === 'slots' ||
+        job.task === 'slots-stl'
+      ) {
         const fonts = await Promise.all(
           job.fonts
             .filter((f) => !slot.sent.has(f.id))
@@ -175,6 +265,8 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
         message = { ...job, id, fonts };
       } else if (job.task === 'scripts') {
         message = { id, task: 'scripts', bytes: job.bytes };
+      } else if (job.task === 'logo') {
+        message = { id, task: 'logo', svg: job.svg };
       } else {
         message = { id, task: 'warm' };
       }
@@ -240,6 +332,13 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     }
     if (worker) void worker.terminate();
   }
+}
+
+function toSlots(r: TextResult): MeasuredSlots {
+  if (!r.ok) throw new ServiceUnavailableException(r.message);
+  if ('problem' in r) return { problem: r.problem };
+  if ('slots' in r) return { problem: null, slots: r.slots };
+  throw new Error('Unexpected answer from the text worker');
 }
 
 function toMeasured(r: TextResult): Measured {

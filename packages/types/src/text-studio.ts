@@ -1,4 +1,5 @@
 import type { TextDecor, TextStyle } from './generated/prisma/enums.js';
+import type { DesignSlot, KeychainShape, Region } from '@forgea/text3d/design';
 import type { Money } from './lists.js';
 
 /** A font customers write in (Dashboard → Fonts). */
@@ -35,6 +36,10 @@ export interface ProductTextSettings {
   defaultAccentColourId: string | null;
   /** Big initial pieces: the decorations around the initial (null for other styles). */
   decor: TextDecor | null;
+  /** Name keychains: the plate shapes customers choose from (empty: follows the letters). */
+  shapes: KeychainShape[];
+  /** Name keychains: the studio's logos customers may add beside their name. */
+  logoIds: string[];
 }
 
 /** What the product page offers a customer to design with. */
@@ -44,6 +49,8 @@ export interface ProductTextOffer extends Omit<
 > {
   colours: { id: string; label: string; swatchHex: string | null }[];
   fonts: Pick<FontView, 'id' | 'name' | 'fileKey' | 'latin' | 'arabic'>[];
+  /** The logos customers may add (keychains), as print outlines. */
+  logos: { id: string; name: string; outline: Region[] }[];
 }
 
 /**
@@ -71,6 +78,9 @@ export interface TextDesignInput {
   heightMm?: string;
   /** Curved initials and single letters: per letter, its font and colour. */
   letters?: { fontId?: string; colour?: string }[];
+  /** Name keychains: the plate's shape and a logo beside the name. */
+  shape?: KeychainShape;
+  logoId?: string;
 }
 
 /** How a design reads in the cart, an order and the dashboard (names, not ids). */
@@ -89,6 +99,50 @@ export interface DesignSummary {
   letters: { char: string; font: string; colour: string }[] | null;
   /** The letters' height, mm (the size chosen). */
   letterHeightMm: number;
+  /** Name keychains: the plate's shape and the logo on it, by name; null = none chosen. */
+  shape: string | null;
+  logo: string | null;
   /** The piece's size, mm (width × depth × height as it lies on the bed). */
   sizeMm: { x: number; y: number; z: number };
+}
+
+/** A logo the studio adds to products (Dashboard → Logos). */
+export interface LogoView {
+  id: string;
+  name: string;
+  /** How detailed its outline is. */
+  points: number;
+  active: boolean;
+  sortOrder: number;
+}
+
+/** A logo with its print outline (1 across, centred): GET /logos/:id. */
+export interface LogoDetail extends LogoView {
+  outline: Region[];
+}
+
+/** What a product page needs to show and change its text and logo slots. */
+export interface ProductSlotsOffer {
+  /** Every slot (the ones customers can't change show as the owner set them). */
+  slots: DesignSlot[];
+  /** The logos its slots use, as print outlines (1 across, centred). */
+  logos: { id: string; outline: Region[] }[];
+  /** The fonts its text slots may be written in. */
+  fonts: Pick<FontView, 'id' | 'name' | 'fileKey' | 'latin' | 'arabic'>[];
+  /** The colours slots may print in (the product's part colours, or its text colours). */
+  colours: { id: string; label: string; swatchHex: string | null }[];
+}
+
+/** One slot as chosen, for the cart, an order and the studio (names, not ids). */
+export interface SlotSummary {
+  slotId: string;
+  label: string;
+  kind: 'TEXT' | 'LOGO';
+  /** Text: what it says. */
+  text: string | null;
+  font: string | null;
+  /** Logo: which one. */
+  logo: string | null;
+  colour: string;
+  grams: string;
 }

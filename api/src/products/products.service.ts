@@ -27,6 +27,7 @@ import type {
   PrintFilesDto,
   ProductListQuery,
   SaveProductDto,
+  SlotChoiceDto,
 } from '@forgea/validation';
 import {
   formatSizeCm,
@@ -41,6 +42,7 @@ import {
   UploadPurpose,
 } from '../generated/prisma/enums.js';
 import { PricingService } from '../pricing/pricing.service.js';
+import { DesignSlots } from '../text-studio/design-slots.js';
 import { TextStudio } from '../text-studio/text-studio.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import {
@@ -48,6 +50,7 @@ import {
   extraCostOf,
   ProductConfigurator,
   profitOf,
+  type Configuration,
 } from './product-configurator.js';
 import { ModelFileInfoService } from './model-file-info.js';
 import { ProductsRepository } from './products.repository.js';
@@ -64,6 +67,7 @@ export class ProductsService {
     private readonly uploads: UploadsService,
     private readonly studio: TextStudio,
     private readonly files: ModelFileInfoService,
+    private readonly slots: DesignSlots,
   ) {}
 
   /** The public catalog, each product priced by the engine (cost inputs never leave the API). */
@@ -137,6 +141,7 @@ export class ProductsService {
       // One size only: show its measurements; with sizes, each choice shows its own.
       size: p.sizes.length === 0 ? productSize(p) : null,
       text: await this.studio.offer(p),
+      slots: await this.slots.offer(p),
     };
   }
 
@@ -146,13 +151,17 @@ export class ProductsService {
     selections: readonly OptionSelection[],
     design?: TextDesignInput,
     measured?: DesignMeasurement,
+    slotChoices: readonly SlotChoiceDto[] = [],
   ): Promise<{ unitPrice: string }> {
     const p = await this.products.findActiveBySlug(slug);
     if (!p) throw new NotFoundException('Product not found');
     // Like the cart: a design only for a product that has one.
     if (design && !p.textStyle)
       throw new BadRequestException('This product has no text to design');
-    const configuration = this.configurator.configure(p, selections);
+    const configuration = withSlots(
+      this.configurator.configure(p, selections),
+      await this.slots.measure(p, slotChoices),
+    );
     // A personalised piece: priced by what it takes, as the browser measured it (or, when it
     // sent no measurement, as the worker does).
     if (p.textStyle && design) {
@@ -232,7 +241,7 @@ export class ProductsService {
         dto.extraCosts.length > 0)
     )
       throw profitNotYours();
-    await this.checkSetup(dto);
+    dto = await this.checkSetup(dto);
     return this.toAdmin(
       await this.withSample(
         await this.products.create(
@@ -302,7 +311,7 @@ export class ProductsService {
       if (same(current.extraCosts) !== same(dto.extraCosts))
         throw profitNotYours();
     }
-    await this.checkSetup(dto);
+    dto = await this.checkSetup(dto);
     return this.toAdmin(
       await this.withSample(
         await this.products.update(
@@ -513,7 +522,8 @@ export class ProductsService {
     return this.products.setModel(p.id, key);
   }
 
-  private async checkSetup(dto: SaveProductDto): Promise<void> {
+  /** The product's set-up checked; its text and logo slots as they will be saved. */
+  private async checkSetup(dto: SaveProductDto): Promise<SaveProductDto> {
     if (dto.text) {
       if (dto.text.style === 'MONOGRAM' && dto.text.maxChars > 3)
         throw new BadRequestException('Curved initials take up to 3 letters');
@@ -633,6 +643,13 @@ export class ProductsService {
     if (materialGroups > 1) {
       throw new BadRequestException('Only one option can change the material');
     }
+    if (dto.text?.style === 'KEYCHAIN')
+      await this.slots.checkLogos(dto.text.logoIds);
+    const slots = await this.slots.check(dto.slots, [
+      dto.partColourGroupId,
+      dto.text?.colourGroupId,
+    ]);
+    return { ...dto, slots };
   }
 
   /**
@@ -756,6 +773,7 @@ export class ProductsService {
         p,
         this.configurator.starting(p),
       ),
+      slots: this.slots.of(p),
     };
   }
 
@@ -821,3 +839,11 @@ const profitNotYours = () =>
   new ForbiddenException(
     "Only someone who manages pricing can change a product's profit or price",
   );
+
+/** The configuration with the grams and hours its text and logo slots add. */
+function withSlots(
+  configuration: Configuration,
+  slots: { grams: string; printHours: string } | null,
+): Configuration {
+  return slots ? { ...configuration, extra: slots } : configuration;
+}

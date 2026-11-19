@@ -88,6 +88,8 @@ export interface Configuration {
   configKey: string;
   /** A chosen size prints with its own grams and hours instead of the product's. */
   base?: { grams: string; printHours: string };
+  /** What its text and logo slots add, as chosen. */
+  extra?: { grams: string; printHours: string };
 }
 
 /**
@@ -265,9 +267,16 @@ export class ProductConfigurator {
     const calculated = configuredUnitPrice(
       calculator,
       {
-        grams: configuration.base?.grams ?? product.grams.toString(),
-        printHours:
+        grams: new Prisma.Decimal(
+          configuration.base?.grams ?? product.grams.toString(),
+        )
+          .plus(configuration.extra?.grams ?? 0)
+          .toString(),
+        printHours: new Prisma.Decimal(
           configuration.base?.printHours ?? product.printHours.toString(),
+        )
+          .plus(configuration.extra?.printHours ?? 0)
+          .toString(),
         pricePerGram: filamentPricePerGram(product),
         wasteIncluded: product.slicedFile,
         extraCost: extraCostOf(product),

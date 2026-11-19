@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { ModelOptimizer } from '../uploads/model-optimizer.js';
 import { UploadsService } from '../uploads/uploads.service.js';
+import { DesignSlots, type OrderedSlot } from './design-slots.js';
 import { printProject } from './print-project.js';
 import { TextStudio, type Measurement } from './text-studio.service.js';
 
@@ -15,7 +17,64 @@ export class PrintFiles {
     private readonly prisma: PrismaService,
     private readonly studio: TextStudio,
     private readonly uploads: UploadsService,
+    private readonly slots: DesignSlots,
+    private readonly optimizer: ModelOptimizer,
   ) {}
+
+  /**
+   * An order line's model with its text and logos as ordered, as one 3MF project: the model's
+   * own parts and colours, then each slot as a part placed where it was designed, tinted after
+   * its filament. Made in the 3D worker; the slots are made again from what was ordered.
+   */
+  async slotsProject(
+    orderId: string,
+    itemId: string,
+  ): Promise<{ name: string; bytes: Uint8Array }> {
+    const item = await this.prisma.orderItem.findFirst({
+      where: { id: itemId, orderId },
+      select: {
+        slots: true,
+        order: { select: { orderNumber: true } },
+        product: { select: { slug: true, modelFileKey: true } },
+      },
+    });
+    const ordered = (item?.slots as OrderedSlot[] | null | undefined) ?? [];
+    const key = item?.product?.modelFileKey;
+    if (!item || ordered.length === 0 || !key || !/\.(3mf|stl)$/.test(key))
+      throw new NotFoundException('No such print file');
+    const slots = ordered.map((o) => o.slot);
+    const choices = Object.fromEntries(
+      ordered.map((o) => [o.slot.id, o.choice]),
+    );
+    const [files, values] = await Promise.all([
+      this.slots.files(slots, choices),
+      this.prisma.optionValue.findMany({
+        where: {
+          id: { in: slots.map((s) => choices[s.id]?.colour ?? s.colour) },
+        },
+        select: { id: true, swatchHex: true },
+      }),
+    ]);
+    const hex = new Map(values.map((v) => [v.id, v.swatchHex]));
+    const number = item.order.orderNumber;
+    const bytes = await this.optimizer.project(
+      () => this.uploads.read(key),
+      key.slice(key.lastIndexOf('.') + 1),
+      number,
+      files.map((f) => {
+        const s = ordered.find((o) => o.slot.id === f.slotId)!;
+        return {
+          label: `${s.summary.label}: ${s.summary.text ?? s.summary.logo ?? ''} (${s.summary.colour})`,
+          hex: hex.get(f.colour) ?? null,
+          stl: f.bytes,
+        };
+      }),
+    );
+    return {
+      name: `${number}-${item.product?.slug ?? 'print'}-with-text.3mf`,
+      bytes,
+    };
+  }
 
   async stl(
     orderId: string,

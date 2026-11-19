@@ -6,17 +6,32 @@ import { parentPort, workerData } from 'node:worker_threads';
 import {
   makeVariants,
   measureVolume,
+  projectWith,
   threeMfInfo,
 } from './model-processing.js';
 
 const job = workerData as
   | { task: 'variants'; data: Uint8Array; extension: string }
   | { task: 'volume'; data: Uint8Array }
-  | { task: 'info'; data: Uint8Array };
+  | { task: 'info'; data: Uint8Array }
+  | {
+      task: 'project';
+      data: Uint8Array;
+      extension: string;
+      title: string;
+      extras: { label: string; hex: string | null; stl: Uint8Array }[];
+    };
 
 const run = async () => {
   if (job.task === 'info') {
     parentPort!.postMessage({ ok: true, info: threeMfInfo(job.data) });
+    return;
+  }
+  if (job.task === 'project') {
+    const project = projectWith(job.data, job.extension, job.title, job.extras);
+    parentPort!.postMessage({ ok: true, project }, [
+      project.buffer as ArrayBuffer,
+    ]);
     return;
   }
   if (job.task === 'volume') {

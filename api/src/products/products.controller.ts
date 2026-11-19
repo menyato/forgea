@@ -128,7 +128,13 @@ export class ProductsController {
     @Param('slug') slug: string,
     @Body() dto: ProductPriceDto,
   ): Promise<{ unitPrice: string }> {
-    return this.products.price(slug, dto.options, dto.design, dto.measured);
+    return this.products.price(
+      slug,
+      dto.options,
+      dto.design,
+      dto.measured,
+      dto.slots,
+    );
   }
 
   @RequirePermission('catalog.manage')

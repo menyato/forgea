@@ -26,6 +26,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@forgea/text3d": "workspace:*",
     "@forgea/types": "workspace:*",
     "class-transformer": "catalog:",
     "class-validator": "catalog:",

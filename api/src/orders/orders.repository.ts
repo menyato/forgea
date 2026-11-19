@@ -48,6 +48,7 @@ const withCustomerView = {
       lineTotal: true,
       options: true,
       design: true,
+      slots: true,
     },
     orderBy: { id: 'asc' },
   },
@@ -95,6 +96,8 @@ export interface OrderLineSource {
   design?: object | null;
   /** Made from a 3MF: the file and what one unit of the line takes (PrintFile). */
   printFile?: object | null;
+  /** Its text and logo slots as made (DesignSlots' OrderedSlot[]). */
+  slots?: object[] | null;
 }
 
 export interface NewOrder {
@@ -181,27 +184,27 @@ export class OrdersRepository {
               totalInCurrency: o.currency.total,
               depositInCurrency: o.currency.deposit,
               items: {
-                create: o.quote.lines.map((l) => ({
-                  productId: lineOf(o, l.id).productId,
-                  options: lineOf(o, l.id)
-                    .options as unknown as Prisma.InputJsonValue,
-                  ...(lineOf(o, l.id).design
-                    ? {
-                        design: lineOf(o, l.id).design as Prisma.InputJsonValue,
-                      }
-                    : {}),
-                  ...(lineOf(o, l.id).printFile
-                    ? {
-                        printFile: lineOf(o, l.id)
-                          .printFile as Prisma.InputJsonValue,
-                      }
-                    : {}),
-                  name: l.name,
-                  quantity: l.quantity,
-                  unitPrice: l.unitPrice,
-                  lineTotal: l.lineTotal,
-                  isCustom: l.isCustom,
-                })),
+                create: o.quote.lines.map((l) => {
+                  const source = lineOf(o, l.id);
+                  return {
+                    productId: source.productId,
+                    options: source.options as unknown as Prisma.InputJsonValue,
+                    ...(source.design
+                      ? { design: source.design as Prisma.InputJsonValue }
+                      : {}),
+                    ...(source.printFile
+                      ? { printFile: source.printFile as Prisma.InputJsonValue }
+                      : {}),
+                    ...(source.slots?.length
+                      ? { slots: source.slots as Prisma.InputJsonValue }
+                      : {}),
+                    name: l.name,
+                    quantity: l.quantity,
+                    unitPrice: l.unitPrice,
+                    lineTotal: l.lineTotal,
+                    isCustom: l.isCustom,
+                  };
+                }),
               },
             },
           });

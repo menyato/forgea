@@ -41,7 +41,9 @@ import {
 import { Trim } from './email.js';
 import {
   DesignMeasurementDto,
+  DesignSlotDto,
   ProductTextDto,
+  SlotChoiceDto,
   TextDesignDto,
 } from './text-studio.dto.js';
 
@@ -447,6 +449,12 @@ export class SaveProductDto {
   @IsOptional()
   @IsUUID('all', { message: 'Choose the colours customers pick from' })
   partColourGroupId?: string;
+  /** Text and logos added to its model, and which ones customers may change. */
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => DesignSlotDto)
+  slots: DesignSlotDto[] = [];
 }
 
 /** A customer's choice for one option. */
@@ -485,6 +493,13 @@ export class ProductPriceDto {
   @ValidateNested()
   @Type(() => DesignMeasurementDto)
   measured?: DesignMeasurementDto;
+
+  /** What the customer chose for the product's text and logo slots. */
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => SlotChoiceDto)
+  slots: SlotChoiceDto[] = [];
 }
 
 /** POST /products/price-preview: the price a product would have while it is being edited. */

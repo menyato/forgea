@@ -345,13 +345,19 @@ const fields = (dto: SaveProductDto) => ({
   // Decorations belong to a big initial only (CHECK).
   textDecor:
     dto.text?.style === 'INITIAL_NAME' ? (dto.text.decor ?? null) : null,
+  // Shapes and logos belong to name keychains only.
+  textShapes: dto.text?.style === 'KEYCHAIN' ? dto.text.shapes : [],
+  textLogoIds: dto.text?.style === 'KEYCHAIN' ? dto.text.logoIds : [],
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
   priceOverride: dto.priceOverride ?? null,
-  // Kept only while a part is recoloured by customers.
-  partColourGroupId: dto.colours.some((c) => c.part)
-    ? (dto.partColourGroupId ?? null)
-    : null,
+  // Kept only while a part is recoloured by customers, or text and logos print in its colours.
+  partColourGroupId:
+    dto.colours.some((c) => c.part) || dto.slots.length > 0
+      ? (dto.partColourGroupId ?? null)
+      : null,
+  // As checked by DesignSlots.check (ProductsService).
+  designSlots: dto.slots as unknown as Prisma.InputJsonValue,
 });
 
 const printFileRow = (f: ProductPrintFileView, sortOrder: number) => ({

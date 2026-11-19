@@ -15,20 +15,22 @@ model Cart {
 }
 
 model CartItem {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  cartId    String   @db.Uuid
-  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  productId String   @db.Uuid
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  quantity  Int
+  id          String   @id @default(uuid(7)) @db.Uuid
+  cartId      String   @db.Uuid
+  cart        Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId   String   @db.Uuid
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Int
   /// The customer's choices: [{ groupId, valueId } | { groupId, text }], validated by the API.
-  options   Json     @default("[]")
+  options     Json     @default("[]")
   /// The same choices as a canonical string: one line per product configuration.
-  configKey String   @default("")
+  configKey   String   @default("")
   /// A personalised product: the customer's design (@forgea/text3d TextDesign), validated by the API.
-  design    Json?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  design      Json?
+  /// What the customer chose for the product's text and logo slots (slot id → SlotChoice).
+  slotChoices Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([cartId, productId, configKey])
   @@map("cart_items")

@@ -21,6 +21,8 @@ export interface LineKey {
   selections: readonly OptionSelection[];
   /** A personalised piece: its design as measured (TextStudio), kept with the line. */
   design?: object | null;
+  /** Its text and logo slots as chosen and measured (DesignSlots), kept with the line. */
+  slots?: object | null;
 }
 
 @Injectable()
@@ -132,6 +134,7 @@ export class CartRepository {
             configKey: item.configKey,
             selections: item.options as unknown as OptionSelection[],
             design: item.design as object | null,
+            slots: item.slotChoices as object | null,
           },
           item.quantity,
         );
@@ -170,6 +173,9 @@ async function addTo(
       configKey: line.configKey,
       options: line.selections as unknown as Prisma.InputJsonValue,
       ...(line.design ? { design: line.design as Prisma.InputJsonValue } : {}),
+      ...(line.slots
+        ? { slotChoices: line.slots as Prisma.InputJsonValue }
+        : {}),
       quantity: total,
     },
     update: { quantity: total },

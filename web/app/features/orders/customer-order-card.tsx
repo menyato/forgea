@@ -3,6 +3,7 @@ import { Form, useNavigation } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { DesignLines } from '~/features/text-studio/design-lines';
+import { SlotLines } from '~/features/design-slots/slot-lines';
 import { OrderTimeline } from './order-timeline';
 import { STUDIO_TIME_ZONE } from '~/lib/studio-time';
 
@@ -45,6 +46,7 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
               <span className="min-w-0">
                 {item.quantity} × {item.name}
                 {item.design && <DesignLines design={item.design} />}
+                <SlotLines slots={item.slots} />
                 {item.options.length > 0 && (
                   <span className="block text-text-muted">
                     {item.options

@@ -22,7 +22,11 @@ import { OptionSelectionDto } from './catalog.dto.js';
 import { MONEY_PATTERN } from './constants.js';
 import { Trim } from './email.js';
 import { CART_QUANTITY_MAX } from './constants.js';
-import { DesignMeasurementDto, TextDesignDto } from './text-studio.dto.js';
+import {
+  DesignMeasurementDto,
+  SlotChoiceDto,
+  TextDesignDto,
+} from './text-studio.dto.js';
 
 export class AddCartItemDto {
   @IsUUID()
@@ -53,6 +57,13 @@ export class AddCartItemDto {
   @ValidateNested()
   @Type(() => DesignMeasurementDto)
   measured?: DesignMeasurementDto;
+
+  /** What the customer chose for the product's text and logo slots. */
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ValidateNested({ each: true })
+  @Type(() => SlotChoiceDto)
+  slots: SlotChoiceDto[] = [];
 }
 
 export class UpdateCartItemDto {

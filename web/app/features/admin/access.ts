@@ -157,7 +157,15 @@ export const PAGES: readonly {
     group: 'Catalog',
     config: true,
   },
+  {
+    path: '/admin/logos',
+    access: 'catalog.view',
+    label: 'Logos',
+    group: 'Catalog',
+    config: true,
+  },
   { path: '/admin/fonts/new', access: 'catalog.manage' },
+  { path: '/admin/logos/new', access: 'catalog.manage' },
   { path: '/admin/products/new', access: 'catalog.manage' },
   {
     path: '/admin/categories',

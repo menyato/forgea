@@ -35,6 +35,21 @@ export class PrintFilesController {
     });
   }
 
+  /** The line's model with its text and logos as ordered, as one 3MF project. */
+  @RequirePermission('orders.view')
+  @Get(':id/items/:itemId/slots-project')
+  async slotsProject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+  ): Promise<StreamableFile> {
+    const file = await this.files.slotsProject(id, itemId);
+    return new StreamableFile(file.bytes, {
+      type: 'model/3mf',
+      disposition: `attachment; filename="${file.name}"`,
+      length: file.bytes.byteLength,
+    });
+  }
+
   /** One of the product's sliced print files, as uploaded, named after the order. */
   @RequirePermission('orders.view')
   @Get(':id/items/:itemId/print-files/:fileId')

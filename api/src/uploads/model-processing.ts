@@ -17,6 +17,8 @@ import {
 } from 'meshoptimizer';
 import { glbProblem } from './glb-check.js';
 import { readThreeMf, type ThreeMfInfo } from './three-mf.js';
+import { stlFromPositions } from '@forgea/text3d';
+import { printProject } from '../text-studio/print-project.js';
 
 /** Triangles kept in the `lite` copy: plenty for a shop card or the home page bed. */
 export const LITE_TRIANGLES = 30_000;
@@ -91,6 +93,32 @@ export async function makeVariants(
     return { view, lite: view };
   }
   throw new Error(`Not a 3D model: .${extension}`);
+}
+
+/**
+ * A product's model with more parts placed on it (its text and logos), as one 3MF project for
+ * the slicer: the model's own colours (an STL is one part), then the extra parts, all in the
+ * model file's frame. Made here, in the worker: the model is the uploaded file.
+ */
+export function projectWith(
+  data: Uint8Array,
+  extension: string,
+  title: string,
+  extras: readonly { label: string; hex: string | null; stl: Uint8Array }[],
+): Uint8Array {
+  const model =
+    extension === '3mf'
+      ? readThreeMf(data).parts.map((p, i, all) => ({
+          label: all.length > 1 ? `Model ${p.hex}` : 'Model',
+          hex: p.hex,
+          stl: stlFromPositions(p.positions, `part-${i + 1}`),
+        }))
+      : extension === 'stl'
+        ? [{ label: 'Model', hex: null, stl: data }]
+        : [];
+  if (model.length === 0)
+    throw new Error('Only an STL or 3MF model can take printed text');
+  return printProject(title, [...model, ...extras]);
 }
 
 /** What a 3MF says about printing it (colours, volumes, the slicer's time and grams). */

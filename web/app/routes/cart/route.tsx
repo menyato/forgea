@@ -50,6 +50,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       quantity: form.get('quantity') ?? 1,
       // The product page sends its choices as JSON: [{ groupId, valueId | text }].
       options: jsonField(form, 'options') ?? [],
+      // Its text and logos as the customer made them theirs.
+      slots: jsonField(form, 'slots') ?? [],
       // A personalised piece's design (text, fonts, colours), also as JSON.
       ...(jsonField(form, 'design')
         ? {

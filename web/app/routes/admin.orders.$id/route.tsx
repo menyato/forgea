@@ -20,6 +20,7 @@ import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button, buttonClass } from '~/components/ui/button';
 import { DesignLines } from '~/features/text-studio/design-lines';
+import { SlotLines } from '~/features/design-slots/slot-lines';
 import { Field, TextAreaField } from '~/components/ui/field';
 import { useCan } from '~/features/admin/access';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
@@ -330,6 +331,22 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                             </a>
                           ))}
                         </span>
+                      </span>
+                    )}
+                    {i.slots.length > 0 && (
+                      <span className="mt-1 grid gap-2">
+                        <SlotLines slots={i.slots} />
+                        <a
+                          href={`/admin/orders/${o.id}/slots/${i.id}`}
+                          download
+                          title="The model with this order's text and logos in place: one object, a part per colour"
+                          className={buttonClass(
+                            'primary',
+                            'justify-self-start px-3 py-1 text-sm',
+                          )}
+                        >
+                          Download with their text (3MF)
+                        </a>
                       </span>
                     )}
                     {i.printProject && (

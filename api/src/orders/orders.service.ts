@@ -12,6 +12,7 @@ import { toPage } from '../common/pagination/keyset.js';
 import { Invoicing } from '../accounting/invoicing.service.js';
 import type { Measurement } from '../text-studio/text-studio.service.js';
 import { OrdersRepository, type StaffOrderRow } from './orders.repository.js';
+import type { OrderedSlot } from '../text-studio/design-slots.js';
 
 @Injectable()
 export class OrdersService {
@@ -85,6 +86,7 @@ function toStaffOrder(o: StaffOrderRow): Omit<StaffOrder, 'invoices'> {
       // Its product's sliced print files (a line with its own file prints from that one).
       printFiles:
         i.design || i.printFile !== null ? [] : (i.product?.printFiles ?? []),
+      slots: ((i.slots as OrderedSlot[] | null) ?? []).map((s) => s.summary),
     })),
     priceBreakdown: (
       o.priceBreakdown as unknown as { label: string; amount: string }[]

@@ -10,9 +10,18 @@ import {
 import { partGeometry, volumeMm3 } from './geometry.js';
 import { layoutDesign } from './layout.js';
 import type { FontSet } from './shaper.js';
+import type { Region } from './outline.js';
 
 export * from './design.js';
-export { stlBytes } from './geometry.js';
+export { stlBytes, stlFromPositions } from './geometry.js';
+export {
+  buildSlots,
+  placementMatrix,
+  slotsProblem,
+  type BuiltSlot,
+} from './slots.js';
+export { logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
+export type { Region } from './outline.js';
 export { FontSet, fontScripts, type FontSource } from './shaper.js';
 
 /** A designed piece ready to show, price or print: one solid per colour. */
@@ -62,8 +71,10 @@ export function buildDesign(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
+  /** The logos a keychain may carry (as `logoRegionsFromSvg` gives them, 1 across). */
+  logos: ReadonlyMap<string, readonly Region[]> = new Map(),
 ): BuiltDesign {
-  const layout = layoutDesign(fonts, design, settings);
+  const layout = layoutDesign(fonts, design, settings, logos);
   return {
     parts: layout.parts.map((part) => {
       const geometry = partGeometry(part);

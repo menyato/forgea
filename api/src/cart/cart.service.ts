@@ -19,6 +19,13 @@ import {
   type Measurement,
   TextStudio,
 } from '../text-studio/text-studio.service.js';
+import {
+  DesignSlots,
+  type MeasuredSlotsResult,
+  type OrderedSlot,
+  orderedSlots,
+} from '../text-studio/design-slots.js';
+import type { SlotChoiceDto } from '@forgea/validation';
 import { CartRepository, type CartRow } from './cart.repository.js';
 
 /** Who the cart belongs to on this request: a signed-in user, a guest cookie, or both. */
@@ -28,7 +35,13 @@ export interface CartOwner {
 }
 
 /** A line ready for checkout: with a personalised piece's design as just measured. */
-export type CheckoutLine = CartLine & { measurement: Measurement | null };
+export type CheckoutLine = CartLine & {
+  measurement: Measurement | null;
+  /** Its text and logo slots as just measured (none without). */
+  slotsMeasured: MeasuredSlotsResult | null;
+  /** The same, as the order keeps them (filled in at checkout). */
+  slotsOrdered?: OrderedSlot[] | null;
+};
 
 export interface CartResult {
   view: CartView;
@@ -46,6 +59,7 @@ export class CartService {
     private readonly products: ProductsRepository,
     private readonly configurator: ProductConfigurator,
     private readonly studio: TextStudio,
+    private readonly slots: DesignSlots,
   ) {}
 
   async view(owner: CartOwner): Promise<CartResult> {
@@ -60,6 +74,7 @@ export class CartService {
     selections: readonly OptionSelection[],
     design?: TextDesignInput,
     measured?: DesignMeasurement,
+    slotChoices: readonly SlotChoiceDto[] = [],
   ): Promise<CartResult> {
     const product = await this.products.findActive(productId);
     if (!product) throw new NotFoundException('This product is not available');
@@ -74,6 +89,8 @@ export class CartService {
     } else if (design) {
       throw new BadRequestException('This product has no text to design');
     }
+    // Its text and logos, checked and measured (400 if they can't be made).
+    const slots = await this.slots.measure(product, slotChoices);
     const resolved = await this.which(owner);
     let cart = resolved.cart;
     let newGuestCartId: string | undefined;
@@ -88,11 +105,17 @@ export class CartService {
       {
         productId,
         // Another text, font or colour is another line.
-        configKey: measurement
-          ? `${configuration.configKey}|${designKey(measurement.design)}`
-          : configuration.configKey,
+        configKey: [
+          configuration.configKey,
+          ...(measurement ? [designKey(measurement.design)] : []),
+          // Another name or logo on it is another line too.
+          ...(slots && Object.keys(slots.choices).length
+            ? [`slots:${designKey(slots.choices)}`]
+            : []),
+        ].join('|'),
         selections: configuration.selections,
         design: measurement,
+        slots,
       },
       quantity,
     );
@@ -192,6 +215,42 @@ export class CartService {
       line.unitPrice = this.studio.price(calculator, product, line.measurement);
       line.design = line.measurement.summary;
     }
+    // Text and logos are made again too: today's fonts, logos and price.
+    for (const line of lines) {
+      const item = cart.items.find((i) => i.id === line.id)!;
+      if (this.slots.of(item.product).length === 0) continue;
+      const choices = Object.entries(line.slotsMeasured?.choices ?? {}).map(
+        ([slotId, c]) => ({ slotId, ...c }),
+      );
+      try {
+        line.slotsMeasured = await this.slots.measure(item.product, choices);
+      } catch (error) {
+        if (error instanceof BadRequestException)
+          throw new BadRequestException(`${line.name}: ${error.message}`);
+        throw error;
+      }
+      if (!line.measurement) {
+        const configuration = this.configureSaved(item.product, item.options);
+        if (configuration)
+          line.unitPrice = this.configurator.unitPrice(
+            calculator,
+            item.product,
+            {
+              ...configuration,
+              ...(line.slotsMeasured
+                ? {
+                    extra: {
+                      grams: line.slotsMeasured.grams,
+                      printHours: line.slotsMeasured.printHours,
+                    },
+                  }
+                : {}),
+            },
+          );
+      }
+      line.slots = line.slotsMeasured?.summary ?? [];
+      line.slotsOrdered = orderedSlots(item.product, line.slotsMeasured);
+    }
     return { cartId: cart.id, lines };
   }
 
@@ -249,7 +308,12 @@ export class CartService {
   private async toView(cart: CartRow | null): Promise<CartView> {
     // The browser sees how a design reads, never what it takes to print.
     const lines = (await this.priced(cart)).map((l) => {
-      const { measurement: _, ...line } = l;
+      const {
+        measurement: _,
+        slotsMeasured: __,
+        slotsOrdered: ___,
+        ...line
+      } = l;
       return line;
     });
     return { lines, itemCount: lines.reduce((n, l) => n + l.quantity, 0) };
@@ -270,6 +334,17 @@ export class CartService {
       // line from before it was) can't be bought as it is.
       const measurement = (i.design as Measurement | null) ?? null;
       if (!!i.product.textStyle !== !!measurement) return [];
+      const slotsMeasured =
+        (i.slotChoices as MeasuredSlotsResult | null) ?? null;
+      const priced = slotsMeasured
+        ? {
+            ...configuration,
+            extra: {
+              grams: slotsMeasured.grams,
+              printHours: slotsMeasured.printHours,
+            },
+          }
+        : configuration;
       return [
         {
           id: i.id,
@@ -279,12 +354,14 @@ export class CartService {
           materialCode: i.product.material.code,
           unitPrice: measurement
             ? this.studio.price(calculator, i.product, measurement)
-            : this.configurator.unitPrice(calculator, i.product, configuration),
+            : this.configurator.unitPrice(calculator, i.product, priced),
           quantity: i.quantity,
           isCustom: i.product.isCustom,
           options: configuration.chosen,
           design: measurement?.summary ?? null,
+          slots: slotsMeasured?.summary ?? [],
           measurement,
+          slotsMeasured,
         },
       ];
     });
@@ -305,7 +382,7 @@ export class CartService {
 }
 
 /** A design's identity: the same text, fonts and colours make the same line. */
-function designKey(design: TextDesignInput): string {
+function designKey(design: object): string {
   return createHash('sha256')
     .update(JSON.stringify(design))
     .digest('hex')

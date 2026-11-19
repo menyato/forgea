@@ -1,7 +1,12 @@
 import type { OptionKind, ProfitKind } from './generated/prisma/enums.js';
 import type { ShownColour } from './parts.js';
 import type { Money, ProductListItem } from './lists.js';
-import type { ProductTextOffer, ProductTextSettings } from './text-studio.js';
+import type { DesignSlot } from '@forgea/text3d/design';
+import type {
+  ProductSlotsOffer,
+  ProductTextOffer,
+  ProductTextSettings,
+} from './text-studio.js';
 
 // Everything the dashboard configures about the catalog, and what the shop shows of it.
 // Decimal values travel as strings ("1.800"), exactly as the database stores them.
@@ -114,6 +119,8 @@ export interface ProductDetail extends ProductListItem {
   size: SizeCm | null;
   /** Personalised: the customer designs their text (fonts, colours) and sees it in 3D. */
   text: ProductTextOffer | null;
+  /** Text and logos on its model; null when it has none. */
+  slots: ProductSlotsOffer | null;
 }
 
 /** How a product offers one option group (dashboard). */
@@ -162,6 +169,8 @@ export interface AdminProduct {
   printFiles: ProductPrintFileView[];
   /** Base price with default options, from the current pricing settings. */
   price: Money;
+  /** Text and logos added to its model, and which ones customers may change. */
+  slots: DesignSlot[];
 }
 
 /** What one filament colour takes for one piece of a multi-colour product. */

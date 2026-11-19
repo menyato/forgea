@@ -1,6 +1,11 @@
 import { renderer } from './three-console.client';
 import { meshVolume } from '@forgea/pricing';
-import { Canvas, useLoader, useThree } from '@react-three/fiber';
+import {
+  Canvas,
+  type ThreeEvent,
+  useLoader,
+  useThree,
+} from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import {
   Box3,
@@ -23,7 +28,7 @@ import {
   studioEnvironment,
   uprightStl,
 } from './model-assets.client';
-import type { ModelMeasurement } from './model-viewer';
+import type { ModelExtra, ModelMeasurement, ModelPick } from './model-viewer';
 import { useSceneColors } from './theme-colors';
 
 export interface SceneProps {
@@ -41,6 +46,8 @@ export interface SceneProps {
   /** Slow turntable; off when the visitor prefers reduced motion. */
   spin: boolean;
   onMeasured?: ((m: ModelMeasurement) => void) | undefined;
+  extras?: readonly ModelExtra[] | undefined;
+  onPick?: ((pick: ModelPick) => void) | undefined;
 }
 
 /** The WebGL scene. Imported lazily, in the browser only: three.js never runs on the server. */
@@ -62,7 +69,7 @@ export default function ModelScene(props: SceneProps) {
   );
 }
 
-function Stl({ src, color, spin, onMeasured }: SceneProps) {
+function Stl({ src, color, spin, onMeasured, extras, onPick }: SceneProps) {
   const loaded = useLoader(STLLoader, src);
   const { geometry, mesh } = useMemo(() => {
     const g = uprightStl(loaded);
@@ -75,13 +82,14 @@ function Stl({ src, color, spin, onMeasured }: SceneProps) {
   }, [mesh, onMeasured]);
   return (
     <Framed object={mesh} spin={spin}>
-      <mesh geometry={geometry}>
+      <mesh geometry={geometry} onClick={picker(onPick, 1)}>
         <meshStandardMaterial
           color={new Color(color)}
           roughness={0.5}
           metalness={0.05}
         />
       </mesh>
+      <Extras extras={extras} scale={1} />
     </Framed>
   );
 }
@@ -93,6 +101,8 @@ function Glb({
   recolour,
   spin,
   onMeasured,
+  extras,
+  onPick,
 }: SceneProps) {
   const gltf = useLoader(GLTFLoader, src, (loader) => gltfLoader(loader));
   // A copy made from an STL takes the chosen colour, like the STL itself.
@@ -117,9 +127,65 @@ function Glb({
   }, [model, onMeasured]);
   return (
     <Framed object={model} spin={spin}>
-      <primitive object={model} />
+      <primitive object={model} onClick={picker(onPick, 1000)} />
+      {/* glTF is in metres: the extras, in millimetres, shrink to match. */}
+      <Extras extras={extras} scale={0.001} />
     </Framed>
   );
+}
+
+/**
+ * Text and logos on the model: given in the model file's frame (millimetres, Z up) and turned
+ * upright as the model itself is (Y up), scaled to the scene's units.
+ */
+function Extras({
+  extras,
+  scale,
+}: {
+  extras: readonly ModelExtra[] | undefined;
+  scale: number;
+}) {
+  const { invalidate } = useThree();
+  useEffect(() => invalidate(), [extras, invalidate]);
+  if (!extras?.length) return null;
+  return (
+    <group rotation={[-Math.PI / 2, 0, 0]} scale={scale}>
+      {extras.map((e, i) => (
+        <mesh key={i} geometry={e.geometry}>
+          <meshStandardMaterial
+            color={new Color(e.color)}
+            roughness={0.5}
+            metalness={0.05}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * A click on the model, as the dashboard places text: the spot and the face's outward
+ * direction, back in the model file's frame (millimetres, Z up). `toMm`: the scene's units.
+ */
+function picker(onPick: ((pick: ModelPick) => void) | undefined, toMm: number) {
+  if (!onPick) return undefined;
+  return (e: ThreeEvent<MouseEvent>) => {
+    // A drag to turn the model is not a click on it.
+    if (e.delta > 4 || !e.face) return;
+    e.stopPropagation();
+    const root = e.eventObject;
+    const local = root.worldToLocal(e.point.clone());
+    const normal = e.face.normal
+      .clone()
+      .transformDirection(e.object.matrixWorld)
+      .transformDirection(root.matrixWorld.clone().invert())
+      .normalize();
+    // Y up (the scene) back to Z up (the file): x, y, z = x, -z, y.
+    onPick({
+      origin: [local.x * toMm, -local.z * toMm, local.y * toMm],
+      normal: [normal.x, -normal.z, normal.y],
+    });
+  };
 }
 
 /** Reflections from a generated studio, so materials read as plastic. */
@@ -216,9 +282,15 @@ function measure(object: Object3D, toMm: number): ModelMeasurement {
     volume += meshVolume(flat.getAttribute('position').array);
     flat.dispose();
   });
-  const size = new Box3().setFromObject(object).getSize(new Vector3());
+  const box = new Box3().setFromObject(object);
+  const size = box.getSize(new Vector3());
+  // The scene is Y up; the file is Z up (x, y, z = x, -z, y).
   return {
     volumeMm3: volume * toMm ** 3,
     sizeMm: [size.x * toMm, size.y * toMm, size.z * toMm],
+    box: {
+      min: [box.min.x * toMm, -box.max.z * toMm, box.min.y * toMm],
+      max: [box.max.x * toMm, -box.min.z * toMm, box.max.y * toMm],
+    },
   };
 }

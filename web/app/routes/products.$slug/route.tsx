@@ -23,6 +23,12 @@ import type { loader as rootLoader } from '~/root';
 import type { Route } from './+types/route';
 import { type Choices, OptionPicker } from './option-picker';
 import { TextDesigner } from './text-designer';
+import type { SlotChoice } from '@forgea/text3d/design';
+import {
+  SlotInputs,
+  slotChoicesJson,
+} from '~/features/design-slots/slot-inputs';
+import { useSlotExtras } from '~/features/design-slots/use-slot-extras';
 
 export function meta({ loaderData: d, matches }: Route.MetaArgs) {
   if (!d) return [{ title: 'Product not found — Forgea' }];
@@ -65,6 +71,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const measured = jsonField(form, 'measured');
   const parsed = validateForm(ProductPriceDto, {
     options: jsonField(form, 'options') ?? [],
+    slots: jsonField(form, 'slots') ?? [],
     ...(design ? { design } : {}),
     // What the browser built for the 3D preview: priced without building it again.
     ...(design && measured ? { measured } : {}),
@@ -141,6 +148,15 @@ function CatalogProduct({
     (o) => o.required && !choices[o.groupId]?.trim(),
   );
   const optionsJson = JSON.stringify(selections);
+  // Its text and logos, as the customer makes them theirs.
+  const [slotChoices, setSlotChoices] = useState<Record<string, SlotChoice>>(
+    {},
+  );
+  const slotsJson = slotChoicesJson(slotChoices);
+  const { extras, problem: slotProblem } = useSlotExtras(
+    product.slots,
+    slotChoices,
+  );
 
   // Re-price as choices change; typing a name waits for a pause.
   const { submit: requestPrice } = pricing;
@@ -148,11 +164,15 @@ function CatalogProduct({
   useEffect(() => {
     if (!complete) return;
     const timer = setTimeout(
-      () => void requestPrice({ options: optionsJson }, { method: 'post' }),
+      () =>
+        void requestPrice(
+          { options: optionsJson, slots: slotsJson },
+          { method: 'post' },
+        ),
       250,
     );
     return () => clearTimeout(timer);
-  }, [requestPrice, optionsJson, complete]);
+  }, [requestPrice, optionsJson, slotsJson, complete]);
 
   const quoted =
     pricing.data && 'unitPrice' in pricing.data ? pricing.data.unitPrice : null;
@@ -179,7 +199,7 @@ function CatalogProduct({
     cart.state === 'idle' &&
     cart.data !== undefined &&
     !cart.data.error &&
-    addedFor === optionsJson;
+    addedFor === optionsJson + slotsJson;
 
   return (
     <main
@@ -193,6 +213,7 @@ function CatalogProduct({
             label={product.name}
             color={color ?? undefined}
             recolour={recolour}
+            extras={extras}
             className="sm:rounded-lg lg:aspect-auto lg:h-[min(78dvh,52rem)]"
           />
         ) : (
@@ -249,6 +270,15 @@ function CatalogProduct({
           />
         ))}
 
+        {product.slots && (
+          <SlotInputs
+            offer={product.slots}
+            choices={slotChoices}
+            onChange={setSlotChoices}
+          />
+        )}
+        {slotProblem && <p className="text-sm text-danger">{slotProblem}</p>}
+
         <div aria-live="polite" className="grid gap-1">
           <p className="text-3xl font-bold">
             {missing.length > 0 && 'from '}
@@ -277,11 +307,12 @@ function CatalogProduct({
           method="post"
           action="/cart"
           className="flex flex-wrap items-end gap-3"
-          onSubmit={() => setAddedFor(optionsJson)}
+          onSubmit={() => setAddedFor(optionsJson + slotsJson)}
         >
           <input type="hidden" name="intent" value="add" />
           <input type="hidden" name="productId" value={product.id} />
           <input type="hidden" name="options" value={optionsJson} />
+          <input type="hidden" name="slots" value={slotsJson} />
           <label className="grid gap-1 text-sm">
             <span>Quantity</span>
             <input

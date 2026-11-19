@@ -3,7 +3,6 @@ import {
   buildDesign,
   type BuiltDesign,
   designProblem,
-  FontSet,
   type TextSettings,
 } from '@forgea/text3d';
 import type {
@@ -16,39 +15,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box3, Color, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Plate, StudioLight } from '~/features/model-viewer/model-scene.client';
+import { fontsFor } from './font-set.client';
 import { useSceneColors } from '~/features/model-viewer/theme-colors';
-
-/** One HarfBuzz font set for the page; each font file is fetched once. */
-let fonts: Promise<FontSet> | undefined;
-const fetched = new Map<string, Promise<void>>();
-
-async function fontsFor(
-  offer: ProductTextOffer,
-  ids: readonly string[],
-): Promise<FontSet> {
-  const set = await (fonts ??= FontSet.load([]));
-  await Promise.all(
-    ids.map((id) => {
-      let loading = fetched.get(id);
-      if (!loading) {
-        const font = offer.fonts.find((f) => f.id === id);
-        loading = font
-          ? fetch(`/media/${font.fileKey}`)
-              .then((r) => {
-                if (!r.ok) throw new Error(`Font ${font.name} didn't load`);
-                return r.arrayBuffer();
-              })
-              .then((b) => set.add([{ id, bytes: new Uint8Array(b) }]))
-          : Promise.reject(new Error('Unknown font'));
-        // A failed download may be tried again.
-        loading.catch(() => fetched.delete(id));
-        fetched.set(id, loading);
-      }
-      return loading;
-    }),
-  );
-  return set;
-}
 
 /** The product's settings at the size chosen (the widest piece grows with it), as the API does. */
 const settingsOf = (
@@ -102,14 +70,19 @@ export default function TextPreview({
         ...(d.accentFontId ? [d.accentFontId] : []),
         ...(d.letters ?? []).flatMap((l) => l.fontId ?? []),
       ];
-      fontsFor(offer, ids)
+      fontsFor(offer.fonts, ids)
         .then((set) => {
           if (cancelled) return;
           const settings = settingsOf(offer, d.heightMm);
           const problem = designProblem(set, d, settings);
           onProblem(problem);
           if (problem) return;
-          const next = buildDesign(set, d, settings);
+          const next = buildDesign(
+            set,
+            d,
+            settings,
+            new Map(offer.logos.map((l) => [l.id, l.outline])),
+          );
           setBuilt((old) => {
             for (const p of old?.parts ?? []) p.geometry.dispose();
             return next;

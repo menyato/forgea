@@ -12,6 +12,9 @@ import type {
   ProductRealCost,
   ProfitKind,
   UploadedFile,
+  FontView,
+  LogoDetail,
+  LogoView,
 } from '@forgea/types';
 import {
   ModelInfoDto,
@@ -45,6 +48,8 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     pricing,
     realCost,
     stock,
+    fonts,
+    logos,
   ] = await Promise.all([
     isNew
       ? Promise.resolve(null)
@@ -70,6 +75,21 @@ export async function loader({ params, context }: Route.LoaderArgs) {
         ),
     // The filaments on the shelf (others get 403 and no list).
     filamentChoices(api),
+    // Text and logos added to the model: the fonts, and the logos as they print.
+    api.get<FontView[]>('/fonts'),
+    api
+      .get<LogoView[]>('/logos')
+      .then(async (r) =>
+        r.ok
+          ? (
+              await Promise.all(
+                r.data.map((l) =>
+                  api.get<LogoDetail>(`/logos/${encodeURIComponent(l.id)}`),
+                ),
+              )
+            ).flatMap((d) => (d.ok ? [d.data] : []))
+          : [],
+      ),
   ]);
   if (product && !product.ok)
     throw new Response(product.message, { status: product.status });
@@ -86,6 +106,8 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     // The filaments on the shelf a colour may be printed from (none for someone who can't
     // see the stock).
     filaments: stock.filter((i) => i.colour !== ''),
+    fonts: fonts.ok ? fonts.data.filter((f) => f.active) : [],
+    logos,
     others: list
       .filter((p) => p.id !== params.id)
       .map((p) => ({ id: p.id, name: p.name })),
@@ -222,6 +244,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       colours: jsonField(form, 'colours') ?? [],
       printFiles: jsonField(form, 'printFiles') ?? [],
       partColourGroupId: text(form, 'partColourGroupId'),
+      slots: jsonField(form, 'slots') ?? [],
       profitKind: text(form, 'profitKind'),
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
@@ -281,6 +304,7 @@ async function duplicate(api: ApiClient, id: string) {
       ...(p.partColourGroupId
         ? { partColourGroupId: p.partColourGroupId }
         : {}),
+      slots: p.slots,
     });
     if (created.ok) throw redirect(`/admin/products/${created.data.id}`);
     // The address is taken: try the next one.

@@ -59,6 +59,7 @@ export class CartController {
         dto.options,
         dto.design,
         dto.measured,
+        dto.slots,
       ),
     );
   }

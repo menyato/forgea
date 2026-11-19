@@ -18,6 +18,8 @@ export function DesignLines({ design: d }: { design: DesignSummary }) {
           : ''}
         {d.accentFont ? ` (initial in ${d.accentFont})` : ''}
         {d.baseColour ? ` on ${d.baseColour}` : ''}
+        {d.shape ? `, ${d.shape.toLowerCase()}` : ''}
+        {d.logo ? `, with the ${d.logo} logo` : ''}
       </span>
       {d.letters && d.letters.length > 0 && (
         <span className="block text-text-muted">

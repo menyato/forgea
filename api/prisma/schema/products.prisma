@@ -61,11 +61,19 @@ model Product {
   textDefaultAccent    OptionValue? @relation("TextDefaultAccent", fields: [textDefaultAccentId], references: [id], onDelete: SetNull)
   /// Big initial pieces: the decorations around the initial (set only for INITIAL_NAME, CHECK).
   textDecor            TextDecor?
+  /// Name keychains: the plate shapes customers choose from (@forgea/text3d KeychainShape);
+  /// empty = the plate follows the letters.
+  textShapes           String[]     @default([])
+  /// Name keychains: the studio's logos customers may add beside their name.
+  textLogoIds          String[]     @default([]) @db.Uuid
   /// Added for every colour beyond the first (a multi-colour print), USD.
   textExtraColourPrice Decimal      @default(0) @db.Decimal(10, 2)
 
   /// Multi-colour (3MF): the colours customers may recolour its named parts in (an option group
   /// with swatches; each value's add-on is that colour's price). Set when a part is named.
+  /// Text and logos added to the model (@forgea/text3d DesignSlot[]): where, how big, and
+  /// which ones customers may change. Validated by the API (SaveProductDto).
+  designSlots       Json         @default("[]")
   partColourGroupId String?      @db.Uuid
   partColourGroup   OptionGroup? @relation("PartColours", fields: [partColourGroupId], references: [id], onDelete: Restrict)
 

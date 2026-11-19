@@ -1,11 +1,17 @@
 import {
   ACCENT_STYLES,
+  KEYCHAIN_SHAPE_LABELS,
+  KEYCHAIN_SHAPES,
   TEXT_DECOR_LABELS,
   TEXT_DECORS,
   TEXT_STYLE_LABELS,
   TEXT_STYLES,
 } from '@forgea/text3d/design';
-import type { OptionGroupView, ProductTextSettings } from '@forgea/types';
+import type {
+  LogoView,
+  OptionGroupView,
+  ProductTextSettings,
+} from '@forgea/types';
 import { useState } from 'react';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 
@@ -20,6 +26,8 @@ const STARTS: Record<
     | 'defaultBaseColourId'
     | 'defaultAccentColourId'
     | 'decor'
+    | 'shapes'
+    | 'logoIds'
   >
 > = {
   KEYCHAIN: {
@@ -101,11 +109,14 @@ export function TextSettingsPanel({
   value,
   onChange,
   groups,
+  logos,
   errors,
 }: {
   value: ProductTextSettings | null;
   onChange: (next: ProductTextSettings | null) => void;
   groups: readonly OptionGroupView[];
+  /** The studio's logos a keychain may offer. */
+  logos: readonly LogoView[];
   errors: Partial<Record<string, string>>;
 }) {
   const colourGroups = groups.filter((g) => g.values.some((v) => v.swatchHex));
@@ -134,6 +145,8 @@ export function TextSettingsPanel({
                   defaultBaseColourId: null,
                   defaultAccentColourId: null,
                   decor: null,
+                  shapes: [],
+                  logoIds: [],
                   ...STARTS.KEYCHAIN,
                 }
               : null,
@@ -156,6 +169,9 @@ export function TextSettingsPanel({
                 ...STARTS[style],
                 decor:
                   style === 'INITIAL_NAME' ? (value.decor ?? 'HEARTS') : null,
+                // Shapes and logos belong to keychains.
+                shapes: style === 'KEYCHAIN' ? value.shapes : [],
+                logoIds: style === 'KEYCHAIN' ? value.logoIds : [],
               });
               setSizesText(STARTS[style].sizesMm.join(', '));
             }}
@@ -183,6 +199,66 @@ export function TextSettingsPanel({
               </option>
             ))}
           </SelectField>
+          {value.style === 'KEYCHAIN' && (
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">
+                Shapes customers choose from
+              </legend>
+              <p className="text-sm text-text-muted">
+                The plate follows the letters unless you offer shapes here.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {KEYCHAIN_SHAPES.filter((s) => s !== 'OUTLINE').map((s) => (
+                  <label key={s} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name={`text-shape-${s}`}
+                      checked={value.shapes.includes(s)}
+                      onChange={(e) =>
+                        set({
+                          shapes: e.currentTarget.checked
+                            ? [...value.shapes, s]
+                            : value.shapes.filter((x) => x !== s),
+                        })
+                      }
+                    />
+                    {KEYCHAIN_SHAPE_LABELS[s]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {value.style === 'KEYCHAIN' && logos.some((l) => l.active) && (
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">
+                Logos customers may add beside their name
+              </legend>
+              <div className="flex flex-wrap gap-3">
+                {logos
+                  .filter((l) => l.active || value.logoIds.includes(l.id))
+                  .map((l) => (
+                    <label
+                      key={l.id}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name={`text-logo-${l.id}`}
+                        checked={value.logoIds.includes(l.id)}
+                        onChange={(e) =>
+                          set({
+                            logoIds: e.currentTarget.checked
+                              ? [...value.logoIds, l.id]
+                              : value.logoIds.filter((x) => x !== l.id),
+                          })
+                        }
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+              </div>
+            </fieldset>
+          )}
           {value.style === 'INITIAL_NAME' && (
             <SelectField
               label="Decorations"
