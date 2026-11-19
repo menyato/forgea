@@ -37,6 +37,8 @@ export const PAGES: readonly {
   config?: true;
 }[] = [
   { path: '/admin', access: 'team', label: 'Overview' },
+  // Searches only the lists this person may see (each one is asked with their permissions).
+  { path: '/admin/search', access: 'team' },
   {
     path: '/admin/todo',
     access: 'leads.view',

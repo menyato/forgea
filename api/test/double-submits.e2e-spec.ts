@@ -197,6 +197,29 @@ describe('Double submits (e2e)', () => {
         .send({})
         .expect(201)
     ).body as { id: string; total: string };
+    // The staff's list names who ordered and what, and finds the order by that name.
+    const listed = (
+      await http()
+        .get(`/orders?q=${encodeURIComponent(order.orderNumber)}`)
+        .set('Cookie', staff.cookie)
+        .expect(200)
+    ).body.items as {
+      customerName: string;
+      items: { name: string; quantity: number }[];
+      moreItems: number;
+    }[];
+    expect(listed[0]).toMatchObject({
+      customerName: 'Rana Khoury',
+      items: [{ name: product.name, quantity: 1 }],
+      moreItems: 0,
+    });
+    const byName = (
+      await http()
+        .get('/orders?q=rana%20khoury&limit=100')
+        .set('Cookie', staff.cookie)
+        .expect(200)
+    ).body.items as { orderNumber: string }[];
+    expect(byName.map((o) => o.orderNumber)).toContain(order.orderNumber);
     const credit = () =>
       http()
         .post(`/accounting/invoices/${invoice.id}/credit-note`)

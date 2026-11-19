@@ -6,6 +6,7 @@ import type {
 import { Money } from '~/components/money';
 import { Panel } from '~/features/admin/admin-ui';
 import { type SmartButton, SmartButtons } from '~/features/admin/smart-buttons';
+import { formatHours } from '~/lib/duration';
 
 /**
  * The order in figures, joined to where each comes from: the filament it takes (and what
@@ -49,7 +50,7 @@ export function OrderFigures({
     },
     {
       label: 'Print time',
-      value: `${production.printHours} h`,
+      value: formatHours(production.printHours),
       hint:
         jobs === null
           ? undefined
@@ -129,7 +130,7 @@ export function OrderFigures({
                           .join(', ')}
                   </td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">
-                    {l.printHours === null ? '—' : `${l.printHours} h`}
+                    {formatHours(l.printHours)}
                   </td>
                   {production.money && (
                     <td className="py-1.5 text-right tabular-nums">

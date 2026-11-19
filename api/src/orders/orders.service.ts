@@ -30,6 +30,10 @@ export class OrdersService {
       orderNumber: o.orderNumber,
       status: o.status,
       customerEmail: o.user.email,
+      customerName: o.customerName,
+      // "2 × Twist vase, Keychain and 3 more"
+      items: o.items.map((i) => ({ name: i.name, quantity: i.quantity })),
+      moreItems: o._count.items - o.items.length,
       total: o.total.toFixed(2),
       currencyCode: o.currencyCode,
       totalInCurrency: o.totalInCurrency.toString(),

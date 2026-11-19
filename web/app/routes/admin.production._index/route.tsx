@@ -24,6 +24,7 @@ import { PRINT_JOB_ORDER } from '~/features/production/print-job-steps';
 import { apiContext } from '~/lib/request.server';
 import { studioDate, studioFormat } from '~/lib/studio-time';
 import type { Route } from './+types/route';
+import { formatHours } from '~/lib/duration';
 
 const DEFAULTS = { sorts: ['createdAt'], view: 'kanban' } as const;
 
@@ -154,7 +155,10 @@ const COLUMNS: ListColumn<PrintJobListItem>[] = [
     key: 'hours',
     label: 'Hours',
     align: 'right',
-    cell: (j) => (j.actualHours ? `${j.actualHours} h taken` : `${j.hours} h`),
+    cell: (j) =>
+      j.actualHours
+        ? `${formatHours(j.actualHours)} taken`
+        : formatHours(j.hours),
   },
   {
     key: 'printer',
@@ -271,7 +275,7 @@ export default function Production({ loaderData }: Route.ComponentProps) {
               <span>{what(j)}</span>
               <span className="text-text-muted">
                 {reel(j)} · {j.actualGrams ?? j.grams} g ·{' '}
-                {j.actualHours ?? j.hours} h
+                {formatHours(j.actualHours ?? j.hours)}
               </span>
               <span className="flex justify-between gap-2 text-text-muted">
                 <span className={j.printer ? '' : 'text-danger'}>

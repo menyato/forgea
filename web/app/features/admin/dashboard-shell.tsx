@@ -2,6 +2,7 @@ import type { Profile } from '@forgea/types';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useLocation } from 'react-router';
 import { useRememberAddresses } from './breadcrumbs';
+import { SearchBox } from './search-box';
 import { DashboardNav } from './dashboard-nav';
 
 const STORAGE_KEY = 'forgea_dashboard_sidebar';
@@ -127,6 +128,7 @@ export function DashboardShell({
             id="dashboard-menu"
             className={`min-h-0 flex-1 overflow-y-auto px-2 pb-6 ${folded ? 'md:hidden' : ''}`}
           >
+            <SearchBox className="mb-3 px-1" />
             <DashboardNav staff={staff} />
           </div>
         </div>

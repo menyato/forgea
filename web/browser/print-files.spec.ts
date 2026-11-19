@@ -57,7 +57,7 @@ test('a product shown assembled and printed from sliced files: their totals pric
     files.getByText(/Bambu Lab X2D · 0\.4 mm nozzle · 0\.12 mm layers/).first(),
   ).toBeVisible();
   await expect(page.getByText(/In all:/)).toContainText('25.00 g');
-  await expect(page.getByText(/In all:/)).toContainText('3.00 h');
+  await expect(page.getByText(/In all:/)).toContainText('3 h ');
 
   // One click makes the total the product's grams, time and colours.
   await page.getByRole('button', { name: 'Use the totals' }).click();

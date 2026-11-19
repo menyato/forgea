@@ -402,6 +402,8 @@ test('Omar pokes around: other people’s orders, the dashboard, forged prices a
   }
   // A price sent with the cart is ignored: the server prices it.
   await page.goto('/products/phone-stand');
+  // The price as the page settles on it (it says "updating…" while it asks).
+  await expect(productPrice(page)).not.toContainText('updating');
   const shown = (await productPrice(page).textContent()) ?? '';
   await page.evaluate(() => {
     const form = [...document.querySelectorAll('form')].find((f) =>

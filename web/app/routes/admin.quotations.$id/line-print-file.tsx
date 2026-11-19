@@ -4,6 +4,7 @@ import { useFetcher } from 'react-router';
 import { Busy } from '~/components/brand/busy';
 import { Button } from '~/components/ui/button';
 import { Swatch } from '~/features/stock/stock-ui';
+import { formatHours } from '~/lib/duration';
 
 export type PrintFileResult =
   | { file: QuotationPrintFileView; error?: undefined }
@@ -41,7 +42,7 @@ export function LinePrintFile({
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-medium">From a 3D file:</span>
             <span>
-              {printFile.grams} g, {printFile.printHours} h a piece{' '}
+              {printFile.grams} g, {formatHours(printFile.printHours)} a piece{' '}
               <span className="text-text-muted">
                 {printFile.sliced ? '(from the slicer)' : '(estimated)'}
               </span>

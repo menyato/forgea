@@ -74,7 +74,7 @@ export class CartService {
     } else if (design) {
       throw new BadRequestException('This product has no text to design');
     }
-    const resolved = await this.resolve(owner);
+    const resolved = await this.which(owner);
     let cart = resolved.cart;
     let newGuestCartId: string | undefined;
     if (!cart) {
@@ -149,7 +149,7 @@ export class CartService {
     itemId: string,
     quantity: number,
   ): Promise<CartResult> {
-    const { cart, clearGuestCookie } = await this.resolve(owner);
+    const { cart, clearGuestCookie } = await this.which(owner);
     if (!cart || !(await this.carts.setQuantity(cart.id, itemId, quantity))) {
       throw new NotFoundException('This item is not in your cart');
     }
@@ -157,7 +157,7 @@ export class CartService {
   }
 
   async remove(owner: CartOwner, itemId: string): Promise<CartResult> {
-    const { cart, clearGuestCookie } = await this.resolve(owner);
+    const { cart, clearGuestCookie } = await this.which(owner);
     if (cart) await this.carts.removeItem(cart.id, itemId);
     return { view: await this.reload(owner), clearGuestCookie };
   }
@@ -170,11 +170,12 @@ export class CartService {
     owner: CartOwner,
   ): Promise<{ cartId: string; lines: CheckoutLine[] }> {
     const { cart } = await this.resolve(owner);
-    const lines = await this.priced(cart);
+    // One reading of today's costs for the whole checkout.
+    const calculator = await this.pricing.costCalculator();
+    const lines = await this.priced(cart, calculator);
     if (!cart || lines.length === 0)
       throw new BadRequestException('Your cart is empty');
     // Personalised pieces are made again, so the order has today's grams and price.
-    const calculator = await this.pricing.costCalculator();
     for (const line of lines) {
       if (!line.measurement) continue;
       const product = cart.items.find((i) => i.id === line.id)!.product;
@@ -195,27 +196,44 @@ export class CartService {
   }
 
   /**
-   * Finds the cart for this request. A signed-in user's guest cart (from before they signed
-   * in) is merged into their account here, so the cart follows them on login.
+   * Finds the cart for this request, with everything in it. A signed-in user's guest cart
+   * (from before they signed in) is merged into their account here, so the cart follows them
+   * on login.
    */
   private async resolve(
     owner: CartOwner,
   ): Promise<{ cart: CartRow | null; clearGuestCookie: boolean }> {
-    if (owner.userId) {
-      if (owner.guestCartId) {
-        await this.carts.mergeGuestIntoUser(owner.guestCartId, owner.userId);
-      }
-      return {
-        cart: await this.carts.findUserCart(owner.userId),
-        clearGuestCookie: owner.guestCartId !== undefined,
-      };
-    }
+    const clearGuestCookie = await this.merge(owner);
     return {
-      cart: owner.guestCartId
-        ? await this.carts.findGuestCart(owner.guestCartId)
-        : null,
-      clearGuestCookie: false,
+      cart: owner.userId
+        ? await this.carts.findUserCart(owner.userId)
+        : owner.guestCartId
+          ? await this.carts.findGuestCart(owner.guestCartId)
+          : null,
+      clearGuestCookie,
     };
+  }
+
+  /** As `resolve`, only which cart it is: a change reads the whole cart once, afterwards. */
+  private async which(
+    owner: CartOwner,
+  ): Promise<{ cart: { id: string } | null; clearGuestCookie: boolean }> {
+    const clearGuestCookie = await this.merge(owner);
+    return {
+      cart: owner.userId
+        ? await this.carts.findUserCartId(owner.userId)
+        : owner.guestCartId
+          ? await this.carts.findGuestCartId(owner.guestCartId)
+          : null,
+      clearGuestCookie,
+    };
+  }
+
+  /** A signed-in user's guest cart joins theirs; true when the guest cookie should go. */
+  private async merge(owner: CartOwner): Promise<boolean> {
+    if (!owner.userId || owner.guestCartId === undefined) return false;
+    await this.carts.mergeGuestIntoUser(owner.guestCartId, owner.userId);
+    return true;
   }
 
   private async reload(
@@ -237,10 +255,14 @@ export class CartService {
     return { lines, itemCount: lines.reduce((n, l) => n + l.quantity, 0) };
   }
 
-  private async priced(cart: CartRow | null): Promise<CheckoutLine[]> {
+  private async priced(
+    cart: CartRow | null,
+    /** Today's costs, when the caller has already read them. */
+    known?: Awaited<ReturnType<PricingService['costCalculator']>>,
+  ): Promise<CheckoutLine[]> {
     const items = cart?.items.filter((i) => i.product.active) ?? [];
     if (items.length === 0) return [];
-    const calculator = await this.pricing.costCalculator();
+    const calculator = known ?? (await this.pricing.costCalculator());
     return items.flatMap((i): CheckoutLine[] => {
       const configuration = this.configureSaved(i.product, i.options);
       if (!configuration) return [];

@@ -229,3 +229,34 @@ test('the studio adds an order itself, with no lead: it opens as the order', asy
   await expect(page.getByText(email).first()).toBeVisible();
   await expect(page.getByText(/Walk-in keychain/).first()).toBeVisible();
 });
+
+test('one search finds an order, its customer and its product from the menu', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  await page.goto('/admin/orders?filter=');
+  const first = page.locator('table tbody a').first();
+  const number = (await first.textContent())?.match(/FG-\d{4}-\d{4,}/)?.[0];
+  expect(number).toBeTruthy();
+  await page.goto('/admin');
+  const menu = await dashboardMenu(page);
+  await menu
+    .page()
+    .getByRole('searchbox', { name: 'Search the dashboard' })
+    .first()
+    .fill(number!);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/admin\/search\?q=/);
+  await expect(
+    page
+      .getByRole('region', { name: 'Orders' })
+      .getByRole('link', { name: new RegExp(`^${number!} · `) }),
+  ).toBeVisible();
+  await page
+    .getByRole('region', { name: 'Orders' })
+    .getByRole('link', { name: new RegExp(`^${number!} · `) })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/orders\/[0-9a-f-]{36}$/);
+});

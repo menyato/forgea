@@ -105,7 +105,17 @@ const COLUMNS: ListColumn<OrderListItem>[] = [
       <span className="font-mono whitespace-nowrap">{o.orderNumber}</span>
     ),
   },
-  { key: 'customer', label: 'Customer', cell: (o) => o.customerEmail },
+  {
+    key: 'customer',
+    label: 'Customer',
+    cell: (o) => (
+      <span className="grid">
+        <span>{o.customerName}</span>
+        <span className="text-xs text-text-muted">{o.customerEmail}</span>
+      </span>
+    ),
+  },
+  { key: 'items', label: 'What they ordered', cell: (o) => whatOrdered(o) },
   {
     key: 'status',
     label: 'Status',
@@ -144,6 +154,12 @@ const COLUMNS: ListColumn<OrderListItem>[] = [
 
 const href = (o: OrderListItem) => `/admin/orders/${o.id}`;
 
+/** "2 × Twist vase, Keychain and 3 more": what an order is, at a glance. */
+const whatOrdered = (o: OrderListItem) =>
+  o.items
+    .map((i) => (i.quantity > 1 ? `${i.quantity} × ${i.name}` : i.name))
+    .join(', ') + (o.moreItems > 0 ? ` and ${o.moreItems} more` : '');
+
 export default function Orders({ loaderData }: Route.ComponentProps) {
   const { state, orders, counts, total, columns } = loaderData;
   const can = useCan();
@@ -165,7 +181,7 @@ export default function Orders({ loaderData }: Route.ComponentProps) {
       />
       <ControlPanel
         state={state}
-        search="Order number or email"
+        search="Order number, name or email"
         filters={FILTERS.map((f) => ({
           key: f.key,
           label: f.label,
@@ -195,7 +211,8 @@ export default function Orders({ loaderData }: Route.ComponentProps) {
           title={(o) => o.orderNumber}
           card={(o) => (
             <>
-              <span className="text-text-muted">{o.customerEmail}</span>
+              <span>{o.customerName}</span>
+              <span className="text-text-muted">{whatOrdered(o)}</span>
               <span className="flex justify-between">
                 <Money amount={o.total} />
                 {Number(o.depositRequired) > 0 && !o.depositPaid && (

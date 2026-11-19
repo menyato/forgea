@@ -6,6 +6,7 @@ import { formatRange, PeriodPicker } from '~/features/admin/period-picker';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
 import { studioToday } from '~/lib/studio-time';
+import { formatHours } from '~/lib/duration';
 
 export async function loader({ url, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -96,9 +97,13 @@ export default function Results({ loaderData }: Route.ComponentProps) {
             <dt className="text-text-muted">of which lost</dt>
             <dd className="text-right tabular-nums">{r.grams.lost} g</dd>
             <dt className="text-text-muted">Printing hours</dt>
-            <dd className="text-right tabular-nums">{r.hours.printing} h</dd>
+            <dd className="text-right tabular-nums">
+              {formatHours(r.hours.printing)}
+            </dd>
             <dt className="text-text-muted">of which lost</dt>
-            <dd className="text-right tabular-nums">{r.hours.lost} h</dd>
+            <dd className="text-right tabular-nums">
+              {formatHours(r.hours.lost)}
+            </dd>
             <dt className="text-text-muted">Electricity</dt>
             <dd className="text-right tabular-nums">{r.electricityKwh} kWh</dd>
             {r.studioFailures.grams > 0 && (

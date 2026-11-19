@@ -483,8 +483,9 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
           )}
         </div>
 
-        <div className="grid content-start gap-6">
-          <Panel title="Next step">
+        {/* On a phone the next step comes first, before the items; beside them on a wide screen. */}
+        <div className="contents xl:grid xl:content-start xl:gap-6">
+          <Panel title="Next step" className="order-first xl:order-none">
             {o.nextStatuses.length === 0 ? (
               <p className="text-text-muted">This order is closed.</p>
             ) : !can('orders.manage') ? (

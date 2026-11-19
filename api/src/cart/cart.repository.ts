@@ -41,17 +41,32 @@ export class CartRepository {
     });
   }
 
-  createGuestCart(): Promise<CartRow> {
-    return this.prisma.cart.create({ data: {}, include: withItems });
+  /** Only which cart it is: what a change to it needs before the cart is read once, after. */
+  findGuestCartId(id: string): Promise<{ id: string } | null> {
+    return this.prisma.cart.findFirst({
+      where: { id, userId: null },
+      select: { id: true },
+    });
+  }
+
+  findUserCartId(userId: string): Promise<{ id: string } | null> {
+    return this.prisma.cart.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+  }
+
+  createGuestCart(): Promise<{ id: string }> {
+    return this.prisma.cart.create({ data: {}, select: { id: true } });
   }
 
   /** The user's cart, created on first use (one per user, enforced by a unique index). */
-  userCart(userId: string): Promise<CartRow> {
+  userCart(userId: string): Promise<{ id: string }> {
     return this.prisma.cart.upsert({
       where: { userId },
       create: { userId },
       update: {},
-      include: withItems,
+      select: { id: true },
     });
   }
 

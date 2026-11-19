@@ -9,6 +9,7 @@ import { Busy } from '~/components/brand/busy';
 import { Button } from '~/components/ui/button';
 import { Swatch } from '~/features/stock/stock-ui';
 import type { PrintFilesResult, UploadResult } from './route';
+import { formatHours } from '~/lib/duration';
 
 /** A sliced print file of the product: its upload and what the owner calls it. */
 export interface PrintFileRef {
@@ -177,7 +178,7 @@ export function PrintFilesField({
                     <p>
                       <strong className="tabular-nums">{read.grams} g</strong>,{' '}
                       <strong className="tabular-nums">
-                        {read.printHours} h
+                        {formatHours(read.printHours)}
                       </strong>
                     </p>
                     <ul className="flex flex-wrap gap-x-4 gap-y-1">
@@ -205,7 +206,9 @@ export function PrintFilesField({
         <div className="grid gap-2 rounded-md bg-background p-4">
           <p>
             In all: <strong className="tabular-nums">{total.grams} g</strong>,{' '}
-            <strong className="tabular-nums">{total.printHours} h</strong>{' '}
+            <strong className="tabular-nums">
+              {formatHours(total.printHours)}
+            </strong>{' '}
             <span className="text-text-muted">
               (the slicer&apos;s own: purge, prime tower and supports counted)
             </span>

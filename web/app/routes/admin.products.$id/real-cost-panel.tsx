@@ -1,5 +1,6 @@
 import type { ProductRealCost } from '@forgea/types';
 import { Money } from '~/components/money';
+import { formatHours } from '~/lib/duration';
 
 /**
  * What one piece really took and cost, from the product's finished print runs (failed
@@ -38,8 +39,10 @@ export function RealCostPanel({
         </dd>
         <dt className="text-text-muted">Print time</dt>
         <dd className="text-right tabular-nums">
-          {p.hours} h{' '}
-          <span className="text-text-muted">(priced with {hours} h)</span>
+          {formatHours(p.hours)}{' '}
+          <span className="text-text-muted">
+            (priced with {formatHours(hours)})
+          </span>
         </dd>
         {(
           [

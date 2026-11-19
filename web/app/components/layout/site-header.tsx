@@ -21,6 +21,7 @@ interface HeaderProps {
 
 export function SiteHeader(props: HeaderProps) {
   const { cartCount } = props;
+  const inDashboard = useLocation().pathname.startsWith('/admin');
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
       <div
@@ -49,7 +50,7 @@ export function SiteHeader(props: HeaderProps) {
 
         {/* Phone: the cart stays in reach; the rest folds into a menu. */}
         <div className="flex items-center gap-4 text-sm md:hidden">
-          <CartLink count={cartCount} />
+          {!inDashboard && <CartLink count={cartCount} />}
           <PhoneMenu {...props} />
         </div>
       </div>
@@ -58,6 +59,19 @@ export function SiteHeader(props: HeaderProps) {
 }
 
 function Links({ user, whatsappPhone, cartCount }: HeaderProps) {
+  // In the dashboard the team works: the shop is one link away, the customer's pages aren't.
+  const inDashboard = useLocation().pathname.startsWith('/admin');
+  if (inDashboard)
+    return (
+      <>
+        <NavLink to="/admin" className={navLink}>
+          Dashboard
+        </NavLink>
+        <NavLink to="/shop" className={navLink} end>
+          View the shop
+        </NavLink>
+      </>
+    );
   return (
     <>
       <NavLink to="/shop" className={navLink}>

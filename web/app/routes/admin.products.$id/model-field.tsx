@@ -16,6 +16,7 @@ import {
 import { isThreeMf } from '~/features/model-viewer/model-source';
 import { Swatch } from '~/features/stock/stock-ui';
 import type { ModelInfoResult, UploadResult } from './route';
+import { formatHours } from '~/lib/duration';
 
 /**
  * Upload an STL, GLB or 3MF and see it in 3D. An STL or GLB gets grams and print hours
@@ -194,7 +195,7 @@ export function ModelField({
               <span>
                 Suggested in {material.code}:{' '}
                 <strong>{estimate.grams} g</strong>,{' '}
-                <strong>{estimate.printHours} h</strong>
+                <strong>{formatHours(estimate.printHours)}</strong>
               </span>
               <Button
                 variant="secondary"
@@ -299,7 +300,7 @@ function ThreeMfInfo({
           <p>
             Size {info.size.x} × {info.size.y} × {info.size.z} cm ·{' '}
             <strong>{info.grams} g</strong>,{' '}
-            <strong>{info.printHours} h</strong>{' '}
+            <strong>{formatHours(info.printHours)}</strong>{' '}
             <span className="text-text-muted">
               {info.sliced
                 ? '(from the slicer: the file was sliced, so the purge, prime tower and supports are counted in them)'

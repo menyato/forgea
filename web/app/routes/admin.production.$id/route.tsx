@@ -22,6 +22,7 @@ import {
 import { apiContext } from '~/lib/request.server';
 import { fromStudioInput, studioFormat, studioInput } from '~/lib/studio-time';
 import type { Route } from './+types/route';
+import { formatHours } from '~/lib/duration';
 
 export async function loader({ url, params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -130,7 +131,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
       <AdminHeader
         trail={[{ label: 'Production', to: '/admin/production' }]}
         title={`${job.quantity} × ${job.item?.name ?? 'Print run'}`}
-        intro={`Order ${job.orderNumber} · about ${job.grams} g, ${job.hours} h${
+        intro={`Order ${job.orderNumber} · about ${job.grams} g, ${formatHours(job.hours)}${
           job.printer ? ` on ${job.printer.name}` : ''
         }${job.reel ? `, ${job.reel.material} ${job.reel.colour}` : ''}.`}
       />
@@ -198,7 +199,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
             </dd>
             <dt className="text-text-muted">Estimate</dt>
             <dd>
-              {job.grams} g · {job.hours} h
+              {job.grams} g · {formatHours(job.hours)}
             </dd>
             {job.actualGrams && (
               <>
@@ -209,7 +210,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 </dt>
                 <dd>
                   {job.actualGrams} g
-                  {job.actualHours ? ` · ${job.actualHours} h` : ''}
+                  {job.actualHours ? ` · ${formatHours(job.actualHours)}` : ''}
                 </dd>
               </>
             )}

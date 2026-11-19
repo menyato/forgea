@@ -43,6 +43,11 @@ export interface OrderListItem {
   orderNumber: string;
   status: OrderStatus;
   customerEmail: string;
+  /** The name the order was placed under. */
+  customerName: string;
+  /** Its first few lines, and how many more it has. */
+  items: { name: string; quantity: number }[];
+  moreItems: number;
   total: Money;
   currencyCode: string;
   totalInCurrency: string;

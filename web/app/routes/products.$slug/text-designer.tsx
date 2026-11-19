@@ -21,7 +21,6 @@ import {
   useState,
 } from 'react';
 import { Link, useFetcher } from 'react-router';
-import { PrintingLogo } from '~/components/brand/printing-logo';
 import { Busy } from '~/components/brand/busy';
 import { PAGE_WIDTH } from '~/components/layout/page-width';
 import { Money } from '~/components/money';
@@ -31,6 +30,12 @@ import {
   fontFamilyOf,
   useFontFaces,
 } from '~/features/text-studio/use-font-faces';
+import {
+  TEXT_INPUT,
+  withLetter,
+  Swatches,
+  Loading,
+} from './text-designer-parts';
 
 // three.js and HarfBuzz are large: they load only here, and only in the browser.
 const TextPreview = lazy(
@@ -602,108 +607,5 @@ export function TextDesigner({
         )}
       </div>
     </main>
-  );
-}
-
-const TEXT_INPUT =
-  'w-full rounded-md border border-border bg-surface px-3 py-2.5 text-xl text-text aria-[invalid=true]:border-danger';
-
-function withLetter(
-  all: { fontId?: string; colour?: string }[],
-  i: number,
-  patch: { fontId?: string | undefined; colour?: string | undefined },
-) {
-  const next = [...all];
-  while (next.length <= i) next.push({});
-  const merged: { fontId?: string; colour?: string } = { ...next[i] };
-  if ('fontId' in patch) {
-    if (patch.fontId) merged.fontId = patch.fontId;
-    else delete merged.fontId;
-  }
-  if ('colour' in patch) {
-    if (patch.colour) merged.colour = patch.colour;
-    else delete merged.colour;
-  }
-  next[i] = merged;
-  return next;
-}
-
-/** Colour swatches as a radio group; `same` adds "no colour of its own". */
-function Swatches({
-  legend,
-  name,
-  colours,
-  value,
-  onChange,
-  same,
-  note,
-  small = false,
-}: {
-  legend: string;
-  name: string;
-  colours: ProductTextOffer['colours'];
-  value: string | null;
-  onChange: (id: string | null) => void;
-  same?: string;
-  note?: React.ReactNode;
-  small?: boolean;
-}) {
-  const size = small ? 'h-6 w-6' : 'h-8 w-8';
-  return (
-    <fieldset className="grid gap-2">
-      <legend className="mb-1 text-sm font-medium">
-        {legend}
-        {value && (
-          <span className="font-normal text-text-muted">
-            : {colours.find((c) => c.id === value)?.label}
-          </span>
-        )}
-      </legend>
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="radiogroup"
-        aria-label={legend}
-      >
-        {same && (
-          <label className="relative cursor-pointer rounded-pill border border-border px-3 py-1 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10">
-            <input
-              type="radio"
-              name={name}
-              className="sr-only"
-              checked={value === null}
-              onChange={() => onChange(null)}
-            />
-            {same}
-          </label>
-        )}
-        {colours.map((c) => (
-          <label
-            key={c.id}
-            title={c.label}
-            className={`${size} relative cursor-pointer rounded-full border-2 border-border has-[:checked]:border-accent has-[:checked]:ring-2 has-[:checked]:ring-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus-ring`}
-            style={{ backgroundColor: c.swatchHex ?? undefined }}
-          >
-            <input
-              type="radio"
-              name={name}
-              className="sr-only"
-              checked={value === c.id}
-              onChange={() => onChange(c.id)}
-              aria-label={c.label}
-            />
-          </label>
-        ))}
-      </div>
-      {note && <p className="text-xs text-text-muted">{note}</p>}
-    </fieldset>
-  );
-}
-
-function Loading() {
-  return (
-    <div className="grid h-full place-content-center justify-items-center gap-3 text-sm text-text-muted">
-      <PrintingLogo mode="loop" className="w-14" />
-      Loading the 3D studio…
-    </div>
   );
 }

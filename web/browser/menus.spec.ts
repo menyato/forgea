@@ -46,7 +46,10 @@ test('every list opens its filters menu from anywhere on the search field, shown
     await page.waitForLoadState('networkidle');
     // Lists with nothing to filter or group by (printers, rates) have no menu.
     if ((await page.getByLabel('Filters and grouping').count()) === 0) continue;
-    const field = page.getByRole('searchbox').first();
+    // The list's own field (the menu's "Search the dashboard" is another one).
+    const field = page
+      .getByRole('searchbox', { name: /^(?!Search the dashboard)/ })
+      .first();
     // A click on the field itself (not only its arrow) opens the menu.
     await field.click();
     const menu = page.getByRole('group', {

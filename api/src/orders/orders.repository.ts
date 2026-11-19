@@ -19,10 +19,25 @@ import {
 import { catchUpOrderSequences, nextOrderNumber } from './order-number.js';
 import { studioToday } from '../common/studio-day.js';
 
+/** How many of an order's lines its row in the staff's list names. */
+const LIST_ITEMS_SHOWN = 3;
+
 const withCustomer = {
   user: { select: { email: true } },
 } as const satisfies Prisma.OrderInclude;
-type OrderRow = Prisma.OrderGetPayload<{ include: typeof withCustomer }>;
+/** A row of the staff's list: who, and the first few things ordered with how many there are. */
+const withListView = {
+  ...withCustomer,
+  items: {
+    select: { name: true, quantity: true },
+    orderBy: { id: 'asc' },
+    take: LIST_ITEMS_SHOWN,
+  },
+  _count: { select: { items: true } },
+} as const satisfies Prisma.OrderInclude;
+type OrderListRow = Prisma.OrderGetPayload<{
+  include: typeof withListView;
+}>;
 
 const withCustomerView = {
   user: { select: { email: true } },
@@ -386,11 +401,12 @@ export class OrdersRepository {
             OR: [
               { orderNumber: { contains: query.q, mode: 'insensitive' } },
               { user: { email: { contains: search } } },
+              { customerName: { contains: query.q, mode: 'insensitive' } },
             ],
           }
         : {}),
     };
-    return keysetPage<OrderRow>(
+    return keysetPage<OrderListRow>(
       {
         sortField: query.sort,
         kind: query.sort === 'total' ? 'decimal' : 'date',
@@ -404,7 +420,7 @@ export class OrdersRepository {
           where: { AND: [where, after as Prisma.OrderWhereInput] },
           orderBy: orderBy as Prisma.OrderOrderByWithRelationInput[],
           take,
-          include: withCustomer,
+          include: withListView,
         }),
     );
   }

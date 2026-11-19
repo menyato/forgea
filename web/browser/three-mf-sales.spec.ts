@@ -87,7 +87,7 @@ test('the studio prices a quotation line from a 3MF: grams, time, colours and si
     buffer: bambuThreeMf({ sliced: true }),
   });
   await expect(page.getByText('From a 3D file:')).toBeVisible();
-  await expect(page.getByText(/12\.50 g, 1\.50 h a piece/)).toBeVisible();
+  await expect(page.getByText(/12\.50 g, 1 h 30 min a piece/)).toBeVisible();
   await expect(page.getByText('(from the slicer)')).toBeVisible();
   await expect(page.getByLabel('Description')).toHaveValue('Custom print');
   await expect(page.getByLabel('Unit price')).not.toHaveValue('');
@@ -97,5 +97,5 @@ test('the studio prices a quotation line from a 3MF: grams, time, colours and si
   await page.getByRole('button', { name: 'Create the quotation' }).click();
   await expect(page).toHaveURL(/\/admin\/quotations\/[0-9a-f-]{36}$/);
   // Kept with the line, read again from the file when it was saved.
-  await expect(page.getByText(/12\.50 g, 1\.50 h a piece/)).toBeVisible();
+  await expect(page.getByText(/12\.50 g, 1 h 30 min a piece/)).toBeVisible();
 });
