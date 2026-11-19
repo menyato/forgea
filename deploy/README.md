@@ -299,6 +299,7 @@ A scheduled task copies new backups to `C:\Files\Backups\Forgea\<env>` and keeps
 there (`deploy/pc/forgea-pull-backups.ps1`, log in `pull.log`). It uses its own key
 (`~/.ssh/forgea_backups`) that the server lets do nothing but list and send backups
 (`forgea-backup-serve`, account `backups`); the files are encrypted, so the key reveals no data.
+The server's address is in `C:\Files\Backups\Forgea\server.txt` (one line, on the PC only).
 
 ### Restore on a new server
 

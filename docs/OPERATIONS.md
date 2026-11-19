@@ -78,7 +78,9 @@ grams from its reel. The order page has a download for every sliced file. Before
 "What it takes to make" checks each filament against the shelf: **⚠** marks a colour with no
 reel (buy it, or link the shop colour to a reel you have) or with too little left.
 
-**A sale you make yourself** (a walk-in, WhatsApp, a client's piece): Sales → **Quotations** →
+**A sale you make yourself** (a walk-in, WhatsApp, a client's piece): Orders → **New order**
+(or the Dashboard's **New order** button). Fill in who it is for and the lines, press **Create the
+order**: it opens as the order. To send a price first instead: Sales → **Quotations** →
 New. Pick the product (hidden ones say "not in the shop") or write a free line; **Unit price**
 is yours to change, higher or lower than the shop's: profit follows what you charge. Then
 **Send** it (the customer accepts online) or **Confirm: create the order** yourself.

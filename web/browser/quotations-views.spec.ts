@@ -202,3 +202,30 @@ test('the dashboard menu folds away to a strip and comes back; the current page 
     menu.getByRole('link', { name: 'Orders', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
 });
+
+test('the studio adds an order itself, with no lead: it opens as the order', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signInAsAdmin(context, baseURL!);
+  const email = `walk-in-${Date.now().toString(36)}@example.com`;
+  await page.goto('/admin/orders');
+  await page.getByRole('link', { name: 'New order' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'New order', level: 1 }),
+  ).toBeVisible();
+  await page.getByLabel('Customer email').fill(email);
+  await page.getByLabel('Name for the order').fill('Rami Walk-in');
+  await page.getByLabel('Phone').fill('71 555 444');
+  await page.getByLabel('Description').fill('Walk-in keychain');
+  await page.getByLabel('Qty').fill('2');
+  await page.getByLabel('Unit price').fill('5');
+  await page.getByRole('button', { name: 'Create the order' }).click();
+  await expect(page).toHaveURL(/\/admin\/orders\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    /FG-\d{4}-\d{4,}/,
+  );
+  await expect(page.getByText(email).first()).toBeVisible();
+  await expect(page.getByText(/Walk-in keychain/).first()).toBeVisible();
+});

@@ -5,7 +5,9 @@
 # send backups (forgea-backup-serve). The files are encrypted: restoring one needs the backup
 # password from backup.env.
 param(
-  [string]$Server = '31.97.116.192',
+  # The server's address: given here, else read from server.txt in the destination folder
+  # (kept on this PC only, so the public repository never names the server).
+  [string]$Server = '',
   [string]$Destination = 'C:\Files\Backups\Forgea',
   [int]$Keep = 5,
   [string]$Key = "$env:USERPROFILE\.ssh\forgea_backups",
@@ -14,6 +16,11 @@ param(
   [string]$Ping = ''
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Server) {
+  $file = Join-Path $Destination 'server.txt'
+  if (-not (Test-Path $file)) { throw "Put the server's address in $file" }
+  $Server = (Get-Content $file -TotalCount 1).Trim()
+}
 $pattern = '^(?<env>production|staging)/(?<file>forgea-(production|staging)-\d{4}-\d{2}-\d{2}-\d{6}(-[a-z]{1,20}(-[a-z]{1,20})?)?\.tar) (?<size>\d+)$'
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $log = Join-Path $Destination 'pull.log'

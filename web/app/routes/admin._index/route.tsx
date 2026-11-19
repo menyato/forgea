@@ -212,6 +212,11 @@ const ACTIONS: {
   needs: Parameters<typeof can>[1];
 }[] = [
   {
+    label: 'New order',
+    to: '/admin/quotations/new?order=1',
+    needs: 'quotations.manage',
+  },
+  {
     label: 'New quotation',
     to: '/admin/quotations/new',
     needs: 'quotations.manage',

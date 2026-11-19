@@ -27,6 +27,7 @@ import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   checked,
   type SaveResult,
+  save,
   saveNew,
   text,
 } from '~/features/admin/staff.server';
@@ -65,6 +66,10 @@ export async function loader({ params, url, context }: Route.LoaderArgs) {
     products: products.ok ? products.data : [],
     // Coming from a lead: who it's for.
     prefill: {
+      // From Orders → New order: the same form, made into the order at once.
+      asOrder: url.searchParams.get('order') === '1',
+      // It was saved, but could not become an order yet (the API's reason).
+      notOrdered: url.searchParams.get('not-ordered'),
       leadId: url.searchParams.get('lead'),
       email: url.searchParams.get('email') ?? '',
       name: url.searchParams.get('name') ?? '',
@@ -83,6 +88,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   const base = `/quotations/${encodeURIComponent(params.id)}`;
   // A line's 3D file: uploaded (or read again in another material) and read by the API.
   if (intent === 'print-file') return printFile(api, form);
+  if (intent === 'order') return newOrder(api, form);
   if (intent === 'send' || intent === 'confirm' || intent === 'cancel') {
     const r =
       intent === 'cancel'
@@ -99,19 +105,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
   }
   return saveNew(
     SaveQuotationDto,
-    {
-      customerEmail: text(form, 'customerEmail'),
-      leadId: text(form, 'leadId'),
-      validUntil: text(form, 'validUntil'),
-      note: text(form, 'note'),
-      customerName: text(form, 'customerName'),
-      phone: text(form, 'phone'),
-      paymentMethod: text(form, 'paymentMethod'),
-      delivery: checked(form, 'delivery'),
-      city: text(form, 'city'),
-      addressLine: text(form, 'addressLine'),
-      lines: jsonField(form, 'lines') ?? [],
-    },
+    quotationValues(form),
     (dto) =>
       params.id === 'new'
         ? api.post<{ id: string }>('/quotations', dto)
@@ -119,6 +113,51 @@ export async function action({ request, params, context }: Route.ActionArgs) {
     (saved) => (params.id === 'new' ? `/admin/quotations/${saved.id}` : null),
   );
 }
+
+/**
+ * A sale the studio makes itself (a walk-in, a WhatsApp order): written as a quotation, as
+ * every sale is, and confirmed in the same step, so it opens as the order. If it can't become
+ * one yet, it stays as a quotation and its page says why.
+ */
+async function newOrder(api: ApiClient, form: FormData) {
+  let quotationId: string | undefined;
+  const result = await save(
+    SaveQuotationDto,
+    quotationValues(form),
+    async (dto) => {
+      const r = await api.post<{ id: string }>('/quotations', dto);
+      if (r.ok) quotationId = r.data.id;
+      return r;
+    },
+  );
+  if (!quotationId) return result;
+  const path = `/quotations/${quotationId}`;
+  const page = `/admin${path}`;
+  const confirmed = await api.post<CheckoutResult>(`${path}/confirm`);
+  if (!confirmed.ok)
+    throw redirect(
+      `${page}?not-ordered=${encodeURIComponent(confirmed.message)}`,
+    );
+  const made = await api.get<QuotationDetail>(path);
+  throw redirect(
+    made.ok && made.data.orderId ? `/admin/orders/${made.data.orderId}` : page,
+  );
+}
+
+/** The quotation form's fields, as the shared DTO reads them. */
+const quotationValues = (form: FormData) => ({
+  customerEmail: text(form, 'customerEmail'),
+  leadId: text(form, 'leadId'),
+  validUntil: text(form, 'validUntil'),
+  note: text(form, 'note'),
+  customerName: text(form, 'customerName'),
+  phone: text(form, 'phone'),
+  paymentMethod: text(form, 'paymentMethod'),
+  delivery: checked(form, 'delivery'),
+  city: text(form, 'city'),
+  addressLine: text(form, 'addressLine'),
+  lines: jsonField(form, 'lines') ?? [],
+});
 
 async function printFile(api: ApiClient, form: FormData) {
   let key = text(form, 'key');
@@ -171,6 +210,7 @@ const lineTotal = (l: Line) =>
 
 export default function QuotationPage({ loaderData }: Route.ComponentProps) {
   const { quotation: q, products, prefill } = loaderData;
+  const asOrder = !q && prefill.asOrder;
   const fetcher = useFetcher<ActionResult>();
   const errors = fetcher.data?.errors ?? {};
   const mayManage = useCan()('quotations.manage');
@@ -241,13 +281,19 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <AdminHeader
-        trail={[{ label: 'Quotations', to: '/admin/quotations' }]}
+        trail={[
+          asOrder
+            ? { label: 'Orders', to: '/admin/orders' }
+            : { label: 'Quotations', to: '/admin/quotations' },
+        ]}
         related={loaderData.related}
-        title={q ? q.number : 'New quotation'}
+        title={q ? q.number : asOrder ? 'New order' : 'New quotation'}
         intro={
           q
             ? `${q.expired ? 'Expired' : q.status.toLowerCase()} · for ${q.customer.email}${q.orderNumber ? ` · order ${q.orderNumber}` : ''}`
-            : 'For anyone with an email address: sending it emails the full quotation with a link to accept it online. Prices in USD, taxes included, like the shop.'
+            : asOrder
+              ? 'A sale you make yourself: a walk-in, a WhatsApp or phone order, a piece for a client. Who it is for and what they take; it opens as the order, ready to confirm and print. Prices in USD, taxes included, like the shop.'
+              : 'For anyone with an email address: sending it emails the full quotation with a link to accept it online. Prices in USD, taxes included, like the shop.'
         }
         action={
           <Link
@@ -258,6 +304,16 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
           </Link>
         }
       />
+      {q && prefill.notOrdered && (
+        <p
+          role="alert"
+          className="mb-4 rounded-md border border-warning bg-surface p-3 text-sm"
+        >
+          Saved as this quotation, but it could not become an order yet:{' '}
+          {prefill.notOrdered} Fix it below, then press{' '}
+          <strong>Confirm: create the order</strong>.
+        </p>
+      )}
       {q && (
         <StatusBar
           steps={[
@@ -278,7 +334,7 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
         />
       )}
       <fetcher.Form ref={formRef} method="post" className="grid gap-6">
-        <input type="hidden" name="intent" value="save" />
+        <input type="hidden" name="intent" value={asOrder ? 'order' : 'save'} />
         {prefill.leadId && (
           <input
             type="hidden"
@@ -562,7 +618,11 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
         {editable && (
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={fetcher.state !== 'idle'}>
-              {q ? 'Save changes' : 'Create the quotation'}
+              {q
+                ? 'Save changes'
+                : asOrder
+                  ? 'Create the order'
+                  : 'Create the quotation'}
             </Button>
             <SaveStatus state={fetcher.state} result={fetcher.data} />
           </div>

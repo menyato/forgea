@@ -19,6 +19,8 @@ import {
 import { apiContext } from '~/lib/request.server';
 import { STUDIO_TIME_ZONE, studioDate } from '~/lib/studio-time';
 import { statusList } from '~/features/admin/status-list.server';
+import { Link } from 'react-router';
+import { buttonClass } from '~/components/ui/button';
 import type { Route } from './+types/route';
 
 /** The filters: orders by what the studio has to do next; several together add up. */
@@ -144,12 +146,22 @@ const href = (o: OrderListItem) => `/admin/orders/${o.id}`;
 
 export default function Orders({ loaderData }: Route.ComponentProps) {
   const { state, orders, counts, total, columns } = loaderData;
-  const mayMove = useCan()('orders.manage');
+  const can = useCan();
+  const mayMove = can('orders.manage');
+  // A sale the studio makes itself is written as a quotation and confirmed at once.
+  const mayOrder = can('quotations.manage');
   return (
     <>
       <AdminHeader
         title="Orders"
         intro="Filtered by what to do next. Open one to move it to its next step, or drag its card on the kanban; each change is recorded with who made it and shown to the customer."
+        action={
+          mayOrder && (
+            <Link to="/admin/quotations/new?order=1" className={buttonClass()}>
+              New order
+            </Link>
+          )
+        }
       />
       <ControlPanel
         state={state}
