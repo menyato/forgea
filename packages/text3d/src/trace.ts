@@ -7,9 +7,13 @@
 
 type Pt = [number, number];
 
+/** On a transparent picture, a pixel at least this opaque (of 255) is part of the logo. */
+const VISIBLE_ALPHA = 32;
+
 /**
  * Which pixels are the logo (1) and which the background (0), from RGBA pixels: on a picture
- * with transparency, the opaque pixels; otherwise every pixel that differs from the
+ * with transparency, every visible pixel (a translucent part is still part of the logo; only
+ * the faint haze at its edges is not); otherwise every pixel that differs from the
  * background's colour (the picture's border) by more than the border's own noise. Every part
  * of a logo counts, light or dark (a pale letter on white is still the logo): the piece is
  * its whole outline, raised in one colour.
@@ -24,7 +28,8 @@ export function inkMask(
   let transparent = 0;
   for (let i = 0; i < n; i++) if (rgba[i * 4 + 3]! < 128) transparent++;
   if (transparent > n * 0.02) {
-    for (let i = 0; i < n; i++) mask[i] = rgba[i * 4 + 3]! >= 128 ? 1 : 0;
+    for (let i = 0; i < n; i++)
+      mask[i] = rgba[i * 4 + 3]! >= VISIBLE_ALPHA ? 1 : 0;
     return mask;
   }
   const border: number[] = [];

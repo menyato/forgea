@@ -104,6 +104,21 @@ describe('inkMask', () => {
     expect(inkMask(px, 20, 20).reduce((n, v) => n + v, 0)).toBe(36);
   });
 
+  it('a translucent part of a transparent logo is part of it', () => {
+    // A solid square, a 40% opaque one beside it, faint edge haze around: two squares count.
+    const px = picture(
+      12,
+      12,
+      (x, y) => y > 2 && y < 6 && x > 1 && x < 5,
+      [238, 240, 241, 255],
+      [0, 0, 0, 0],
+    );
+    for (let y = 3; y < 6; y++)
+      for (let x = 6; x < 9; x++) px.set([50, 55, 60, 102], (y * 12 + x) * 4);
+    for (let x = 0; x < 12; x++) px.set([0, 0, 0, 10], (10 * 12 + x) * 4);
+    expect(inkMask(px, 12, 12).reduce((n, v) => n + v, 0)).toBe(18);
+  });
+
   it('a transparent PNG: the opaque pixels, whatever their colour', () => {
     const px = picture(
       10,
