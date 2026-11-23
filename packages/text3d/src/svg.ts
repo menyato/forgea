@@ -1,3 +1,10 @@
+import { difference, union } from './clip.js';
+import {
+  type LogoInk,
+  type LogoShape,
+  MAX_LOGO_INKS,
+  nearestColour,
+} from './design.js';
 import {
   boundsOf,
   contoursFromPath,
@@ -7,6 +14,7 @@ import {
   type Point,
   type Region,
   regionsOf,
+  signedArea,
 } from './outline.js';
 
 /**
@@ -18,41 +26,200 @@ import {
  * nothing to draw.
  */
 export function logoRegionsFromSvg(svg: string): Region[] {
-  const contours: Contour[] = [];
-  const stack: Matrix[] = [IDENTITY];
-  // Tags in order: an opening group pushes its transform, its closing tag pops it.
-  for (const m of svg.matchAll(/<(\/?)([a-zA-Z]+)([^>]*?)(\/?)>/g)) {
-    const [, closing, rawName, attrs, selfClosing] = m;
-    const name = rawName!.toLowerCase();
-    if (closing) {
-      if (name === 'g' || name === 'svg') stack.pop();
-      continue;
-    }
-    const own = attr(attrs!, 'transform');
-    const matrix = multiply(stack.at(-1) ?? IDENTITY, parseTransform(own));
-    if (name === 'g' || name === 'svg') {
-      if (!selfClosing) stack.push(matrix);
-      continue;
-    }
-    // Hidden parts (defs, clip paths, masks) are not drawn.
-    if (/display\s*[:=]\s*["']?none/.test(attrs!)) continue;
-    for (const c of shapeContours(name, attrs!))
-      contours.push(c.map((p) => apply(matrix, p)));
-  }
-  if (contours.length === 0) throw new Error('This SVG has no shapes to print');
-  if (contours.reduce((n, c) => n + c.length, 0) > MAX_LOGO_POINTS)
+  return logoFromSvg(svg).outline;
+}
+
+/**
+ * A logo's outline (as `logoRegionsFromSvg`) and, when it is drawn in more than one colour,
+ * its colours' areas in the same frame (`LogoShape.inks`): each shape in its fill colour,
+ * later shapes covering earlier ones, as the drawing shows them; the largest colour first, at
+ * most MAX_LOGO_INKS (a smaller colour joins the closest kept one). A drawing traced from a
+ * picture (`@forgea/text3d/trace`) carries its outline and its colours separately: a group
+ * marked `data-inks` holds the colours, and only the rest is the outline.
+ */
+export function logoFromSvg(svg: string): LogoShape {
+  const shapes = readShapes(svg);
+  const outlineShapes = shapes.filter((s) => !s.ink);
+  const outlineContours = (
+    outlineShapes.length ? outlineShapes : shapes
+  ).flatMap((s) => s.contours);
+  if (outlineContours.length === 0)
+    throw new Error('This SVG has no shapes to print');
+  const points = shapes.reduce(
+    (n, s) => n + s.contours.reduce((m, c) => m + c.length, 0),
+    0,
+  );
+  if (points > MAX_LOGO_POINTS)
     throw new Error(
       'This SVG is too detailed: simplify it and upload it again',
     );
-  // SVG's y runs down; print outlines run up.
-  const regions = regionsOf(contours.map((c) => c.map(([x, y]) => [x, -y])));
+  const regions = regionsOf(outlineContours);
   const b = boundsOf(regions);
   if (!b || b.maxX - b.minX <= 0 || b.maxY - b.minY <= 0)
     throw new Error('This SVG has no shapes to print');
   const k = 1 / Math.max(b.maxX - b.minX, b.maxY - b.minY);
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
-  return mapRegions(regions, ([x, y]) => [(x - cx) * k, (y - cy) * k]);
+  const frame = (r: readonly Region[]) =>
+    mapRegions(r, ([x, y]) => [(x - cx) * k, (y - cy) * k]);
+
+  // The colours, painted in order: each shape covers what earlier ones drew under it.
+  const inkShapes = shapes.some((s) => s.ink)
+    ? shapes.filter((s) => s.ink)
+    : shapes;
+  const painted = new Map<string, Region[]>();
+  for (const shape of inkShapes) {
+    if (!shape.fill) continue;
+    const own = regionsOf(shape.contours);
+    for (const [hex, area] of painted)
+      if (hex !== shape.fill) painted.set(hex, difference(area, own));
+    const mine = painted.get(shape.fill);
+    painted.set(shape.fill, mine ? union([...mine, ...own]) : own);
+  }
+  return { outline: frame(regions), inks: keptInks(painted, frame) };
+}
+
+/** A drawn shape: its outlines (y up) and its fill (#rrggbb; null when not filled). */
+interface Shape {
+  contours: Contour[];
+  fill: string | null;
+  /** Inside a `data-inks` group (a traced picture's colours). */
+  ink: boolean;
+}
+
+function readShapes(svg: string): Shape[] {
+  const shapes: Shape[] = [];
+  const stack: { matrix: Matrix; fill: string | null; ink: boolean }[] = [
+    { matrix: IDENTITY, fill: '#000000', ink: false },
+  ];
+  // Tags in order: an opening group pushes its transform and fill, its closing tag pops it.
+  for (const m of svg.matchAll(/<(\/?)([a-zA-Z]+)([^>]*?)(\/?)>/g)) {
+    const [, closing, rawName, attrs, selfClosing] = m;
+    const name = rawName!.toLowerCase();
+    if (closing) {
+      if ((name === 'g' || name === 'svg') && stack.length > 1) stack.pop();
+      continue;
+    }
+    const parent = stack.at(-1)!;
+    const matrix = multiply(
+      parent.matrix,
+      parseTransform(attr(attrs!, 'transform')),
+    );
+    const fill = fillOf(attrs!, parent.fill);
+    if (name === 'g' || name === 'svg') {
+      if (!selfClosing)
+        stack.push({
+          matrix,
+          fill,
+          ink: parent.ink || /(?:^|\s)data-inks\s*=/.test(attrs!),
+        });
+      continue;
+    }
+    // Hidden parts (defs, clip paths, masks) are not drawn.
+    if (/display\s*[:=]\s*["']?none/.test(attrs!)) continue;
+    const contours = shapeContours(name, attrs!).map((c) =>
+      // SVG's y runs down; print outlines run up.
+      c.map((p): Point => {
+        const [x, y] = apply(matrix, p);
+        return [x, -y];
+      }),
+    );
+    if (contours.length) shapes.push({ contours, fill, ink: parent.ink });
+  }
+  return shapes;
+}
+
+/**
+ * The colours worth printing, largest first, at most MAX_LOGO_INKS: specks of a colour and
+ * the colours beyond those join the closest kept one. None for a one-colour logo.
+ */
+function keptInks(
+  painted: Map<string, Region[]>,
+  frame: (r: readonly Region[]) => Region[],
+): LogoInk[] | null {
+  const all = [...painted]
+    .map(([hex, regions]) => ({ hex, regions, area: areaOf(regions) }))
+    .filter((i) => i.area > 0)
+    .sort((a, b) => b.area - a.area);
+  const total = all.reduce((n, i) => n + i.area, 0);
+  const kept = all
+    .filter((i) => i.area >= total * 0.005)
+    .slice(0, MAX_LOGO_INKS);
+  if (kept.length < 2) return null;
+  for (const extra of all.filter((i) => !kept.includes(i))) {
+    const near = nearestColour(
+      extra.hex,
+      kept.map((i) => ({ ...i, swatchHex: i.hex })),
+    )!;
+    const into = kept.find((i) => i.hex === near.hex)!;
+    into.regions = union([...into.regions, ...extra.regions]);
+  }
+  return kept.map((i) => ({ hex: i.hex, regions: frame(i.regions) }));
+}
+
+const areaOf = (regions: readonly Region[]) =>
+  regions.reduce(
+    (n, r) =>
+      n +
+      Math.abs(signedArea(r.outer)) -
+      r.holes.reduce((m, h) => m + Math.abs(signedArea(h)), 0),
+    0,
+  );
+
+/** A shape's fill as #rrggbb: its own `fill` (attribute or style), else its group's. */
+function fillOf(attrs: string, inherited: string | null): string | null {
+  const style = /(?:^|;)\s*fill\s*:\s*([^;]+)/.exec(
+    attr(attrs, 'style') ?? '',
+  )?.[1];
+  const value = (style ?? attr(attrs, 'fill'))?.trim().toLowerCase();
+  if (value === undefined || value === 'inherit' || value === 'currentcolor')
+    return inherited;
+  if (value === 'none' || value === 'transparent') return null;
+  return colourHex(value) ?? inherited;
+}
+
+const NAMED: Readonly<Record<string, string>> = {
+  black: '#000000',
+  white: '#ffffff',
+  red: '#ff0000',
+  green: '#008000',
+  blue: '#0000ff',
+  yellow: '#ffff00',
+  orange: '#ffa500',
+  purple: '#800080',
+  pink: '#ffc0cb',
+  gray: '#808080',
+  grey: '#808080',
+  silver: '#c0c0c0',
+  gold: '#ffd700',
+  navy: '#000080',
+  brown: '#a52a2a',
+};
+
+/** A CSS colour (#rgb, #rrggbb, rgb(), a few names) as #rrggbb, or null. */
+function colourHex(value: string): string | null {
+  if (NAMED[value]) return NAMED[value];
+  let m = /^#([0-9a-f]{3})$/.exec(value);
+  if (m) return `#${[...m[1]!].map((c) => c + c).join('')}`;
+  m = /^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/.exec(value);
+  if (m) return `#${m[1]}`;
+  const rgb = /^rgba?\(([^)]*)\)$/.exec(value);
+  if (!rgb) return null;
+  const channels = rgb[1]!
+    .split(/[\s,/]+/)
+    .slice(0, 3)
+    .map((v) =>
+      v.endsWith('%') ? (parseFloat(v) * 255) / 100 : parseFloat(v),
+    );
+  if (channels.length < 3 || !channels.every((v) => Number.isFinite(v)))
+    return null;
+  return `#${channels
+    .map((v) =>
+      Math.round(Math.max(0, Math.min(255, v)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 }
 
 /** Most points one logo may have (a traced photo can have millions: refused). */

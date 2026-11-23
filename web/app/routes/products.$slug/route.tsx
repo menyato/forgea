@@ -169,7 +169,11 @@ function CatalogProduct({
         ...product.slots,
         logos: [
           ...product.slots.logos,
-          ...ownLogos.map((l) => ({ id: l.id, outline: l.outline })),
+          ...ownLogos.map((l) => ({
+            id: l.id,
+            outline: l.outline,
+            inks: l.inks,
+          })),
         ],
       },
     [product.slots, ownLogos],

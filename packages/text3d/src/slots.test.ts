@@ -8,6 +8,7 @@ import {
   KEYCHAIN_SHAPES,
   type DesignSlot,
   FontSet,
+  logoFromSvg,
   logoRegionsFromSvg,
   slotsProblem,
   slotState,
@@ -111,7 +112,7 @@ describe('slots on a model', () => {
       logoId: 'square',
       defaultOn: true,
     };
-    const logos = new Map([['square', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+    const logos = new Map([['square', logoFromSvg(SQUARE_WITH_HOLE)]]);
     expect(buildSlots(fonts, [logo], {}, logos)).toHaveLength(1);
     expect(
       buildSlots(fonts, [logo], { logo: { on: false } }, logos),
@@ -156,7 +157,7 @@ describe('keychain shapes and logo', () => {
   });
 
   it('puts the logo after the name, in the letters’ colour', () => {
-    const logos = new Map([['square', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+    const logos = new Map([['square', logoFromSvg(SQUARE_WITH_HOLE)]]);
     const plain = buildDesign(fonts, design, settings, logos);
     const withLogo = buildDesign(
       fonts,
@@ -173,7 +174,7 @@ describe('keychain shapes and logo', () => {
   });
 
   it('a logo alone, no name: the logo raised on its plate, with the ring', () => {
-    const logos = new Map([['square', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+    const logos = new Map([['square', logoFromSvg(SQUARE_WITH_HOLE)]]);
     const alone = { ...design, text: '', logoId: 'square' };
     expect(designProblem(fonts, alone, settings)).toBeNull();
     // Without a logo, a name is still needed.
@@ -207,7 +208,7 @@ describe("a customer's own logo in a slot", () => {
     colour: 'white',
     defaultOn: true,
   };
-  const logos = new Map([['theirs', logoRegionsFromSvg(SQUARE_WITH_HOLE)]]);
+  const logos = new Map([['theirs', logoFromSvg(SQUARE_WITH_HOLE)]]);
 
   it('shows nothing until the customer adds theirs, then prints it', () => {
     expect(slotState(place, undefined).on).toBe(false);

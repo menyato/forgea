@@ -137,7 +137,7 @@ export function SlotsEditor({
   const offer = useMemo<ProductSlotsOffer>(
     () => ({
       slots: value,
-      logos: logos.map((l) => ({ id: l.id, outline: l.outline })),
+      logos: logos.map((l) => ({ id: l.id, outline: l.outline, inks: l.inks })),
       fonts: [...fonts],
       colours,
     }),

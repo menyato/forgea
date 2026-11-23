@@ -3,6 +3,7 @@ import {
   coupleNames,
   isArabic,
   lettersOf,
+  type LogoShape,
   STANDING_STYLES,
   type TextDecor,
   type TextDesign,
@@ -54,7 +55,7 @@ export function layoutDesign(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
-  logos: ReadonlyMap<string, readonly Region[]> = new Map(),
+  logos: ReadonlyMap<string, LogoShape> = new Map(),
 ): Layout {
   // Too wide for the piece: laid out again with smaller letters (thicknesses stay).
   let h = settings.letterHeightMm;
@@ -70,7 +71,7 @@ function layoutAt(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
-  logos: ReadonlyMap<string, readonly Region[]>,
+  logos: ReadonlyMap<string, LogoShape>,
 ): Layout {
   const h = settings.letterHeightMm;
   const margin = Math.max(1.5, h * 0.12);
@@ -91,7 +92,14 @@ function layoutAt(
       placed = singleLetters(fonts, design, h, margin);
       break;
     case 'INITIAL_NAME':
-      placed = [initialWithName(fonts, design, h, settings.decor ?? 'HEARTS')];
+      placed = [
+        initialWithName(
+          fonts,
+          design,
+          h,
+          design.decor ?? settings.decor ?? 'HEARTS',
+        ),
+      ];
       break;
     case 'COUPLE':
       placed = [couple(fonts, design, h)];
@@ -122,7 +130,12 @@ function layoutAt(
         ? shapedPlate(piece, margin, design.shape)
         : backingOf(piece, margin, settings.style !== 'INITIAL_NAME');
     if (settings.style === 'KEYCHAIN') {
-      backing = withRing(backing, h, isArabic(design.text));
+      backing = withRing(
+        backing,
+        h,
+        isArabic(design.text),
+        design.shape === 'HEART',
+      );
     }
     // A standing piece gets a foot to stand on, joined to its backing.
     if (STANDING_STYLES.includes(settings.style)) {
@@ -260,6 +273,11 @@ const DECORATIONS: Readonly<
     { motif: 'STAR', slot: 'LEFT', size: 0.16 },
     { motif: 'STAR', slot: 'RIGHT', size: 0.16 },
   ],
+  BUTTERFLIES: [
+    { motif: 'BUTTERFLY', slot: 'TOP_RIGHT', size: 0.34 },
+    { motif: 'BUTTERFLY', slot: 'LEFT', size: 0.2 },
+    { motif: 'HEART', slot: 'TOP_LEFT', size: 0.14 },
+  ],
 };
 
 /**
@@ -275,6 +293,7 @@ function initialWithName(
 ): Placed[] {
   const name = design.text.trim();
   const accent = design.accentColour ?? design.textColour;
+  const decorColour = design.decorColour ?? accent;
   const initial = centred(
     run(
       fonts,
@@ -318,20 +337,60 @@ function initialWithName(
       ];
     }
     return {
-      colour: accent,
+      colour: decorColour,
       regions: moved(motif(d.motif, size), at[0], at[1]),
       gap,
     };
   });
+  const nameAt = moved(shaped.regions, 0, ib.minY + ih * 0.3, k);
+  // The extra line: under the initial, as wide as the name may be, joined by the backing.
+  const line = subtitleLine(fonts, design, h * 0.15, widest);
+  const lb = line && boundsOf(line.regions);
+  const under = lb
+    ? [
+        {
+          ...line,
+          regions: moved(
+            line.regions,
+            0,
+            Math.min(ib.minY, boundsOf(nameAt)!.minY) - gap * 1.5 - lb.maxY,
+          ),
+        },
+      ]
+    : [];
   return [
     initial,
     ...decorations,
-    {
-      colour: design.textColour,
-      regions: moved(shaped.regions, 0, ib.minY + ih * 0.3, k),
-      gap,
-    },
+    { colour: design.textColour, regions: nameAt, gap },
+    ...under,
   ];
+}
+
+/**
+ * The extra line under a name (a baby's weight and birth date, a wedding date), in the name's
+ * font and colour, `h` mm tall, centred on x = 0 with its top at y = 0, at most `widest` mm
+ * across; null without one.
+ */
+function subtitleLine(
+  fonts: FontSet,
+  design: TextDesign,
+  h: number,
+  widest: number,
+): Placed | null {
+  const text = design.subtitle?.trim();
+  if (!text) return null;
+  const shaped = run(fonts, design.fontId, text, h, design.textColour);
+  const b = boundsOf(shaped.regions);
+  if (!b) return null;
+  const k = Math.min(1, widest / Math.max(1e-6, b.maxX - b.minX));
+  const cx = (b.minX + b.maxX) / 2;
+  return {
+    ...shaped,
+    regions: mapRegions(shaped.regions, ([x, y]) => [
+      (x - cx) * k,
+      (y - b.maxY) * k,
+    ]),
+  };
 }
 
 /** A point beyond the initial in the slot's direction (its outline's nearest point is used). */
@@ -409,7 +468,7 @@ function couple(fonts: FontSet, design: TextDesign, h: number): Placed[] {
   const space = h * 0.22;
   const lb = boundsOf(left.regions)!;
   const rb = boundsOf(right.regions)!;
-  return [
+  const pieces: Placed[] = [
     { ...left, regions: moved(left.regions, -size / 2 - space - lb.maxX, 0) },
     { ...right, regions: moved(right.regions, size / 2 + space - rb.minX, 0) },
     {
@@ -418,6 +477,20 @@ function couple(fonts: FontSet, design: TextDesign, h: number): Placed[] {
       gap: Math.max(0.6, h * 0.025),
     },
   ];
+  // The extra line (a wedding date) under the names, centred under the heart.
+  const all = boundsOf(pieces.flatMap((p) => p.regions))!;
+  const line = subtitleLine(
+    fonts,
+    design,
+    h * 0.4,
+    (all.maxX - all.minX) * 0.8,
+  );
+  if (line)
+    pieces.push({
+      ...line,
+      regions: moved(line.regions, 0, all.minY - h * 0.25),
+    });
+  return pieces;
 }
 
 /** Single letters in a row, each its own piece (its own backing), in its font and colour. */
@@ -495,32 +568,30 @@ function footOf(
 
 /**
  * A keychain's face: the name, and a logo after it (the end of the reading, away from the
- * ring), a little taller than the capitals, in the letters' colour; or the logo alone.
+ * ring), a little taller than the capitals, in the letters' colour or in its own colours; or
+ * the logo alone.
  */
 function keychainFace(
   fonts: FontSet,
   design: TextDesign,
   h: number,
-  logos: ReadonlyMap<string, readonly Region[]>,
+  logos: ReadonlyMap<string, LogoShape>,
 ): Placed[] {
   const text = design.text.trim();
-  const logo = design.logoId ? logos.get(design.logoId) : undefined;
-  // A logo alone (no name): the logo is the face, twice the letters' height.
+  const shape = design.logoId ? logos.get(design.logoId) : undefined;
+  const logo = shape?.outline;
+  const lb = logo && logo.length ? boundsOf(logo) : null;
   if (text === '') {
-    const lb = logo && logo.length ? boundsOf(logo) : null;
-    if (!logo || !lb) return [];
+    // A logo alone (no name): the logo is the face, twice the letters' height.
+    if (!shape || !lb) return [];
     const k = (h * 2) / Math.max(1e-6, lb.maxY - lb.minY);
-    return [
-      {
-        regions: moved(logo, -lb.minX * k, -lb.minY * k, k),
-        colour: design.textColour,
-      },
-    ];
+    return logoPlaced(design, shape, (r) =>
+      moved(r, -lb.minX * k, -lb.minY * k, k),
+    );
   }
   const name = run(fonts, design.fontId, text, h, design.textColour);
-  if (!logo || logo.length === 0) return [name];
+  if (!shape || !lb) return [name];
   const b = boundsOf(name.regions)!;
-  const lb = boundsOf(logo)!;
   const k = (h * 1.25) / Math.max(1e-6, lb.maxY - lb.minY);
   const width = (lb.maxX - lb.minX) * k;
   const gap = h * 0.35;
@@ -530,15 +601,31 @@ function keychainFace(
   const cy = (b.minY + b.maxY) / 2;
   return [
     name,
-    {
-      regions: moved(
-        logo,
-        x - lb.minX * k,
-        cy - ((lb.minY + lb.maxY) / 2) * k,
-        k,
-      ),
-      colour: design.textColour,
-    },
+    ...logoPlaced(design, shape, (r) =>
+      moved(r, x - lb.minX * k, cy - ((lb.minY + lb.maxY) / 2) * k, k),
+    ),
+  ];
+}
+
+/**
+ * The logo as placed: in the letters' colour; or, when the customer chose a colour for each
+ * of its colours, its outline in the first (largest) and the others over it, each in its own.
+ */
+function logoPlaced(
+  design: TextDesign,
+  shape: LogoShape,
+  place: (regions: readonly Region[]) => Region[],
+): Placed[] {
+  const inks = shape.inks ?? [];
+  const chosen = design.logoColours ?? [];
+  if (inks.length < 2 || chosen.length !== inks.length)
+    return [{ regions: place(shape.outline), colour: design.textColour }];
+  return [
+    { regions: place(shape.outline), colour: chosen[0]! },
+    ...inks.slice(1).map((ink, i) => ({
+      regions: place(ink.regions),
+      colour: chosen[i + 1]!,
+    })),
   ];
 }
 
@@ -603,21 +690,38 @@ const ringSize = (h: number) => Math.max(5, h * 0.45);
 /**
  * A ring joined to the backing at the start of the text (the left; the right for Arabic,
  * which reads right to left), its hole cut cleanly through. The hole fits a key ring's wire.
+ * It overlaps the backing's own edge at its height, not the edge of its box: a heart is
+ * narrower at mid-height than across its lobes, so a ring there floated free. A heart's ring
+ * sits on the side of a lobe, where the heart is widest.
  */
 function withRing(
   backing: Region[],
   h: number,
   rightToLeft: boolean,
+  onLobe = false,
 ): Region[] {
   const b = boundsOf(backing)!;
   const r = ringSize(h);
   const hole = Math.max(2.6, r * 0.5);
-  const cx = rightToLeft ? b.maxX + r * 0.45 : b.minX - r * 0.45;
-  const cy = (b.minY + b.maxY) / 2;
+  const side = rightToLeft ? 'RIGHT' : 'LEFT';
+  const cy = onLobe ? widestAt(backing, side) : (b.minY + b.maxY) / 2;
+  const edge =
+    sideAt(backing, cy, side)?.[0] ?? (rightToLeft ? b.maxX : b.minX);
+  const cx = rightToLeft ? edge + r * 0.45 : edge - r * 0.45;
   return difference(
     union([...backing, { outer: circle(cx, cy, r), holes: [] }]),
     [{ outer: circle(cx, cy, hole), holes: [] }],
   );
+}
+
+/** The height of the regions' outermost point on that side. */
+function widestAt(regions: readonly Region[], side: 'LEFT' | 'RIGHT'): number {
+  let best: Point | null = null;
+  for (const { outer } of regions)
+    for (const p of outer)
+      if (!best || (side === 'LEFT' ? p[0] < best[0] : p[0] > best[0]))
+        best = p;
+  return best ? best[1] : 0;
 }
 
 /** Parts of one colour at the same height become one (their regions merged). */

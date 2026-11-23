@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import type {
   DesignSlot,
+  LogoInk,
+  LogoShape,
   Region,
   SlotChoice,
   TextDesign,
@@ -47,7 +49,7 @@ type Job =
       fonts: readonly FontRef[];
       design: TextDesign;
       settings: TextSettings;
-      logos: [string, Region[]][];
+      logos: [string, LogoShape][];
     }
   | { task: 'logo'; svg: string }
   | {
@@ -55,7 +57,7 @@ type Job =
       fonts: readonly FontRef[];
       slots: DesignSlot[];
       choices: Record<string, SlotChoice>;
-      logos: [string, Region[]][];
+      logos: [string, LogoShape][];
     };
 
 /** A product's slots as chosen: each one's colour and volume, or why they can't be made. */
@@ -118,13 +120,17 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     return r.ok && 'scripts' in r ? r.scripts : null;
   }
 
-  /** A logo's SVG as print outlines (1 across), or why it can't be read. */
+  /** A logo's SVG as print outlines (1 across) and its colours, or why it can't be read. */
   async logo(
     svg: string,
-  ): Promise<{ outline: Region[]; points: number } | { problem: string }> {
+  ): Promise<
+    | { outline: Region[]; inks: LogoInk[] | null; points: number }
+    | { problem: string }
+  > {
     const r = await this.send({ task: 'logo', svg });
     if (!r.ok) return { problem: r.message };
-    if ('outline' in r) return { outline: r.outline, points: r.points };
+    if ('outline' in r)
+      return { outline: r.outline, inks: r.inks, points: r.points };
     throw new Error('Unexpected answer from the text worker');
   }
 
@@ -133,7 +139,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     fonts: readonly FontRef[],
     slots: DesignSlot[],
     choices: Record<string, SlotChoice>,
-    logos: [string, Region[]][],
+    logos: [string, LogoShape][],
   ): Promise<MeasuredSlots> {
     const key = JSON.stringify([
       'slots',
@@ -160,7 +166,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     fonts: readonly FontRef[],
     slots: DesignSlot[],
     choices: Record<string, SlotChoice>,
-    logos: [string, Region[]][],
+    logos: [string, LogoShape][],
   ): Promise<
     | { problem: string }
     | { slotId: string; colour: string; bytes: Uint8Array }[]
@@ -182,7 +188,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     fonts: readonly FontRef[],
     design: TextDesign,
     settings: TextSettings,
-    logos: [string, Region[]][] = [],
+    logos: [string, LogoShape][] = [],
   ): Promise<Measured> {
     // Fonts never change once added (a new file is a new font), so the design says it all.
     const key = JSON.stringify([design, settings]);
@@ -207,7 +213,7 @@ export class TextShaper implements OnApplicationBootstrap, OnModuleDestroy {
     fonts: readonly FontRef[],
     design: TextDesign,
     settings: TextSettings,
-    logos: [string, Region[]][] = [],
+    logos: [string, LogoShape][] = [],
   ): Promise<{ problem: string } | { colour: string; bytes: Uint8Array }[]> {
     const r = await this.send({ task: 'stl', fonts, design, settings, logos });
     const m = toMeasured(r);

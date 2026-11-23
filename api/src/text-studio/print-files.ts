@@ -50,12 +50,18 @@ export class PrintFiles {
       this.slots.files(slots, choices),
       this.prisma.optionValue.findMany({
         where: {
-          id: { in: slots.map((s) => choices[s.id]?.colour ?? s.colour) },
+          id: {
+            in: slots.flatMap((s) => [
+              choices[s.id]?.colour ?? s.colour,
+              ...(choices[s.id]?.logoColours ?? []),
+            ]),
+          },
         },
-        select: { id: true, swatchHex: true },
+        select: { id: true, swatchHex: true, label: true },
       }),
     ]);
     const hex = new Map(values.map((v) => [v.id, v.swatchHex]));
+    const named = new Map(values.map((v) => [v.id, v.label]));
     const number = item.order.orderNumber;
     const bytes = await this.optimizer.project(
       () => this.uploads.read(key),
@@ -64,7 +70,7 @@ export class PrintFiles {
       files.map((f) => {
         const s = ordered.find((o) => o.slot.id === f.slotId)!;
         return {
-          label: `${s.summary.label}: ${s.summary.text ?? s.summary.logo ?? ''} (${s.summary.colour})`,
+          label: `${s.summary.label}: ${s.summary.text ?? s.summary.logo ?? ''} (${named.get(f.colour) ?? s.summary.colour})`,
           hex: hex.get(f.colour) ?? null,
           stl: f.bytes,
         };

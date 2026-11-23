@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Region } from '@forgea/text3d';
+import type { LogoInk, LogoShape, Region } from '@forgea/text3d';
 import type { CustomerLogoView, LogoDetail, LogoView } from '@forgea/types';
 import type { UpdateLogoDto } from '@forgea/validation';
 import type { Logo } from '../generated/prisma/client.js';
@@ -43,6 +43,7 @@ export class LogosService {
       await this.logos.create({
         name: clean,
         outline: read.outline as unknown as Prisma.InputJsonValue,
+        inks: inksJson(read.inks),
         points: read.points,
         sortOrder: await this.logos.count(),
       }),
@@ -57,9 +58,15 @@ export class LogosService {
     const read = await this.read(file, CUSTOMER_LOGO_MAX_BYTES, '512 KB');
     const logo = await this.logos.createCustomer({
       outline: read.outline as unknown as Prisma.InputJsonValue,
+      inks: inksJson(read.inks),
       points: read.points,
     });
-    return { id: logo.id, outline: read.outline, points: read.points };
+    return {
+      id: logo.id,
+      outline: read.outline,
+      inks: read.inks,
+      points: read.points,
+    };
   }
 
   /** An SVG read in the worker into print outlines (never on the main thread). */
@@ -67,7 +74,7 @@ export class LogosService {
     file: Buffer | undefined,
     maxBytes: number,
     maxLabel: string,
-  ): Promise<{ outline: Region[]; points: number }> {
+  ): Promise<{ outline: Region[]; inks: LogoInk[] | null; points: number }> {
     if (!file || file.length === 0)
       throw new BadRequestException('Choose an SVG file');
     if (file.length > maxBytes)
@@ -100,20 +107,20 @@ export class LogosService {
   async one(id: string): Promise<LogoDetail> {
     const [logo] = await this.logos.byIds([id]);
     if (!logo) throw new NotFoundException('Logo not found');
-    return { ...toView(logo), outline: logo.outline as unknown as Region[] };
+    return { ...toView(logo), ...shapeOf(logo) };
   }
 
-  /** The outlines of these logos, the studio's or customers' own, by id, for building pieces. */
-  async outlines(ids: readonly string[]): Promise<[string, Region[]][]> {
+  /**
+   * The outlines (and colours) of these logos, the studio's or customers' own, by id, for
+   * building pieces.
+   */
+  async outlines(ids: readonly string[]): Promise<[string, StoredLogo][]> {
     const unique = [...new Set(ids)];
     const [studio, customers] = await Promise.all([
       this.logos.byIds(unique),
       this.logos.customerByIds(unique),
     ]);
-    return [...studio, ...customers].map((l) => [
-      l.id,
-      l.outline as unknown as Region[],
-    ]);
+    return [...studio, ...customers].map((l) => [l.id, shapeOf(l)]);
   }
 
   /** Which of these ids are customers' own logos. */
@@ -130,6 +137,19 @@ export class LogosService {
     );
   }
 }
+
+/** A stored logo's outline and colours. */
+export type StoredLogo = Required<LogoShape>;
+
+function shapeOf(l: { outline: unknown; inks: unknown }): StoredLogo {
+  return {
+    outline: l.outline as Region[],
+    inks: (l.inks as LogoInk[] | null) ?? null,
+  };
+}
+
+const inksJson = (inks: LogoInk[] | null) =>
+  inks ? (inks as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
 
 function toView(l: Logo): LogoView {
   return {

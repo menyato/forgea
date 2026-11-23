@@ -52,22 +52,30 @@ describe('printProject', () => {
     printProject('FG-TEST', [
       { label: 'Copper silk', hex: '#b87333', stl: tetrahedron(0) },
       { label: 'Black & white', hex: null, stl: tetrahedron(20) },
+      { label: 'Copper silk again', hex: '#B87333', stl: tetrahedron(40) },
     ]),
   );
   const model = files.get('3D/3dmodel.model')!;
+  const settings = files.get('Metadata/model_settings.config')!;
+  const project = JSON.parse(
+    files.get('Metadata/project_settings.config')!,
+  ) as Record<string, string[]>;
 
-  it('is a 3MF package', () => {
+  it('is a Bambu Studio project', () => {
     expect([...files.keys()]).toEqual([
       '[Content_Types].xml',
       '_rels/.rels',
       '3D/3dmodel.model',
+      'Metadata/model_settings.config',
+      'Metadata/project_settings.config',
     ]);
     expect(files.get('_rels/.rels')).toContain('Target="/3D/3dmodel.model"');
+    expect(model).toContain('<metadata name="Application">BambuStudio-');
   });
 
   it('keeps each corner once, so every part is a closed solid', () => {
     const parts = model.match(/<mesh>.*?<\/mesh>/g)!;
-    expect(parts).toHaveLength(2);
+    expect(parts).toHaveLength(3);
     for (const part of parts) {
       expect(part.match(/<vertex /g)).toHaveLength(4);
       expect(part.match(/<triangle /g)).toHaveLength(4);
@@ -76,15 +84,43 @@ describe('printProject', () => {
     expect(parts[1]).toContain('x="20"');
   });
 
-  it('is one object with a part per colour, named and tinted after its filament', () => {
+  it('is one object, set down in the middle of the bed', () => {
+    expect(model).toMatch(
+      /<object id="5" type="model" name="FG-TEST"><components><component objectid="2"\/><component objectid="3"\/><component objectid="4"\/><\/components>/,
+    );
+    // 0 to 50 mm across, 0 to 10 deep and high: centred on 128, 128, on the bed.
+    expect(model).toContain(
+      '<item objectid="5" transform="1 0 0 0 1 0 0 0 1 103 123 0" printable="1"/>',
+    );
+  });
+
+  it('gives each colour a filament of that colour, and each part its filament', () => {
+    // Two copper parts share one filament; a colour without a hex has its own.
+    expect(project.filament_colour).toEqual(['#B87333', '#808080']);
+    expect(settings).toMatch(
+      /name" value="Copper silk"\/>\s*<metadata key="matrix"[^>]*\/>\s*<metadata key="extruder" value="1"/,
+    );
+    expect(settings).toMatch(
+      /name" value="Black &amp; white"\/>\s*<metadata key="matrix"[^>]*\/>\s*<metadata key="extruder" value="2"/,
+    );
+    expect(settings).toMatch(
+      /name" value="Copper silk again"\/>\s*<metadata key="matrix"[^>]*\/>\s*<metadata key="extruder" value="1"/,
+    );
     expect(model).toContain(
       '<base name="Copper silk" displaycolor="#B87333FF"/>',
     );
-    expect(model).toContain('name="Black &amp; white"');
-    expect(model).toContain('displaycolor="#808080FF"');
-    expect(model).toMatch(
-      /<object id="4" type="model" name="FG-TEST"><components><component objectid="2"\/><component objectid="3"\/><\/components>/,
-    );
-    expect(model).toContain('<build><item objectid="4"/></build>');
+  });
+
+  it('has every per-filament setting once per filament', () => {
+    expect(project.filament_settings_id).toHaveLength(2);
+    expect(project.filament_type).toHaveLength(2);
+    // Per nozzle variant (six on the X2D), per filament.
+    expect(project.nozzle_temperature).toHaveLength(12);
+    // A purge table per nozzle: 2 x 2 each, nothing to purge into the same filament.
+    expect(project.flush_volumes_matrix).toHaveLength(8);
+    expect(
+      project.flush_volumes_matrix!.slice(0, 4).filter((v) => v === '0'),
+    ).toHaveLength(2);
+    expect(project.different_settings_to_system).toHaveLength(4);
   });
 });

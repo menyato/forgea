@@ -42,6 +42,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
     { name: 'phone', use: { ...devices['Pixel 7'], channel: 'chrome' } },
+    // Many phones are narrower than a Pixel 7 (412 px): the layout audit also runs at 360 px,
+    // where a page that only just fits at 412 spills over.
+    {
+      name: 'small-phone',
+      use: { ...devices['Galaxy S8'], channel: 'chrome' },
+      testMatch: /layout-audit\.spec\.ts/,
+    },
   ],
   webServer: [
     {

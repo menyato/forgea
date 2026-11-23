@@ -11,6 +11,12 @@ body {
   color-scheme: light dark;
 }
 
+/* A file chooser has a fixed width of its own: on a narrow phone it would push its box wider. */
+input[type='file'] {
+  max-width: 100%;
+  min-width: 0;
+}
+
 /* A pinned theme also switches form controls and scrollbars. */
 :root[data-theme='light'] {
   color-scheme: light;

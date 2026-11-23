@@ -82,7 +82,7 @@ export default function Catalog() {
           <fetcher.Form
             method="post"
             encType="multipart/form-data"
-            className="grid gap-4"
+            className="grid grid-cols-1 gap-4"
           >
             <input
               type="file"

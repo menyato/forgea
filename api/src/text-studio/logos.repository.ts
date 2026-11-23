@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
-import type { CustomerLogo, Logo, Prisma } from '../generated/prisma/client.js';
+import type { CustomerLogo, Logo } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 
 const ORDER = [{ sortOrder: 'asc' as const }, { name: 'asc' as const }];
 
@@ -28,6 +29,7 @@ export class LogosRepository {
 
   createCustomer(data: {
     outline: Prisma.InputJsonValue;
+    inks: Prisma.InputJsonValue | typeof Prisma.DbNull;
     points: number;
   }): Promise<CustomerLogo> {
     return this.prisma.customerLogo.create({ data });
@@ -44,6 +46,7 @@ export class LogosRepository {
   create(data: {
     name: string;
     outline: Prisma.InputJsonValue;
+    inks: Prisma.InputJsonValue | typeof Prisma.DbNull;
     points: number;
     sortOrder: number;
   }): Promise<Logo> {

@@ -5,6 +5,8 @@
  * worker into print outlines). No 3D code here (`@forgea/text3d/trace`).
  */
 
+import { MAX_LOGO_INKS } from './design.js';
+
 type Pt = [number, number];
 
 /** On a transparent picture, a pixel at least this opaque (of 255) is part of the logo. */
@@ -70,17 +72,195 @@ export function traceSvg(
   mask: Uint8Array,
   width: number,
   height: number,
-  { tolerance = 0.8, minArea = Math.max(6, width * height * 0.0002) } = {},
+  options: TraceOptions = {},
+): string | null {
+  const d = pathData(mask, width, height, options);
+  return d === null
+    ? null
+    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><path fill-rule="evenodd" d="${d}"/></svg>`;
+}
+
+interface TraceOptions {
+  tolerance?: number;
+  minArea?: number;
+}
+
+/** The mask's outlines as SVG path data, or null when nothing is left to draw. */
+function pathData(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  {
+    tolerance = 0.8,
+    minArea = Math.max(6, width * height * 0.0002),
+  }: TraceOptions = {},
 ): string | null {
   const loops = traceLoops(mask, width, height)
     .filter((l) => Math.abs(area(l)) >= minArea)
     .map((l) => simplify(l, tolerance))
     .filter((l) => l.length >= 3);
   if (loops.length === 0) return null;
-  const d = loops
+  return loops
     .map((l) => `M${l.map(([x, y]) => `${x} ${y}`).join('L')}Z`)
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><path fill-rule="evenodd" d="${d}"/></svg>`;
+}
+
+/**
+ * A logo picture as an SVG drawing that keeps its colours: its whole outline (as `traceSvg`),
+ * then, when it has more than one colour, each colour's areas in a group marked `data-inks`
+ * (largest first, in the colour found), which the API reads as the logo's colours. Null when
+ * there is no logo in it.
+ */
+export function traceLogoSvg(
+  rgba: ArrayLike<number>,
+  width: number,
+  height: number,
+): string | null {
+  const mask = inkMask(rgba, width, height);
+  const outline = pathData(mask, width, height);
+  if (outline === null) return null;
+  const found = inkColours(rgba, mask, width, height);
+  const layers = (found?.palette ?? [])
+    .map((hex, i) => {
+      const own = new Uint8Array(mask.length);
+      for (let p = 0; p < mask.length; p++)
+        own[p] = found!.labels[p] === i ? 1 : 0;
+      const d = pathData(own, width, height);
+      return d === null
+        ? ''
+        : `<path fill="${hex}" fill-rule="evenodd" d="${d}"/>`;
+    })
+    .filter(Boolean);
+  const inks =
+    layers.length >= 2 ? `<g data-inks="1">${layers.join('')}</g>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><path fill-rule="evenodd" d="${outline}"/>${inks}</svg>`;
+}
+
+/** Colours closer than this (RGB distance) are one colour of the logo. */
+const SAME_COLOUR = 48;
+/** A colour covering less than this share of the logo joins its nearest neighbour. */
+const MIN_SHARE = 0.03;
+
+type Rgb = readonly [number, number, number];
+
+const distance = (a: Rgb, b: Rgb) =>
+  Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+function nearest(p: Rgb, centres: readonly Rgb[]): number {
+  let best = 0;
+  let bestD = Infinity;
+  centres.forEach((c, i) => {
+    const d = distance(p, c);
+    if (d < bestD) [best, bestD] = [i, d];
+  });
+  return best;
+}
+
+const coarse = ([r, g, b]: Rgb) => ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+
+/**
+ * The logo's main colours (at most MAX_LOGO_INKS, largest first, as #rrggbb) and which one
+ * each logo pixel is (-1 off the logo), or null for a logo in one colour. Colours are found
+ * from the logo's flat areas (pixels at an edge, blended by anti-aliasing, don't make colours
+ * of their own), then every logo pixel takes the closest, and a pass of majority smoothing
+ * removes the specks along the edges.
+ */
+function inkColours(
+  rgba: ArrayLike<number>,
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): { palette: string[]; labels: Int8Array } | null {
+  const rgb = (p: number): Rgb => [
+    rgba[p * 4]!,
+    rgba[p * 4 + 1]!,
+    rgba[p * 4 + 2]!,
+  ];
+  const inside = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] === 1;
+  // The flat areas: logo pixels whose four neighbours are logo pixels of nearly their colour.
+  const samples: Rgb[] = [];
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      if (!inside(x, y)) continue;
+      const c = rgb(y * width + x);
+      const flat = (
+        [
+          [x - 1, y],
+          [x + 1, y],
+          [x, y - 1],
+          [x, y + 1],
+        ] as const
+      ).every(
+        ([nx, ny]) => inside(nx, ny) && distance(c, rgb(ny * width + nx)) < 24,
+      );
+      if (flat) samples.push(c);
+    }
+  if (samples.length < 16) return null;
+  // Evenly thinned: enough to find a handful of colours quickly.
+  const step = Math.max(1, Math.floor(samples.length / 6000));
+  const points = samples.filter((_, i) => i % step === 0);
+
+  // Start from the commonest colour, then add the colour farthest from those found.
+  const bins = new Map<number, number>();
+  for (const p of points) bins.set(coarse(p), (bins.get(coarse(p)) ?? 0) + 1);
+  const top = [...bins].sort((a, b) => b[1] - a[1])[0]![0];
+  let centres: Rgb[] = [points.find((p) => coarse(p) === top)!];
+  while (centres.length < MAX_LOGO_INKS + 2) {
+    let far: Rgb | null = null;
+    let farD = SAME_COLOUR * 1.5;
+    for (const p of points) {
+      const d = Math.min(...centres.map((c) => distance(p, c)));
+      if (d > farD) [far, farD] = [p, d];
+    }
+    if (!far) break;
+    centres.push(far);
+  }
+  // Settle (k-means), dropping colours too small to print and merging near ones.
+  for (let round = 0; round < 10; round++) {
+    const sums = centres.map(() => ({ r: 0, g: 0, b: 0, n: 0 }));
+    for (const p of points) {
+      const s = sums[nearest(p, centres)]!;
+      s.r += p[0];
+      s.g += p[1];
+      s.b += p[2];
+      s.n++;
+    }
+    const settled = sums
+      .filter((s) => s.n >= points.length * MIN_SHARE)
+      .sort((a, b) => b.n - a.n)
+      .map((s): Rgb => [s.r / s.n, s.g / s.n, s.b / s.n]);
+    centres = settled.filter(
+      (c, i) => !settled.slice(0, i).some((o) => distance(o, c) < SAME_COLOUR),
+    );
+  }
+  centres = centres.slice(0, MAX_LOGO_INKS);
+  if (centres.length < 2) return null;
+
+  const labels = new Int8Array(mask.length).fill(-1);
+  for (let p = 0; p < mask.length; p++)
+    if (mask[p]) labels[p] = nearest(rgb(p), centres);
+  // Majority of the 3 x 3 around each logo pixel: lone edge pixels join their neighbours.
+  const smoothed = new Int8Array(labels);
+  const counts = new Array<number>(centres.length);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const p = y * width + x;
+      if (labels[p]! < 0) continue;
+      counts.fill(0);
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!inside(x + dx, y + dy)) continue;
+          counts[labels[(y + dy) * width + x + dx]!]!++;
+        }
+      let best = labels[p]!;
+      for (let i = 0; i < counts.length; i++)
+        if (counts[i]! > counts[best]!) best = i;
+      if (counts[best]! >= 5) smoothed[p] = best;
+    }
+  const hex = (c: Rgb) =>
+    `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+  return { palette: centres.map(hex), labels: smoothed };
 }
 
 /**

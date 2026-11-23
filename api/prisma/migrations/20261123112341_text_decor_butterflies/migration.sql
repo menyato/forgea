@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "TextDecor" ADD VALUE 'BUTTERFLIES';

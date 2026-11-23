@@ -2,7 +2,10 @@ import type { BufferGeometry } from 'three';
 import {
   coupleNames,
   lettersOf,
+  type LogoShape,
   PER_LETTER_STYLES,
+  SUBTITLE_STYLES,
+  subtitleProblem,
   type TextDesign,
   type TextSettings,
   textProblem,
@@ -10,7 +13,6 @@ import {
 import { partGeometry, volumeMm3 } from './geometry.js';
 import { layoutDesign } from './layout.js';
 import type { FontSet } from './shaper.js';
-import type { Region } from './outline.js';
 
 export * from './design.js';
 export { stlBytes, stlFromPositions } from './geometry.js';
@@ -20,7 +22,7 @@ export {
   slotsProblem,
   type BuiltSlot,
 } from './slots.js';
-export { logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
+export { logoFromSvg, logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
 export type { Region } from './outline.js';
 export { FontSet, fontScripts, type FontSource } from './shaper.js';
 
@@ -40,11 +42,15 @@ export function designProblem(
   design: TextDesign,
   settings: TextSettings,
 ): string | null {
-  const problem = textProblem(
-    design.text,
-    settings,
-    settings.style === 'KEYCHAIN' && Boolean(design.logoId),
-  );
+  const problem =
+    textProblem(
+      design.text,
+      settings,
+      settings.style === 'KEYCHAIN' && Boolean(design.logoId),
+    ) ??
+    (SUBTITLE_STYLES.includes(settings.style)
+      ? subtitleProblem(design.subtitle)
+      : null);
   if (problem) return problem;
   const missing = new Set<string>();
   if (PER_LETTER_STYLES.includes(settings.style)) {
@@ -59,6 +65,9 @@ export function designProblem(
         ? coupleNames(design.text).join(' ')
         : design.text;
     for (const m of fonts.missing(design.fontId, text)) missing.add(m);
+    if (SUBTITLE_STYLES.includes(settings.style) && design.subtitle?.trim())
+      for (const m of fonts.missing(design.fontId, design.subtitle.trim()))
+        missing.add(m);
     if (settings.style === 'INITIAL_NAME') {
       const initial = lettersOf(design.text)[0] ?? '';
       const font = design.accentFontId ?? design.fontId;
@@ -75,8 +84,8 @@ export function buildDesign(
   fonts: FontSet,
   design: TextDesign,
   settings: TextSettings,
-  /** The logos a keychain may carry (as `logoRegionsFromSvg` gives them, 1 across). */
-  logos: ReadonlyMap<string, readonly Region[]> = new Map(),
+  /** The logos a keychain may carry (as `logoFromSvg` gives them, 1 across). */
+  logos: ReadonlyMap<string, LogoShape> = new Map(),
 ): BuiltDesign {
   const layout = layoutDesign(fonts, design, settings, logos);
   return {

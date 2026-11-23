@@ -23,6 +23,10 @@ const fontFile = (file: string) =>
 const RING =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><path fill-rule="evenodd" d="M5 5L35 5L35 35L5 35ZM15 15L15 25L25 25L25 15Z"/></svg>';
 
+/** A logo in two colours: a light badge, a dark square drawn on it. */
+const TWO_COLOURS =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect x="0" y="0" width="40" height="40" fill="#f0f0f0"/><rect x="12" y="12" width="16" height="16" fill="#101010"/></svg>';
+
 /**
  * Customers bring their own logo: read like the studio's into an outline (anyone may, before
  * signing up), then raised alone or beside their name on a keychain that lets them, or put in
@@ -259,6 +263,71 @@ describe('Customers’ own logos (e2e)', () => {
       { slotId: 'their-logo', logoId: randomUUID() },
     ]).expect(400);
     expect(refused.body.message).toMatch(/add your logo again/);
+  });
+
+  it('a logo in colours keeps them: a filament for each, on a keychain and in a logo place', async () => {
+    // A white badge with a black mark on it, traced from their picture into two colours.
+    const coloured = (
+      await http()
+        .post('/logos/yours')
+        .set(CSRF)
+        .attach('file', Buffer.from(TWO_COLOURS), 'logo.svg')
+        .expect(201)
+    ).body as CustomerLogoView;
+    expect(coloured.inks?.map((i) => i.hex)).toEqual(['#f0f0f0', '#101010']);
+    // The one-colour ring has none.
+    expect(theirs.inks).toBeNull();
+
+    const design = {
+      text: 'Sara',
+      fontId: font.id,
+      textColour: white,
+      baseColour: black,
+      logoId: coloured.id,
+    };
+    const price = (d: object) =>
+      http()
+        .post(`/products/logo-tag-${tag}/price`)
+        .set(CSRF)
+        .send({ options: [], design: d });
+    await price({ ...design, logoColours: [white, black] }).expect(200);
+    // One colour for each of the logo's, each one offered.
+    const short = await price({ ...design, logoColours: [white] }).expect(400);
+    expect(short.body.message).toMatch(/a colour for each/);
+    await price({ ...design, logoColours: [white, randomUUID()] }).expect(400);
+    // On a one-colour logo, colours of its own are refused.
+    await price({
+      ...design,
+      logoId: theirs.id,
+      logoColours: [white, black],
+    }).expect(400);
+
+    // In a logo place: printed in the colours chosen, both counted.
+    const placed = await http()
+      .post(`/products/logo-cube-${tag}/price`)
+      .set(CSRF)
+      .send({
+        options: [],
+        slots: [
+          {
+            slotId: 'their-logo',
+            logoId: coloured.id,
+            logoColours: [black, white],
+          },
+        ],
+      })
+      .expect(200);
+    expect(placed.body.unitPrice).toBeDefined();
+    await http()
+      .post(`/products/logo-cube-${tag}/price`)
+      .set(CSRF)
+      .send({
+        options: [],
+        slots: [
+          { slotId: 'their-logo', logoId: coloured.id, logoColours: [black] },
+        ],
+      })
+      .expect(400);
   });
 
   it('the Design page lists pieces from their logo, and every piece they make theirs', async () => {

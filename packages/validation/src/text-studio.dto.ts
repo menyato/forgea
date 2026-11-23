@@ -19,7 +19,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MONEY_PATTERN, STORAGE_KEY_PATTERN } from './constants.js';
-import { KEYCHAIN_SHAPES, type KeychainShape } from '@forgea/text3d/design';
+import {
+  KEYCHAIN_SHAPES,
+  type KeychainShape,
+  MAX_LOGO_INKS,
+  SUBTITLE_MAX_CHARS,
+} from '@forgea/text3d/design';
 import { Trim } from './email.js';
 
 /** The most characters any personalised text may have (a product may allow fewer). */
@@ -71,6 +76,23 @@ export class TextDesignDto {
   @IsUUID()
   accentFontId?: string;
 
+  /** Big initial: the decorations chosen (none: the product's own). */
+  @IsOptional()
+  @IsIn(Object.values(TextDecor), { message: 'Choose the decorations' })
+  decor?: TextDecor;
+
+  /** Big initial: the decorations' own colour. */
+  @IsOptional()
+  @IsUUID()
+  decorColour?: string;
+
+  /** Big initial and couple: a smaller line under the name (weight, birth date, a date). */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(SUBTITLE_MAX_CHARS * 2)
+  subtitle?: string;
+
   /** The size: a letter height the product offers (mm). */
   @IsOptional()
   @Matches(MM_PATTERN, mm)
@@ -92,6 +114,13 @@ export class TextDesignDto {
   @IsOptional()
   @IsUUID('all', { message: 'Choose one of the logos offered' })
   logoId?: string;
+
+  /** The logo in its own colours: an offered colour for each of the logo's, in its order. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_LOGO_INKS)
+  @IsUUID('all', { each: true, message: 'Choose one of the colours offered' })
+  logoColours?: string[];
 }
 
 /** One colour's solid, as the browser measured it. */
@@ -369,6 +398,13 @@ export class SlotChoiceDto {
   @IsOptional()
   @IsUUID()
   logoId?: string;
+
+  /** A logo in its own colours: an offered colour for each of the logo's. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_LOGO_INKS)
+  @IsUUID('all', { each: true, message: 'Choose one of the colours offered' })
+  logoColours?: string[];
 }
 
 /** A logo's name and order, or switched off (a logo is never deleted once used). */

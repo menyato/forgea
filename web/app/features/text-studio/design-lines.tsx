@@ -17,10 +17,25 @@ export function DesignLines({ design: d }: { design: DesignSummary }) {
           ? `, ${d.style === 'COUPLE' ? 'heart' : 'initial'} ${d.accentColour}`
           : ''}
         {d.accentFont ? ` (initial in ${d.accentFont})` : ''}
+        {d.decor ? `, ${d.decor.toLowerCase()}` : ''}
+        {d.decorColour ? ` in ${d.decorColour}` : ''}
         {d.baseColour ? ` on ${d.baseColour}` : ''}
         {d.shape ? `, ${d.shape.toLowerCase()}` : ''}
-        {d.logo ? `, with the ${d.logo} logo` : ''}
+        {d.logo
+          ? d.logo === 'Your logo'
+            ? ', with your logo'
+            : `, with the ${d.logo} logo`
+          : ''}
+        {/* Orders made before logos printed in colour have no logoColours. */}
+        {d.logo && d.logoColours?.length
+          ? ` in ${d.logoColours.join(', ')}`
+          : ''}
       </span>
+      {d.subtitle && (
+        <span dir="auto" className="block">
+          Under the name: “{d.subtitle}”
+        </span>
+      )}
       {d.letters && d.letters.length > 0 && (
         <span className="block text-text-muted">
           {d.letters

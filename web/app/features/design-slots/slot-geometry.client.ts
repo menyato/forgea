@@ -35,7 +35,7 @@ export async function buildOfferSlots(
       fonts,
       offer.slots,
       choices,
-      new Map(offer.logos.map((l) => [l.id, l.outline])),
+      new Map(offer.logos.map((l) => [l.id, l])),
     ),
   };
 }

@@ -172,14 +172,23 @@ test('nothing on the dashboard pages spills out of its box', async ({
 }) => {
   test.setTimeout(600_000);
   await signInAsAdmin(context, baseURL!);
-  // An existing product shows the option and size set-up filled in.
-  const paths = [...DASHBOARD];
-  await page.goto('/admin/products?q=Phone%20stand');
-  const edit = await page
-    .getByRole('link', { name: 'Phone stand', exact: true })
-    .first()
-    .getAttribute('href');
-  if (edit) paths.push(edit as (typeof DASHBOARD)[number]);
+  // Existing products show their set-up filled in: options and sizes, and the personalised
+  // ones their text, colours, decorations, shapes and logos.
+  const paths: string[] = [...DASHBOARD];
+  for (const name of [
+    'Phone stand',
+    'Name keychain',
+    "Baby's initial and name",
+    'Two names and a heart',
+  ]) {
+    await page.goto(`/admin/products?q=${encodeURIComponent(name)}`);
+    const edit = await page
+      .getByRole('link', { name, exact: true })
+      .first()
+      .getAttribute('href', { timeout: 5_000 })
+      .catch(() => null);
+    if (edit) paths.push(edit);
+  }
   // And a record's form from every list.
   const records = await recordPages(page);
   expect(await overflows(page, [...paths, ...records])).toEqual([]);

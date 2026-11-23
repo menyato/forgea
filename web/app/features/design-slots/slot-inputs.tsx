@@ -1,5 +1,5 @@
 import type { SlotChoice } from '@forgea/text3d/design';
-import { slotState } from '@forgea/text3d/design';
+import { nearestColour, slotState } from '@forgea/text3d/design';
 import type { CustomerLogoView, ProductSlotsOffer } from '@forgea/types';
 import { OwnLogoField } from '~/features/own-logo/own-logo-field';
 import {
@@ -100,12 +100,33 @@ export function SlotInputs({
                   }
                   onLogo={(logo) => {
                     onLogo(logo);
-                    set(s.id, { logoId: logo.id, on: true });
+                    // A logo in colours starts in them, each the closest filament.
+                    const logoColours = logo.inks?.map(
+                      (ink) =>
+                        nearestColour(ink.hex, offer.colours)?.id ??
+                        state.colour,
+                    );
+                    set(s.id, {
+                      logoId: logo.id,
+                      on: true,
+                      logoColours,
+                    });
                   }}
+                />
+                <LogoColours
+                  field={field}
+                  label={s.label}
+                  inks={
+                    offer.logos.find((l) => l.id === state.logoId)?.inks ?? null
+                  }
+                  colours={offer.colours}
+                  chosen={state.logoColours}
+                  fallback={state.colour}
+                  onChange={(logoColours) => set(s.id, { logoColours })}
                 />
               </>
             )}
-            {offer.colours.length > 1 && (
+            {offer.colours.length > 1 && !state.logoColours?.length && (
               <div
                 role="radiogroup"
                 aria-label={`${s.label}: colour`}
@@ -140,6 +161,99 @@ export function SlotInputs({
         );
       })}
     </section>
+  );
+}
+
+/**
+ * A logo in more than one colour: print it in its own colours (a filament for each, the
+ * closest to start) or in one.
+ */
+function LogoColours({
+  field,
+  label,
+  inks,
+  colours,
+  chosen,
+  fallback,
+  onChange,
+}: {
+  field: string;
+  label: string;
+  inks: { hex: string }[] | null;
+  colours: ProductSlotsOffer['colours'];
+  chosen: string[] | undefined;
+  fallback: string;
+  onChange: (logoColours: string[] | undefined) => void;
+}) {
+  if (!inks || inks.length < 2 || colours.length < 2) return null;
+  const on = chosen?.length === inks.length;
+  const current = inks.map(
+    (ink, i) =>
+      (on ? chosen[i] : undefined) ??
+      nearestColour(ink.hex, colours)?.id ??
+      fallback,
+  );
+  return (
+    <div className="grid gap-2">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          id={`${field}-in-colour`}
+          name={`${field}-in-colour`}
+          type="checkbox"
+          autoComplete="off"
+          checked={on}
+          onChange={(e) =>
+            onChange(e.currentTarget.checked ? current : undefined)
+          }
+        />
+        Print the logo in its own colours
+      </label>
+      {on &&
+        inks.map((ink, i) => (
+          <div
+            key={i}
+            role="radiogroup"
+            aria-label={`${label}: logo colour ${i + 1}`}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <span
+              title="In your logo"
+              aria-hidden="true"
+              className="size-4 rounded-full border border-border"
+              style={{ backgroundColor: ink.hex }}
+            />
+            <span className="text-sm text-text-muted">→</span>
+            {colours.map((c) => (
+              <label
+                key={c.id}
+                title={c.label}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-pill border px-2.5 py-1 text-sm ${
+                  current[i] === c.id ? 'border-accent' : 'border-border'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${field}-logo-colour-${i}`}
+                  value={c.id}
+                  checked={current[i] === c.id}
+                  onChange={() => {
+                    const next = [...current];
+                    next[i] = c.id;
+                    onChange(next);
+                  }}
+                  className="sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className="size-4 rounded-full border border-border"
+                  style={{ backgroundColor: c.swatchHex ?? undefined }}
+                />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        ))}
+    </div>
   );
 }
 

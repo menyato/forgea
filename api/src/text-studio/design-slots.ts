@@ -178,7 +178,7 @@ export class DesignSlots {
       slots,
       logos: (
         await this.logos.outlines(slots.flatMap((s) => s.logoId ?? []))
-      ).map(([id, outline]) => ({ id, outline })),
+      ).map(([id, shape]) => ({ id, ...shape })),
       fonts: hasText
         ? (await this.fonts.active()).map((f) => ({
             id: f.id,
@@ -256,30 +256,35 @@ export class DesignSlots {
       grams: print.grams,
       printHours: print.printHours,
       colours: [...byColour].map(([id, g]) => ({ id, grams: g.toFixed(1) })),
-      summary: measured.slots.map((m): SlotSummary => {
-        const slot = slots.find((s) => s.id === m.slotId)!;
-        const choice = choices[slot.id] ?? {};
-        const text = (choice.text ?? slot.defaultText ?? '').trim();
-        const fontId = choice.fontId ?? slot.defaultFontId;
-        return {
-          slotId: slot.id,
-          label: slot.label,
-          kind: slot.kind,
-          text: slot.kind === 'TEXT' ? text : null,
-          font:
-            slot.kind === 'TEXT'
-              ? (fonts.get(fontId ?? '')?.name ?? null)
-              : null,
-          logo:
-            slot.kind === 'LOGO'
-              ? choice.logoId
-                ? 'Your logo'
-                : (logoNames.get(slot.logoId ?? '')?.name ?? null)
-              : null,
-          colour: colourNames.get(m.colour) ?? '',
-          grams: share(m.volumeMm3).toFixed(1),
-        };
-      }),
+      summary: [...new Set(measured.slots.map((m) => m.slotId))].map(
+        (slotId): SlotSummary => {
+          const parts = measured.slots.filter((m) => m.slotId === slotId);
+          const slot = slots.find((s) => s.id === slotId)!;
+          const choice = choices[slot.id] ?? {};
+          const text = (choice.text ?? slot.defaultText ?? '').trim();
+          const fontId = choice.fontId ?? slot.defaultFontId;
+          return {
+            slotId: slot.id,
+            label: slot.label,
+            kind: slot.kind,
+            text: slot.kind === 'TEXT' ? text : null,
+            font:
+              slot.kind === 'TEXT'
+                ? (fonts.get(fontId ?? '')?.name ?? null)
+                : null,
+            logo:
+              slot.kind === 'LOGO'
+                ? choice.logoId
+                  ? 'Your logo'
+                  : (logoNames.get(slot.logoId ?? '')?.name ?? null)
+                : null,
+            colour: parts
+              .map((m) => colourNames.get(m.colour) ?? '')
+              .join(', '),
+            grams: share(parts.reduce((n, m) => n + m.volumeMm3, 0)).toFixed(1),
+          };
+        },
+      ),
     };
   }
 
@@ -335,6 +340,23 @@ export class DesignSlots {
         );
       if (c.logoId !== undefined && !theirs.has(c.logoId))
         throw new BadRequestException(`${slot.label}: add your logo again`);
+      // A colour for each of the logo's own colours, each one offered.
+      const logoColours =
+        slot.kind === 'LOGO' && c.logoColours?.length
+          ? c.logoColours
+          : undefined;
+      if (logoColours) {
+        const logoId = c.logoId ?? slot.logoId;
+        const [shape] = logoId ? await this.logos.outlines([logoId]) : [];
+        if (shape?.[1].inks?.length !== logoColours.length)
+          throw new BadRequestException(
+            `${slot.label}: choose a colour for each of the logo's colours`,
+          );
+        if (logoColours.some((id) => !colours.has(id)))
+          throw new BadRequestException(
+            `${slot.label}: choose one of the colours offered`,
+          );
+      }
       out[slot.id] = {
         ...(c.text !== undefined && slot.kind === 'TEXT'
           ? { text: c.text.trim() }
@@ -347,6 +369,7 @@ export class DesignSlots {
           ? { logoId: c.logoId }
           : {}),
         ...(c.colour !== undefined ? { colour: c.colour } : {}),
+        ...(logoColours ? { logoColours } : {}),
       };
     }
     return out;

@@ -92,7 +92,7 @@ test('a customer drops their own logo picture on a keychain: traced, shown in 3D
     page
       .getByRole('article')
       .filter({ hasText: 'Name keychain' })
-      .getByText(/Your logo/)
+      .getByText(/with your logo/i)
       .first(),
   ).toBeVisible();
 });

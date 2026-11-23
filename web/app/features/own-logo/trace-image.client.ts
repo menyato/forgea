@@ -1,11 +1,12 @@
-import { inkMask, traceSvg } from '@forgea/text3d/trace';
+import { inkMask, traceLogoSvg } from '@forgea/text3d/trace';
 
 /** Pixels across the longer side the picture is traced at: detail enough for a print. */
 const TRACE_MAX_SIDE = 600;
 
 /**
  * A logo picture (PNG, JPEG, WebP) traced in the browser into an SVG drawing: drawn small
- * enough to trace quickly, its logo pixels told from the background, their outlines followed.
+ * enough to trace quickly, its logo pixels told from the background, their outlines followed,
+ * and its main colours kept as areas of their own.
  * Null when there is no logo to find (a blank or a photo-like picture).
  */
 export async function traceImage(file: Blob): Promise<string | null> {
@@ -28,7 +29,8 @@ export async function traceImage(file: Blob): Promise<string | null> {
     // A logo covers some of the picture, not (nearly) all of it.
     const ink = mask.reduce((n, v) => n + v, 0);
     if (ink < w * h * 0.002 || ink > w * h * 0.95) return null;
-    return traceSvg(mask, w, h);
+    // Its outline, and each of its colours (the customer picks a filament for each).
+    return traceLogoSvg(data, w, h);
   } finally {
     bitmap.close();
   }

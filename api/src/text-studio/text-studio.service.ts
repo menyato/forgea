@@ -13,8 +13,11 @@ import {
   type KeychainShape,
   lettersOf,
   PER_LETTER_STYLES,
-  type Region,
   STANDING_STYLES,
+  SUBTITLE_STYLES,
+  subtitleProblem,
+  TEXT_DECOR_LABELS,
+  TEXT_DECORS,
   type TextSettings,
 } from '@forgea/text3d/design';
 import type {
@@ -36,7 +39,7 @@ import { UploadsService } from '../uploads/uploads.service.js';
 import { FontsRepository } from './fonts.repository.js';
 import { sampleGlb } from './sample-glb.js';
 import { type Measured, TextShaper } from './text-shaper.js';
-import { LogosService } from './logos.service.js';
+import { LogosService, type StoredLogo } from './logos.service.js';
 
 /**
  * A personalised piece as measured: what it takes to print (server-only: grams and hours are
@@ -154,8 +157,18 @@ export class TextStudio {
     const fonts = new Map((await this.fonts.active()).map((f) => [f.id, f]));
     const perLetter = PER_LETTER_STYLES.includes(settings.style);
     const accented = ACCENT_STYLES.includes(settings.style);
-    const initialFont =
-      settings.style === 'INITIAL_NAME' ? design.accentFontId : undefined;
+    const initial = settings.style === 'INITIAL_NAME';
+    const initialFont = initial ? design.accentFontId : undefined;
+    // A big initial's own decorations and their colour; a line under the name where it fits.
+    const decor = initial ? design.decor : undefined;
+    if (decor && !TEXT_DECORS.includes(decor))
+      throw new BadRequestException('Choose the decorations');
+    const decorColour = initial ? design.decorColour : undefined;
+    const subtitle = SUBTITLE_STYLES.includes(settings.style)
+      ? design.subtitle?.trim() || undefined
+      : undefined;
+    const subtitleIssue = subtitleProblem(subtitle);
+    if (subtitleIssue) throw new BadRequestException(subtitleIssue);
     const letters = perLetter
       ? lettersOf(design.text).map((_, i) => design.letters?.[i] ?? {})
       : [];
@@ -164,6 +177,7 @@ export class TextStudio {
       design.textColour,
       design.baseColour,
       accented ? design.accentColour : undefined,
+      decorColour,
       ...letters.map((l) => l.colour),
     ]) {
       if (c !== undefined && !colours.has(c))
@@ -194,6 +208,18 @@ export class TextStudio {
         : undefined;
     if (keychain && design.logoId && !logo)
       throw new BadRequestException('Choose one of the logos offered');
+    // A logo in its colours: one offered colour for each of its own, or none (one colour).
+    const logoColours =
+      logo?.inks && design.logoColours?.length === logo.inks.length
+        ? design.logoColours
+        : undefined;
+    if (design.logoColours?.length && !logoColours)
+      throw new BadRequestException(
+        "Choose a colour for each of the logo's colours",
+      );
+    for (const c of logoColours ?? [])
+      if (!colours.has(c))
+        throw new BadRequestException('Choose one of the colours offered');
     // As made: letters only where they apply, a backing colour only when it differs.
     const clean: TextDesignInput = {
       // A couple's names always joined the same way ("Sara & Ali").
@@ -214,10 +240,17 @@ export class TextStudio {
       ...(initialFont && initialFont !== design.fontId
         ? { accentFontId: initialFont }
         : {}),
+      ...(decor && decor !== base.decor ? { decor } : {}),
+      ...(decorColour &&
+      decorColour !== (design.accentColour ?? design.textColour)
+        ? { decorColour }
+        : {}),
+      ...(subtitle ? { subtitle } : {}),
       ...(height !== base.letterHeightMm ? { heightMm: String(height) } : {}),
       ...(perLetter ? { letters } : {}),
       ...(shape ? { shape } : {}),
       ...(logo ? { logoId: logo.id } : {}),
+      ...(logoColours ? { logoColours } : {}),
     };
     const used = new Set([
       clean.fontId,
@@ -233,7 +266,7 @@ export class TextStudio {
           })),
           clean,
           settings,
-          logo ? [[logo.id, logo.outline]] : [],
+          logo ? [[logo.id, logo]] : [],
         );
     if (measured.problem !== null)
       throw new BadRequestException(measured.problem);
@@ -276,6 +309,11 @@ export class TextStudio {
           ? colours.get(clean.accentColour)!
           : null,
         accentFont: clean.accentFontId ? font(clean.accentFontId) : null,
+        decor: initial
+          ? TEXT_DECOR_LABELS[clean.decor ?? base.decor ?? 'HEARTS']
+          : null,
+        decorColour: clean.decorColour ? colours.get(clean.decorColour)! : null,
+        subtitle: clean.subtitle ?? null,
         letters: perLetter
           ? lettersOf(clean.text).map((char, i) => ({
               char,
@@ -286,6 +324,7 @@ export class TextStudio {
         letterHeightMm: height,
         shape: shape ? KEYCHAIN_SHAPE_LABELS[shape] : null,
         logo: logo?.name ?? null,
+        logoColours: logoColours?.map((c) => colours.get(c)!) ?? null,
         sizeMm: {
           x: round1(measured.size.x),
           y: round1(measured.size.y),
@@ -298,23 +337,23 @@ export class TextStudio {
   /** A customer's own logo, named for the order, with its outline. */
   private async customerLogo(
     id: string,
-  ): Promise<{ id: string; name: string; outline: Region[] } | undefined> {
+  ): Promise<(StoredLogo & { id: string; name: string }) | undefined> {
     if (!(await this.logos.customerLogoIds([id])).has(id)) return undefined;
     const [found] = await this.logos.outlines([id]);
-    return found ? { id, name: 'Your logo', outline: found[1] } : undefined;
+    return found ? { id, name: 'Your logo', ...found[1] } : undefined;
   }
 
   /** The logos a keychain product offers (switched-off ones dropped), with their outlines. */
   private async keychainLogos(
     p: ConfigurableProduct,
-  ): Promise<{ id: string; name: string; outline: Region[] }[]> {
+  ): Promise<(StoredLogo & { id: string; name: string })[]> {
     if (p.textStyle !== 'KEYCHAIN' || p.textLogoIds.length === 0) return [];
     const named = await this.logos.named(p.textLogoIds);
     const outlines = new Map(await this.logos.outlines(p.textLogoIds));
     return p.textLogoIds.flatMap((id) => {
       const logo = named.get(id);
-      const outline = outlines.get(id);
-      return logo?.active && outline ? [{ id, name: logo.name, outline }] : [];
+      const shape = outlines.get(id);
+      return logo?.active && shape ? [{ id, name: logo.name, ...shape }] : [];
     });
   }
 
@@ -464,7 +503,9 @@ function plausible(
     design.textColour,
     ...(design.baseColour ? [design.baseColour] : []),
     ...(design.accentColour ? [design.accentColour] : []),
+    ...(design.decorColour ? [design.decorColour] : []),
     ...letters.flatMap((l) => l.colour ?? []),
+    ...(design.logoColours ?? []),
   ]);
   const { x, y, z } = given.size;
   // Generous: decorations, a keyring loop and a backing plate stand out past the letters.

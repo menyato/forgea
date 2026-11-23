@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { logoRegionsFromSvg } from './svg.js';
-import { area, inkMask, traceLoops, traceSvg } from './trace.js';
+import { nearestColour } from './design.js';
+import { logoFromSvg, logoRegionsFromSvg } from './svg.js';
+import { area, inkMask, traceLogoSvg, traceLoops, traceSvg } from './trace.js';
 
 /** A w x h mask from rows of '#' (logo) and '.' (background). */
 function mask(rows: string[]): { m: Uint8Array; w: number; h: number } {
@@ -166,5 +167,87 @@ describe('traceSvg', () => {
       '..........',
     ]);
     expect(traceSvg(m, w, h)).toBeNull();
+  });
+});
+
+describe('traceLogoSvg', () => {
+  /** A blue badge with a red square on it and a white ring of paper around. */
+  const w = 60;
+  const px = new Uint8Array(w * w * 4);
+  for (let y = 0; y < w; y++)
+    for (let x = 0; x < w; x++) {
+      const badge = x >= 10 && x < 50 && y >= 10 && y < 50;
+      const mark = x >= 22 && x < 38 && y >= 22 && y < 38;
+      px.set(
+        mark
+          ? [220, 30, 30, 255]
+          : badge
+            ? [20, 60, 200, 255]
+            : [255, 255, 255, 255],
+        (y * w + x) * 4,
+      );
+    }
+
+  it('keeps the logo whole as its outline and each colour as its own area', () => {
+    const svg = traceLogoSvg(px, w, w)!;
+    expect(svg).toContain('data-inks');
+    const logo = logoFromSvg(svg);
+    // The outline is the whole badge: the red square is not a hole in it.
+    expect(logo.outline).toHaveLength(1);
+    expect(logo.outline[0]!.holes).toHaveLength(0);
+    expect(logo.inks!.map((i) => i.hex)).toEqual(['#143cc8', '#dc1e1e']);
+    // The blue is the badge around the red square.
+    expect(logo.inks![0]!.regions[0]!.holes).toHaveLength(1);
+  });
+
+  it('a logo in one colour has no colours of its own', () => {
+    const plain = new Uint8Array(px);
+    for (let i = 0; i < plain.length; i += 4)
+      if (plain[i] === 220) plain.set([20, 60, 200, 255], i);
+    const svg = traceLogoSvg(plain, w, w)!;
+    expect(svg).not.toContain('data-inks');
+    expect(logoFromSvg(svg).inks).toBeNull();
+  });
+});
+
+describe('logoFromSvg', () => {
+  it('reads each fill as a colour, later shapes covering earlier ones', () => {
+    const logo = logoFromSvg(
+      '<svg viewBox="0 0 100 100"><g fill="#0033aa"><rect x="0" y="0" width="100" height="100"/></g>' +
+        '<circle cx="50" cy="50" r="20" style="fill: rgb(255, 255, 255)"/>' +
+        '<rect x="90" y="90" width="1" height="1" fill="red"/></svg>',
+    );
+    // The red speck is too small to print in a colour of its own: it joins the closest.
+    expect(logo.inks!.map((i) => i.hex)).toEqual(['#0033aa', '#ffffff']);
+    expect(logo.inks![0]!.regions[0]!.holes.length).toBeGreaterThan(0);
+    // As before, a shape inside another cuts it in the one-colour outline.
+    expect(logo.outline[0]!.holes.length).toBeGreaterThan(0);
+  });
+});
+
+describe('nearestColour', () => {
+  const shop = [
+    { id: 'black', swatchHex: '#161616' },
+    { id: 'white', swatchHex: '#F4F4F2' },
+    { id: 'silver', swatchHex: '#A8A9AD' },
+    { id: 'blue', swatchHex: '#1F5FBF' },
+    { id: 'gold', swatchHex: '#D4A72C' },
+    { id: 'none', swatchHex: null },
+  ];
+  const pick = (hex: string) => nearestColour(hex, shop)?.id;
+
+  it('prints a coloured part in a colour and a grey one in a neutral', () => {
+    expect(pick('#4197c2')).toBe('blue'); // a light sky blue
+    expect(pick('#575f63')).toBe('silver'); // a chrome grey
+    expect(pick('#040404')).toBe('black');
+    expect(pick('#ebeded')).toBe('white');
+    expect(pick('#c8a040')).toBe('gold');
+  });
+
+  it('takes any colour when the shop has none of that kind', () => {
+    expect(
+      nearestColour('#ff0000', [{ id: 'black', swatchHex: '#000000' }])?.id,
+    ).toBe('black');
+    expect(nearestColour('#ff0000', [{ swatchHex: null }])).toBeNull();
   });
 });

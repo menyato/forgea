@@ -6,6 +6,7 @@ import {
   designProblem,
   FontSet,
   fontScripts,
+  logoFromSvg,
   stlBytes,
   TEXT_DECORS,
   type TextSettings,
@@ -406,5 +407,64 @@ describe('buildDesign', () => {
     const triangles = new DataView(stl.buffer).getUint32(80, true);
     expect(stl.byteLength).toBe(84 + triangles * 50);
     expect(triangles).toBeGreaterThan(100);
+  });
+});
+
+describe('a logo in its own colours', () => {
+  const logo = logoFromSvg(
+    '<svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#0033aa"/><circle cx="50" cy="50" r="25" fill="#ffffff"/></svg>',
+  );
+  const logos = new Map([['badge', logo]]);
+  const design = {
+    text: 'Sam',
+    fontId: 'cairo',
+    textColour: 'gold',
+    baseColour: 'black',
+    logoId: 'badge',
+  };
+
+  it('prints in the letters colour unless colours are chosen', () => {
+    const built = buildDesign(fonts, design, keychain, logos);
+    expect(built.parts.map((p) => p.colour).sort()).toEqual(['black', 'gold']);
+  });
+
+  it('prints each of its colours in the filament chosen for it', () => {
+    const built = buildDesign(
+      fonts,
+      { ...design, logoColours: ['navy', 'white'] },
+      keychain,
+      logos,
+    );
+    const colours = built.parts.map((p) => p.colour).sort();
+    expect(colours).toEqual(['black', 'gold', 'navy', 'white']);
+    const navy = built.parts.find((p) => p.colour === 'navy')!.volumeMm3;
+    const white = built.parts.find((p) => p.colour === 'white')!.volumeMm3;
+    // The white disc lies on the badge: the badge keeps the rest of the square.
+    expect(white).toBeGreaterThan(0);
+    expect(navy).toBeGreaterThan(white);
+    expect(
+      coloursOf({ ...design, logoColours: ['navy', 'white'] }, 'KEYCHAIN'),
+    ).toEqual(['gold', 'black', 'navy', 'white']);
+  });
+});
+
+describe('keychain ring', () => {
+  it('is joined to a heart plate (one piece with it)', () => {
+    for (const text of ['Sara', 'Al', 'Maximilian']) {
+      const layout = layoutDesign(
+        fonts,
+        {
+          text,
+          fontId: 'pacifico',
+          textColour: 'w',
+          baseColour: 'r',
+          shape: 'HEART',
+        },
+        keychain,
+      );
+      const plate = layout.parts.filter((p) => p.colour === 'r');
+      expect(plate).toHaveLength(1);
+      expect(plate[0]!.regions).toHaveLength(1);
+    }
   });
 });

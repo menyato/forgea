@@ -1,3 +1,5 @@
+import type { Region } from './outline.js';
+
 /**
  * A personalised piece, as the customer designs it and as the studio prints it. This module
  * has no 3D code, so validation and the API's main thread can import it cheaply
@@ -44,7 +46,13 @@ export const STANDING_STYLES: readonly TextStyle[] = [
 export const ACCENT_STYLES: readonly TextStyle[] = ['INITIAL_NAME', 'COUPLE'];
 
 /** The decorations around a big initial, chosen per product (e.g. a baby's, a boy's). */
-export const TEXT_DECORS = ['HEARTS', 'FLOWERS', 'STARS', 'CROWN'] as const;
+export const TEXT_DECORS = [
+  'HEARTS',
+  'FLOWERS',
+  'STARS',
+  'CROWN',
+  'BUTTERFLIES',
+] as const;
 export type TextDecor = (typeof TEXT_DECORS)[number];
 
 export const TEXT_DECOR_LABELS: Readonly<Record<TextDecor, string>> = {
@@ -52,6 +60,7 @@ export const TEXT_DECOR_LABELS: Readonly<Record<TextDecor, string>> = {
   FLOWERS: 'Flowers and a heart',
   STARS: 'A moon and stars',
   CROWN: 'A crown and stars',
+  BUTTERFLIES: 'Butterflies',
 };
 
 /**
@@ -88,6 +97,12 @@ export interface TextSettings {
   decor?: TextDecor;
 }
 
+/** Styles with an extra line under the names (a baby's weight and birth date, a wedding date). */
+export const SUBTITLE_STYLES: readonly TextStyle[] = ['INITIAL_NAME', 'COUPLE'];
+
+/** The most characters the extra line may have. */
+export const SUBTITLE_MAX_CHARS = 28;
+
 /** What the customer chose. Colours are option value ids (the product's colour group). */
 export interface TextDesign {
   text: string;
@@ -101,12 +116,97 @@ export interface TextDesign {
   accentColour?: string;
   /** INITIAL_NAME: the big initial's font; none = the name's. */
   accentFontId?: string;
+  /** INITIAL_NAME: the decorations chosen (none: the product's own). */
+  decor?: TextDecor;
+  /** INITIAL_NAME: the decorations' own colour; none = the initial's. */
+  decorColour?: string;
+  /**
+   * INITIAL_NAME and COUPLE: a smaller line under the name, in the letters' colour and font
+   * ("3.2 kg · 12/05/2026", "Since 2020"); none or empty = no line.
+   */
+  subtitle?: string;
   /** MONOGRAM and LETTERS: per letter (in typing order), its own font and colour. */
   letters?: { fontId?: string; colour?: string }[];
   /** KEYCHAIN: the plate's shape (OUTLINE when not chosen). */
   shape?: KeychainShape;
   /** KEYCHAIN: a logo beside the name (one of the studio's, offered by the product). */
   logoId?: string;
+  /**
+   * KEYCHAIN: a logo in its own colours, one filament per colour of the logo (its `inks`, in
+   * order). Left out: the whole logo prints in the letters' colour.
+   */
+  logoColours?: string[];
+}
+
+/** One colour of a logo: where it is (in the logo's own frame) and the colour it was drawn in. */
+export interface LogoInk {
+  /** The colour in the drawing or picture (#rrggbb): the filament closest to it is suggested. */
+  hex: string;
+  regions: Region[];
+}
+
+/**
+ * A logo as print outlines (1 across, centred on 0, 0): its whole outline, and, for a logo in
+ * more than one colour, each colour's areas (the first is the largest: it fills the outline,
+ * the others are printed over it in their own filament).
+ */
+export interface LogoShape {
+  outline: Region[];
+  inks?: LogoInk[] | null;
+}
+
+/** Most colours a logo is printed in (each one a filament). */
+export const MAX_LOGO_INKS = 4;
+
+/** Below this chroma (CIE Lab) a colour reads as black, grey, silver or white. */
+const NEUTRAL_CHROMA = 12;
+
+/**
+ * The colour among `colours` closest to `hex` as a person would pick a filament for it, or
+ * null when none has a swatch: a coloured part of a logo takes a coloured filament (a light
+ * blue is printed blue, not silver), a black, grey or white part a neutral one, when the shop
+ * has one of that kind; among those, the nearest in CIE Lab, lightness counting half (a
+ * logo's colour is told by its hue more than its shade).
+ */
+export function nearestColour<T extends { swatchHex: string | null }>(
+  hex: string,
+  colours: readonly T[],
+): T | null {
+  const target = lab(hex);
+  const chroma = ([, a, b]: readonly number[]) => Math.hypot(a!, b!);
+  const neutral = chroma(target) < NEUTRAL_CHROMA;
+  const known = colours.flatMap((c) =>
+    c.swatchHex && /^#[0-9a-f]{6}$/i.test(c.swatchHex)
+      ? [{ c, at: lab(c.swatchHex) }]
+      : [],
+  );
+  const sameKind = known.filter(
+    (k) => chroma(k.at) < NEUTRAL_CHROMA === neutral,
+  );
+  let best: T | null = null;
+  let bestD = Infinity;
+  for (const { c, at } of sameKind.length ? sameKind : known) {
+    const d =
+      ((at[0] - target[0]) / 2) ** 2 +
+      (at[1] - target[1]) ** 2 +
+      (at[2] - target[2]) ** 2;
+    if (d < bestD) [best, bestD] = [c, d];
+  }
+  return best;
+}
+
+/** #rrggbb (sRGB) as CIE L*a*b* (D65). */
+function lab(hex: string): [number, number, number] {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  const f = (t: number) =>
+    t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116;
+  const x = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+  const y = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+  const z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
 
 export const TEXT_LIMITS = {
@@ -168,6 +268,22 @@ export function textProblem(
   return null;
 }
 
+/** Letters, digits, spaces and what dates, weights and times are written with. */
+const SUBTITLE_ALLOWED = /^[\p{L}\p{M}\p{N} .,:/'·&+-]+$/u;
+
+/** Why the extra line under a name can't be made, or null (an empty line is no line). */
+export function subtitleProblem(text: string | undefined): string | null {
+  const t = (text ?? '').trim();
+  if (t === '') return null;
+  if ([...t].length > SUBTITLE_MAX_CHARS)
+    return `The line under the name: up to ${SUBTITLE_MAX_CHARS} characters`;
+  if (!SUBTITLE_ALLOWED.test(t))
+    return 'The line under the name: use letters, numbers, spaces and . , : / - only';
+  if (ARABIC.test(t) && LATIN.test(t))
+    return 'The line under the name: Arabic or English letters, not both';
+  return null;
+}
+
 /** The colours a design uses (each a separate filament: a multi-colour print). */
 export function coloursOf(design: TextDesign, style: TextStyle): string[] {
   const colours = new Set([design.textColour]);
@@ -176,7 +292,11 @@ export function coloursOf(design: TextDesign, style: TextStyle): string[] {
   }
   if (design.accentColour && ACCENT_STYLES.includes(style))
     colours.add(design.accentColour);
+  if (design.decorColour && style === 'INITIAL_NAME')
+    colours.add(design.decorColour);
   if (design.baseColour && style !== 'LETTERS') colours.add(design.baseColour);
+  if (style === 'KEYCHAIN' && design.logoId)
+    for (const c of design.logoColours ?? []) colours.add(c);
   return [...colours];
 }
 
@@ -243,6 +363,8 @@ export interface SlotChoice {
   colour?: string;
   /** An editable logo slot: the customer's own logo (uploaded) instead of the studio's. */
   logoId?: string;
+  /** A logo in its own colours: a colour for each of its colours (`LogoShape.inks`). */
+  logoColours?: string[];
 }
 
 export const SLOT_LIMITS = {
@@ -269,6 +391,7 @@ export function slotState(slot: DesignSlot, choice: SlotChoice | undefined) {
           (own.on ?? (own.logoId ? true : (slot.defaultOn ?? true)))
         : (own.text ?? slot.defaultText ?? '').trim() !== '',
     colour: own.colour ?? slot.colour,
+    logoColours: slot.kind === 'LOGO' ? own.logoColours : undefined,
   };
 }
 
@@ -284,4 +407,4 @@ export function slotTextProblem(slot: DesignSlot, text: string): string | null {
     maxWidthMm: slot.maxWidthMm,
   });
 }
-export type { Region } from './outline.js';
+export type { Region };

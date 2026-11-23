@@ -6,6 +6,12 @@ import {
   PER_LETTER_STYLES,
   KEYCHAIN_SHAPE_LABELS,
   type KeychainShape,
+  nearestColour,
+  SUBTITLE_MAX_CHARS,
+  SUBTITLE_STYLES,
+  TEXT_DECOR_LABELS,
+  TEXT_DECORS,
+  type TextDecor,
 } from '@forgea/text3d/design';
 import type {
   DesignMeasurement,
@@ -35,6 +41,7 @@ import {
 } from '~/features/text-studio/use-font-faces';
 import {
   TEXT_INPUT,
+  QuickLooks,
   withLetter,
   Swatches,
   Loading,
@@ -109,6 +116,12 @@ export function TextDesigner({
     offer.defaultAccentColourId,
   );
   const [initialFontId, setInitialFontId] = useState('');
+  // A big initial's decorations (the product's to start) and their own colour.
+  const [decor, setDecor] = useState<TextDecor>(offer.decor ?? 'HEARTS');
+  const [decorColour, setDecorColour] = useState<string | null>(null);
+  // A line under the name: a baby's weight and birth date, a couple's date.
+  const [subtitle, setSubtitle] = useState('');
+  const withSubtitle = SUBTITLE_STYLES.includes(offer.style);
   // The initial's own font only while it writes what was typed.
   const initialFont =
     offer.style === 'INITIAL_NAME' && fonts.some((f) => f.id === initialFontId)
@@ -127,6 +140,19 @@ export function TextDesigner({
     [offer, ownLogos],
   );
   const keychain = offer.style === 'KEYCHAIN';
+  // A logo in its own colours: a shop colour for each of its colours (the closest to start).
+  const inks = shownOffer.logos.find((l) => l.id === logoId)?.inks ?? null;
+  const [logoInColour, setLogoInColour] = useState(true);
+  const [inkPicks, setInkPicks] = useState<Record<string, string[]>>({});
+  const logoColours =
+    keychain && inks && logoInColour
+      ? inks.map(
+          (ink, i) =>
+            inkPicks[logoId]?.[i] ??
+            nearestColour(ink.hex, offer.colours)?.id ??
+            textColour,
+        )
+      : null;
   // Something to make: a text, or on a keychain a logo alone.
   const designed = typed !== '' || (keychain && logoId !== '');
   const [quantity, setQuantity] = useState(1);
@@ -141,9 +167,15 @@ export function TextDesigner({
     ...(baseColour ? { baseColour } : {}),
     ...(accented && accentColour ? { accentColour } : {}),
     ...(initialFont ? { accentFontId: initialFont } : {}),
+    ...(offer.style === 'INITIAL_NAME' && decor !== (offer.decor ?? 'HEARTS')
+      ? { decor }
+      : {}),
+    ...(offer.style === 'INITIAL_NAME' && decorColour ? { decorColour } : {}),
+    ...(withSubtitle && subtitle.trim() ? { subtitle: subtitle.trim() } : {}),
     ...(heightMm !== offer.letterHeightMm ? { heightMm } : {}),
     ...(shape !== 'OUTLINE' ? { shape } : {}),
     ...(logoId ? { logoId } : {}),
+    ...(logoColours ? { logoColours } : {}),
     ...(perLetter
       ? {
           letters: chars.map((_, i) => {
@@ -335,6 +367,34 @@ export function TextDesigner({
               Its first letter is the big initial.
             </span>
           )}
+          {withSubtitle && (
+            <label className="mt-2 grid gap-1.5">
+              <span className="text-sm font-medium">
+                A line under the name{' '}
+                <span className="font-normal text-text-muted">
+                  (optional:{' '}
+                  {offer.style === 'COUPLE'
+                    ? 'a date, “Since 2020”'
+                    : 'weight, date of birth, time'}
+                  )
+                </span>
+              </span>
+              <input
+                name="design-subtitle"
+                autoComplete="off"
+                dir="auto"
+                maxLength={SUBTITLE_MAX_CHARS}
+                value={subtitle}
+                onChange={(e) => setSubtitle(e.currentTarget.value)}
+                placeholder={
+                  offer.style === 'COUPLE'
+                    ? '14 . 02 . 2026'
+                    : '3.2 kg · 12/05/2026'
+                }
+                className="w-full rounded-md border border-border bg-surface px-3 py-2"
+              />
+            </label>
+          )}
           <span
             id="design-problem"
             className="text-sm text-danger"
@@ -408,6 +468,44 @@ export function TextDesigner({
               ))}
             </select>
           </label>
+        )}
+
+        {offer.style === 'INITIAL_NAME' && (
+          <>
+            <QuickLooks
+              colours={offer.colours}
+              onPick={(look) => {
+                setDecor(look.decor);
+                if (look.accent) setAccentColour(look.accent);
+                if (look.letters) setTextColour(look.letters);
+                setDecorColour(null);
+              }}
+            />
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">Decorations</legend>
+              <div
+                className="flex flex-wrap gap-2"
+                role="radiogroup"
+                aria-label="Decorations"
+              >
+                {TEXT_DECORS.map((d) => (
+                  <label
+                    key={d}
+                    className="relative cursor-pointer rounded-pill border border-border px-4 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent/10 has-[:checked]:font-semibold"
+                  >
+                    <input
+                      type="radio"
+                      name="design-decor"
+                      className="sr-only"
+                      checked={decor === d}
+                      onChange={() => setDecor(d)}
+                    />
+                    {TEXT_DECOR_LABELS[d]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </>
         )}
 
         {heights.length > 1 && (
@@ -507,6 +605,7 @@ export function TextDesigner({
                             id: logo.id,
                             name: 'Your logo',
                             outline: logo.outline,
+                            inks: logo.inks,
                           },
                         ],
                   );
@@ -519,6 +618,54 @@ export function TextDesigner({
                 Your logo prints beside your name, or alone if you leave the
                 name empty.
               </p>
+            )}
+            {keychain && inks && (
+              <div className="grid gap-3 rounded-md border border-border p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    name="design-logo-in-colour"
+                    autoComplete="off"
+                    checked={logoInColour}
+                    onChange={(e) => setLogoInColour(e.currentTarget.checked)}
+                  />
+                  Print the logo in its own colours
+                </label>
+                {logoColours ? (
+                  inks.map((ink, i) => (
+                    <Swatches
+                      key={`${logoId}-${i}`}
+                      small
+                      legend={`Logo colour ${i + 1}`}
+                      name={`design-logo-colour-${i}`}
+                      colours={offer.colours}
+                      value={logoColours[i] ?? null}
+                      onChange={(id) =>
+                        id &&
+                        setInkPicks((all) => {
+                          const next = [...logoColours];
+                          next[i] = id;
+                          return { ...all, [logoId]: next };
+                        })
+                      }
+                      note={
+                        <>
+                          <span
+                            aria-hidden
+                            className="mr-1 inline-block h-3 w-3 rounded-full border border-border align-middle"
+                            style={{ backgroundColor: ink.hex }}
+                          />
+                          In your logo; we start with the closest filament.
+                        </>
+                      }
+                    />
+                  ))
+                ) : (
+                  <p className="text-sm text-text-muted">
+                    The whole logo prints in the letters' colour.
+                  </p>
+                )}
+              </div>
             )}
           </fieldset>
         )}
@@ -539,6 +686,16 @@ export function TextDesigner({
             value={accentColour}
             onChange={setAccentColour}
             same="Same as the letters"
+          />
+        )}
+        {offer.style === 'INITIAL_NAME' && (
+          <Swatches
+            legend="Decorations colour"
+            name="design-decor-colour"
+            colours={offer.colours}
+            value={decorColour}
+            onChange={setDecorColour}
+            same="Same as the initial"
           />
         )}
         <Swatches

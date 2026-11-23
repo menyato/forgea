@@ -5,6 +5,8 @@ import { parentPort } from 'node:worker_threads';
 import type {
   DesignSlot,
   FontSource,
+  LogoInk,
+  LogoShape,
   Region,
   SlotChoice,
   TextDesign,
@@ -22,8 +24,8 @@ export type TextJob =
       fonts: FontSource[];
       design: TextDesign;
       settings: TextSettings;
-      /** A keychain's logo, as print outlines. */
-      logos: [string, Region[]][];
+      /** A keychain's logo, as print outlines (and its colours). */
+      logos: [string, LogoShape][];
     }
   /** A logo's SVG as print outlines. */
   | { id: number; task: 'logo'; svg: string }
@@ -34,7 +36,7 @@ export type TextJob =
       fonts: FontSource[];
       slots: DesignSlot[];
       choices: Record<string, SlotChoice>;
-      logos: [string, Region[]][];
+      logos: [string, LogoShape][];
     };
 
 export type TextResult =
@@ -46,7 +48,13 @@ export type TextResult =
       scripts: { name: string; latin: boolean; arabic: boolean };
     }
   | { id: number; ok: true; problem: string }
-  | { id: number; ok: true; outline: Region[]; points: number }
+  | {
+      id: number;
+      ok: true;
+      outline: Region[];
+      inks: LogoInk[] | null;
+      points: number;
+    }
   | {
       id: number;
       ok: true;
@@ -75,12 +83,20 @@ const run = async (job: TextJob): Promise<TextResult> => {
     return { id: job.id, ok: true, scripts: await t.fontScripts(job.bytes) };
   }
   if (job.task === 'logo') {
-    const outline = rounded(t.logoRegionsFromSvg(job.svg));
-    const points = outline.reduce(
-      (n, r) => n + r.outer.length + r.holes.reduce((m, h) => m + h.length, 0),
-      0,
-    );
-    return { id: job.id, ok: true, outline, points };
+    const shape = t.logoFromSvg(job.svg);
+    const outline = rounded(shape.outline);
+    const inks =
+      shape.inks?.map((i) => ({ hex: i.hex, regions: rounded(i.regions) })) ??
+      null;
+    const count = (regions: Region[]) =>
+      regions.reduce(
+        (n, r) =>
+          n + r.outer.length + r.holes.reduce((m, h) => m + h.length, 0),
+        0,
+      );
+    const points =
+      count(outline) + (inks ?? []).reduce((n, i) => n + count(i.regions), 0);
+    return { id: job.id, ok: true, outline, inks, points };
   }
   fonts ??= t.FontSet.load([]);
   const set = await fonts;

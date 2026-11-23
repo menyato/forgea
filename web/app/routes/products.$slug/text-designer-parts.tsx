@@ -1,3 +1,4 @@
+import { nearestColour, type TextDecor } from '@forgea/text3d/design';
 import type { ProductTextOffer } from '@forgea/types';
 import { PrintingLogo } from '~/components/brand/printing-logo';
 
@@ -92,6 +93,74 @@ export function Swatches({
       </div>
       {note && <p className="text-xs text-text-muted">{note}</p>}
     </fieldset>
+  );
+}
+
+/** Ready-made looks for a baby's initial: colours (the shop's closest) and decorations. */
+const LOOKS: {
+  label: string;
+  decor: TextDecor;
+  accent: string;
+  letters: string;
+}[] = [
+  {
+    label: 'Baby girl',
+    decor: 'BUTTERFLIES',
+    accent: '#f4a6c1',
+    letters: '#ffffff',
+  },
+  { label: 'Baby boy', decor: 'STARS', accent: '#6fb1e8', letters: '#ffffff' },
+  {
+    label: 'Little prince(ss)',
+    decor: 'CROWN',
+    accent: '#d4a72c',
+    letters: '#ffffff',
+  },
+];
+
+/** One tap sets the decorations and colours of a look; each stays changeable below. */
+export function QuickLooks({
+  colours,
+  onPick,
+}: {
+  colours: ProductTextOffer['colours'];
+  onPick: (look: {
+    decor: TextDecor;
+    accent: string | null;
+    letters: string | null;
+  }) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <span className="text-sm font-medium">Quick looks</span>
+      <div className="flex flex-wrap gap-2">
+        {LOOKS.map((look) => {
+          const accent = nearestColour(look.accent, colours);
+          const letters = nearestColour(look.letters, colours);
+          return (
+            <button
+              key={look.label}
+              type="button"
+              onClick={() =>
+                onPick({
+                  decor: look.decor,
+                  accent: accent?.id ?? null,
+                  letters: letters?.id ?? null,
+                })
+              }
+              className="flex items-center gap-2 rounded-pill border border-border px-3 py-1.5 text-sm hover:border-accent"
+            >
+              <span
+                aria-hidden="true"
+                className="size-4 rounded-full border border-border"
+                style={{ backgroundColor: accent?.swatchHex ?? look.accent }}
+              />
+              {look.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -5,7 +5,8 @@ import { circle, type Contour, type Point, type Region } from './outline.js';
  * Decorations drawn as shapes (no font): each `size` mm across, centred on 0, 0 (the crown
  * stands on 0, 0).
  */
-export type Motif = 'HEART' | 'STAR' | 'FLOWER' | 'MOON' | 'CROWN';
+export type Motif =
+  'HEART' | 'STAR' | 'FLOWER' | 'MOON' | 'CROWN' | 'BUTTERFLY';
 
 export function motif(kind: Motif, size: number): Region[] {
   switch (kind) {
@@ -32,6 +33,27 @@ export function motif(kind: Motif, size: number): Region[] {
         [solid(circle(r * 0.42, r * 0.22, r * 0.82))],
       );
     }
+    case 'BUTTERFLY': {
+      // Two wings a side swept out from a slim body, and two antennae thick enough to print.
+      const e = (x: number, y: number, rx: number, ry: number, tilt: number) =>
+        solid(ellipse(x * size, y * size, rx * size, ry * size, tilt));
+      const feeler = Math.max(0.03 * size, 0.55);
+      return union([
+        e(-0.25, 0.13, 0.25, 0.17, -0.55),
+        e(0.25, 0.13, 0.25, 0.17, 0.55),
+        e(-0.17, -0.16, 0.17, 0.11, 0.6),
+        e(0.17, -0.16, 0.17, 0.11, -0.6),
+        e(0, -0.02, 0.045, 0.24, 0),
+        solid(ellipse(-0.07 * size, 0.3 * size, feeler, 0.12 * size, 0.45)),
+        solid(ellipse(0.07 * size, 0.3 * size, feeler, 0.12 * size, -0.45)),
+        solid(
+          circle(-0.125 * size, 0.41 * size, Math.max(0.045 * size, 0.8), 20),
+        ),
+        solid(
+          circle(0.125 * size, 0.41 * size, Math.max(0.045 * size, 0.8), 20),
+        ),
+      ]);
+    }
     case 'CROWN': {
       const w = size;
       const tips: Point[] = [
@@ -57,6 +79,22 @@ export function motif(kind: Motif, size: number): Region[] {
 }
 
 const solid = (outer: Contour): Region => ({ outer, holes: [] });
+
+/** An ellipse centred on x, y, its x radius turned by `tilt` radians. */
+function ellipse(
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  tilt: number,
+): Contour {
+  const [c, s] = [Math.cos(tilt), Math.sin(tilt)];
+  return Array.from({ length: 40 }, (_, i): Point => {
+    const t = (i / 40) * Math.PI * 2;
+    const [ex, ey] = [rx * Math.cos(t), ry * Math.sin(t)];
+    return [x + ex * c - ey * s, y + ex * s + ey * c];
+  });
+}
 
 /** The classic heart curve, `size` mm wide, centred. */
 function heart(size: number): Contour {

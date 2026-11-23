@@ -81,7 +81,7 @@ export default function TextPreview({
             set,
             d,
             settings,
-            new Map(offer.logos.map((l) => [l.id, l.outline])),
+            new Map(offer.logos.map((l) => [l.id, l])),
           );
           setBuilt((old) => {
             for (const p of old?.parts ?? []) p.geometry.dispose();

@@ -34,6 +34,7 @@ enum TextDecor {
   FLOWERS
   STARS
   CROWN
+  BUTTERFLIES
 }
 
 /// A logo the studio adds to products (Dashboard → Logos): drawn from an SVG file, kept only
@@ -44,6 +45,9 @@ model Logo {
   name      String   @unique
   /// Solid regions (@forgea/text3d Region[]), 1 across, centred on 0, 0.
   outline   Json
+  /// A logo in more than one colour: each colour's areas (@forgea/text3d LogoInk[]), in the
+  /// outline's frame, largest first. Null: one colour.
+  inks      Json?
   /// How many points the outline has (a guide to how detailed it is).
   points    Int
   active    Boolean  @default(true)
@@ -61,6 +65,8 @@ model CustomerLogo {
   id        String   @id @default(uuid(7)) @db.Uuid
   /// Solid regions (@forgea/text3d Region[]), 1 across, centred on 0, 0.
   outline   Json
+  /// Its colours' areas (LogoInk[]), as on Logo. Null: one colour.
+  inks      Json?
   points    Int
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
