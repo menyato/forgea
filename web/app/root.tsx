@@ -35,8 +35,12 @@ import {
 import { pageCacheMiddleware } from './lib/page-cache.server';
 
 // The F mark from @forgea/brand; it switches colours with the browser's own light/dark theme.
+// favicon.ico (16/32/48) is for search results and old browsers; the touch icon for phones'
+// home screens. Both are PNG renders of favicon.svg's light colours.
 export const links: Route.LinksFunction = () => [
+  { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
   { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+  { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
 ];
 
 // Public pages for visitors without our cookies are reused for a moment (page-cache); then
