@@ -417,4 +417,44 @@ describe('Where it is: pieces, extra costs, the shelf, test orders (e2e)', () =>
         prisma.journalEntry.delete({ where: { id: posted.id } }),
       ).rejects.toThrow();
   });
+
+  it('an order made from a quotation is removed with its quotation, and the history still refuses deletes', async () => {
+    const quotation = (
+      await as(admin.cookie)
+        .post('/quotations', {
+          customerEmail: `test-${randomUUID().slice(0, 8)}@example.com`,
+          validUntil: '2099-12-31',
+          customerName: 'A test',
+          phone: '70 904 044',
+          paymentMethod: 'TRANSFER',
+          delivery: false,
+          lines: [{ description: 'Test piece', quantity: 1, unitPrice: '5' }],
+        })
+        .expect(201)
+    ).body as { id: string; number: string };
+    await as(admin.cookie)
+      .post(`/quotations/${quotation.id}/confirm`)
+      .expect(200);
+    const { orderId } = (
+      await as(admin.cookie).get(`/quotations/${quotation.id}`).expect(200)
+    ).body as { orderId: string };
+    const preview = (
+      await as(admin.cookie).get(`/orders/${orderId}/removal`).expect(200)
+    ).body as OrderRemovalPreview;
+    expect(preview.blockedBy).toEqual([]);
+    expect(preview.madeFrom).toEqual([`quotation ${quotation.number}`]);
+    await as(admin.cookie)
+      .post(`/orders/${orderId}/remove`, { confirm: preview.orderNumber })
+      .expect(201);
+    expect(await prisma.order.count({ where: { id: orderId } })).toBe(0);
+    expect(await prisma.quotation.count({ where: { id: quotation.id } })).toBe(
+      0,
+    );
+    // Another quotation's history is still append-only.
+    const kept = await prisma.quotationStatusHistory.findFirst();
+    if (kept)
+      await expect(
+        prisma.quotationStatusHistory.delete({ where: { id: kept.id } }),
+      ).rejects.toThrow();
+  });
 });

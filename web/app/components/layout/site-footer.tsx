@@ -14,8 +14,8 @@ export function SiteFooter({ store }: { store: StoreSettings | null }) {
         <div className="grid content-start gap-3">
           <PrintingLogo variant="compact" className="w-28" />
           <p className="max-w-[40ch]">
-            A design and 3D-printing studio in Lebanon. Every piece is printed
-            to order.
+            Forgea Lab: design and 3D printing in Lebanon. Every piece is
+            printed to order.
           </p>
         </div>
         <div className="grid content-start gap-2">

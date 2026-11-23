@@ -53,7 +53,7 @@ export function OptionsPicker({
             checked={!value.delivery}
             onChange={() => onChange({ ...value, delivery: false })}
           />
-          Pick up from the studio (no delivery fee)
+          Pick up from Forgea Lab (no delivery fee)
         </label>
       </div>
       {allowRush && (

@@ -11,8 +11,8 @@ import { lock } from '../common/advisory-lock.js';
 
 /**
  * Removes a test order entirely, admin only: the order, its print runs, the filament they took
- * (the shelf's totals follow), its pieces, and its invoices, credit notes and the payments
- * matched to them. Real orders are cancelled, never removed; this is for orders that never
+ * (the shelf's totals follow), its pieces, its invoices, credit notes and the payments matched
+ * to them, and the quotation or custom request it was made from (with their lines and history). Real orders are cancelled, never removed; this is for orders that never
  * happened. The database's guards allow these deletes only inside this one transaction.
  */
 @Injectable()
@@ -77,6 +77,9 @@ export class OrderRemoval {
         data: { replacesJobId: null },
       });
       await tx.printJob.deleteMany({ where: { orderId } });
+      // What it was made from goes with it (their lines and histories follow by cascade).
+      await tx.quotation.deleteMany({ where: { orderId } });
+      await tx.customRequest.deleteMany({ where: { orderId } });
       await tx.order.delete({ where: { id: orderId } });
       return plan;
     });
@@ -108,7 +111,7 @@ export class OrderRemoval {
         }),
         tx.customRequest.findFirst({
           where: { orderId },
-          select: { id: true },
+          select: { title: true },
         }),
         tx.readyPieceMovement.count({
           where: { OR: [{ orderId }, { printJob: { orderId } }] },
@@ -116,8 +119,6 @@ export class OrderRemoval {
         tx.piece.count({ where: { orderItem: { orderId } } }),
       ]);
     const blockedBy = [
-      ...(quotation ? [`it was made from quotation ${quotation.number}`] : []),
-      ...(request ? ['it was made from a custom request'] : []),
       ...(readyPieces
         ? ['pieces of it went to or came from the ready pieces']
         : []),
@@ -134,6 +135,10 @@ export class OrderRemoval {
       documents: entries.map(
         (e) => e.number ?? `draft ${e.type.toLowerCase()}`,
       ),
+      madeFrom: [
+        ...(quotation ? [`quotation ${quotation.number}`] : []),
+        ...(request ? [`custom request "${request.title}"`] : []),
+      ],
       blockedBy,
     };
   }

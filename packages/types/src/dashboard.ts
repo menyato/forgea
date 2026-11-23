@@ -385,6 +385,8 @@ export interface OrderRemovalPreview {
   pieces: number;
   /** Its invoices, credit notes and the payments matched to them ("INV/2026/00002"). */
   documents: string[];
+  /** The quotation or custom request it was made from: removed with it ("quotation Q-2026-0006"). */
+  madeFrom: string[];
   /** Why it can't be removed; empty when it can. */
   blockedBy: string[];
 }

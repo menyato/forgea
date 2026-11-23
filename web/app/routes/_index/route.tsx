@@ -74,7 +74,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </h1>
           <p className="max-w-[46ch] text-lg text-text-muted">
             Pick something from the shop and choose its colour and size, or send
-            us your idea. We print it in our studio in Lebanon and deliver it to
+            us your idea. We print it at Forgea Lab in Lebanon and deliver it to
             your door.
           </p>
           <div className="flex flex-wrap gap-3">

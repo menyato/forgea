@@ -178,6 +178,9 @@ function RemoveTestOrder({ preview: r }: { preview: OrderRemovalPreview }) {
             ? `Its documents: ${r.documents.join(', ')}`
             : 'No invoices or payments'}
         </li>
+        {r.madeFrom.length > 0 && (
+          <li>What it was made from: {r.madeFrom.join(', ')}</li>
+        )}
       </ul>
       {r.blockedBy.length > 0 ? (
         <p className="text-sm text-danger">
@@ -437,7 +440,7 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
             <p>
               {o.delivery
                 ? `Deliver to ${o.addressLine ?? ''}, ${o.city ?? ''}`
-                : 'Pickup from the studio'}
+                : 'Pickup from Forgea Lab'}
               {o.rush && <strong className="ml-2 text-warning">Rush</strong>}
             </p>
             {o.deliveryNotes && (

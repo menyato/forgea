@@ -78,7 +78,7 @@ export function CustomerOrderCard({ order }: { order: CustomerOrder }) {
           </p>
         )}
         <p className="text-sm text-text-muted">
-          {order.delivery ? 'Delivery' : 'Pickup from the studio'} ·{' '}
+          {order.delivery ? 'Delivery' : 'Pickup from Forgea Lab'} ·{' '}
           {order.paymentMethod === 'COD' ? 'cash on delivery' : 'bank transfer'}
         </p>
       </div>

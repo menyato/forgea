@@ -98,7 +98,7 @@ export class MailTemplates {
     return this.email(o.to, `Order ${o.orderNumber}: ${label.title}`, {
       paragraphs: [
         `${label.title}. ${label.detail}`,
-        ...(o.note ? [`A note from the studio: ${o.note}`] : []),
+        ...(o.note ? [`A note from Forgea Lab: ${o.note}`] : []),
       ],
       action: { label: 'Follow your order', url: `${this.site}/orders` },
     });
@@ -136,7 +136,7 @@ export class MailTemplates {
     return this.email(r.to, `"${r.title}": ${label.title}`, {
       paragraphs: [
         `${label.title}. ${label.detail}`,
-        ...(r.note ? [`A note from the studio: ${r.note}`] : []),
+        ...(r.note ? [`A note from Forgea Lab: ${r.note}`] : []),
       ],
       action: {
         label: 'See the request',

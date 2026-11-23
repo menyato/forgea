@@ -174,7 +174,7 @@ test('a customer designs a name keychain in 3D, in English and Arabic; the studi
   await finishSignUp(page);
   await expect(page).toHaveURL(/\/checkout/);
   await page.getByLabel('Phone').fill('70 222 111');
-  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await page.getByLabel('Cash on delivery').check();
   await page.getByRole('button', { name: 'Place order' }).click();
   await expect(page.getByText('Order placed')).toBeVisible();

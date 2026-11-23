@@ -41,7 +41,7 @@ export function meta({ matches }: Route.MetaArgs) {
     path: '/custom',
     title: 'Custom order — Forgea',
     description:
-      'Describe what you need or send a 3D file: we quote it and print it in our studio.',
+      'Describe what you need or send a 3D file: we quote it and print it at Forgea Lab.',
   });
 }
 

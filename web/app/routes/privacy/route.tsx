@@ -39,9 +39,8 @@ export default function Privacy() {
           Privacy
         </h1>
         <p className="text-text-muted">
-          Forgea is a design and 3D-printing studio in Lebanon. This page says
-          what we keep about you, why, and what you can ask of us. Updated{' '}
-          {UPDATED}.
+          Forgea Lab designs and 3D prints in Lebanon. This page says what we
+          keep about you, why, and what you can ask of us. Updated {UPDATED}.
         </p>
       </header>
 

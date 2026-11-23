@@ -44,7 +44,7 @@ test('a visitor browses without an account, signs up at checkout and pays by tra
   await expect(page).toHaveURL(/\/checkout/);
   await expect(page.getByLabel('Full name')).toHaveValue('Rana Browser');
   await page.getByLabel('Phone').fill('70 123 456');
-  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await page.getByLabel('Money transfer to our number').check();
   // In the page itself (the footer shows the WhatsApp number too).
   await expect(

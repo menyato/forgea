@@ -138,7 +138,7 @@ export function QuotationDocument({
       <p className="text-sm text-text-muted">
         {q.delivery
           ? `Delivered to ${q.addressLine}, ${q.city}.`
-          : 'Picked up from the studio.'}{' '}
+          : 'Picked up from Forgea Lab.'}{' '}
         Payment: {PAYMENT_METHOD_LABELS[q.paymentMethod].toLowerCase()}.
       </p>
       {error && (

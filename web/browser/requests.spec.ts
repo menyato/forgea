@@ -64,7 +64,7 @@ test('a customer asks for something custom, the studio quotes it, the customer o
     page.getByText('Printed in PETG for strength.').first(),
   ).toBeVisible();
   await page.getByLabel('Phone').fill('70 123 456');
-  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await page.getByLabel('Money transfer to our number').check();
   await page
     .getByRole('button', { name: 'Accept and place the order' })

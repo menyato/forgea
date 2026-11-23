@@ -285,12 +285,12 @@ test('Lina, in a hurry: rush, pickup, a full transfer; she cancels the order her
   await expect(page.getByText('In your cart.')).toBeVisible();
 
   await page.goto('/cart');
-  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await page.getByLabel(/Rush/).check();
   await page.getByRole('link', { name: 'Checkout' }).click();
   // The cart's choices carry over to checkout.
   await expect(
-    page.getByLabel('Pick up from the studio (no delivery fee)'),
+    page.getByLabel('Pick up from Forgea Lab (no delivery fee)'),
   ).toBeChecked();
   await expect(page.getByLabel(/Rush/)).toBeChecked();
   await expect(page.getByLabel('Delivery area')).toHaveCount(0);
@@ -370,7 +370,7 @@ test('Omar pokes around: other people’s orders, the dashboard, forged prices a
   await expect(v.getByText('In your cart.')).toBeVisible();
   await v.goto('/checkout');
   await v.getByLabel('Phone').fill('70 999 000');
-  await v.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await v.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await v.getByRole('button', { name: 'Place order' }).click();
   await expect(v.getByText('Order placed')).toBeVisible();
   const theirs =

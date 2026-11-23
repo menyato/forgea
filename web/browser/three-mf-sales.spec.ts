@@ -35,7 +35,7 @@ test('a customer sends a sliced Bambu Studio file, gets its exact price as a quo
     page.getByText(/Priced from your sliced file/).first(),
   ).toBeVisible();
   await page.getByLabel('Phone').fill('70 123 456');
-  await page.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await page.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await page.getByLabel('Money transfer to our number').check();
   await page
     .getByRole('button', { name: 'Accept and place the order' })

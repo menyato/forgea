@@ -207,7 +207,7 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
   // The customer accepts, cash at pickup: the deposit is due first.
   await c.goto(requestUrl);
   await c.getByLabel('Phone').fill('70 333 222');
-  await c.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await c.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await c.getByLabel('Cash on delivery').check();
   await c.getByRole('button', { name: 'Accept and place the order' }).click();
   await expect(c.getByText('Order placed')).toBeVisible();
@@ -377,7 +377,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await c.goto('/checkout');
   await c.getByLabel('Full name').fill('Hadi Stand');
   await c.getByLabel('Phone').fill('70 444 555');
-  await c.getByLabel('Pick up from the studio (no delivery fee)').check();
+  await c.getByLabel('Pick up from Forgea Lab (no delivery fee)').check();
   await c.getByLabel('Cash on delivery').check();
   await c.getByRole('button', { name: 'Place order' }).click();
   await expect(c.getByText('Order placed')).toBeVisible();

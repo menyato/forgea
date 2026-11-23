@@ -73,7 +73,7 @@ export default function Shop({ loaderData }: Route.ComponentProps) {
             Shop
           </h1>
           <p className="text-text-muted">
-            Printed to order in our studio. Prices in USD, with the Lebanese
+            Printed to order at Forgea Lab. Prices in USD, with the Lebanese
             pound at today's rate.
           </p>
         </div>
