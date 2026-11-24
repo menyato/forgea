@@ -145,6 +145,33 @@ describe('a slot kept on its face', () => {
     expect(box.max.y).toBeLessThanOrEqual(5.5);
   });
 
+  it('a name clicked near the edge of a narrow face moves to where it fits largest', () => {
+    // A long bar, 40 x 8 mm, clicked 1 mm from its end: centred there it would be a speck.
+    const bar = boxTriangles([0, 0, 0], [40, 8, 4]);
+    const nearEnd = {
+      ...placement,
+      origin: [1, 4, 4] as [number, number, number],
+    };
+    const face = faceAround(bar, nearEnd)!;
+    const slot = {
+      ...onTop,
+      placement: { ...nearEnd, face },
+      heightMm: 5,
+      maxWidthMm: 40,
+    };
+    const [built] = buildSlots(
+      fonts,
+      [slot],
+      { name: { text: 'Name' } },
+      new Map(),
+    );
+    const box = new Box3().setFromBufferAttribute(
+      built!.geometry.getAttribute('position') as never,
+    );
+    expect(box.min.x).toBeGreaterThanOrEqual(0.5);
+    expect(box.max.x - box.min.x).toBeGreaterThan(10);
+  });
+
   it('turning the text keeps the face', () => {
     const face = faceAround(boxTriangles([0, 0, 0], [16, 6, 4]), placement)!;
     const turned = {

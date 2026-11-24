@@ -93,8 +93,8 @@ export function faceAround(
 }
 
 /**
- * The slot's face laid flat in its own frame, less the margin: what its text or logo must
- * stay inside. Null when the slot has none recorded.
+ * The slot's face laid flat in its own frame (its outer edge), less the margin: what its text
+ * or logo must stay inside. Null when the slot has none recorded.
  */
 export function faceRegions(
   placement: SlotPlacement,
@@ -111,10 +111,13 @@ export function faceRegions(
     }
     return out;
   });
-  const inside = grown(
-    regionsOf(contours.filter((k) => k.length >= 3)),
-    -FACE_MARGIN_MM,
-  );
+  // Its outer edge only: a groove, a bolt or a hole inside it is shallow detail the raised
+  // letters can cross; only the edge would leave them hanging in the air.
+  const outer = regionsOf(contours.filter((k) => k.length >= 3)).map((g) => ({
+    outer: g.outer,
+    holes: [],
+  }));
+  const inside = grown(outer, -FACE_MARGIN_MM);
   return inside.length ? inside : null;
 }
 

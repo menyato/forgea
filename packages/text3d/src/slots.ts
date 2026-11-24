@@ -10,7 +10,12 @@ import {
 import { difference } from './clip.js';
 import { faceRegions, fitsInside, slotFrame } from './face.js';
 import { partGeometry, volumeMm3 } from './geometry.js';
-import { boundsOf, mapRegions, type Region } from './outline.js';
+import {
+  boundsOf,
+  mapRegions,
+  pointInPolygon,
+  type Region,
+} from './outline.js';
 import type { FontSet } from './shaper.js';
 
 /** How far a slot reaches into the surface under it, so the two print as one piece (mm). */
@@ -126,20 +131,42 @@ function slotRegions(
   if (width > slot.maxWidthMm) k *= slot.maxWidthMm / width;
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
+  let [dx, dy] = [0, 0];
   const at = (r: readonly Region[], s: number) =>
-    mapRegions(r, ([x, y]) => [(x - cx) * s, (y - cy) * s]);
-  // On a recorded face, smaller until it sits inside it (never off the edge of the print).
+    mapRegions(r, ([x, y]) => [(x - cx) * s + dx, (y - cy) * s + dy]);
+  // On a recorded face: smaller until it sits inside it (never off the edge of the print), and
+  // when that leaves it much smaller where it was clicked, moved to where on the face it fits
+  // largest (a click near the edge of a narrow face).
   const face = faceRegions(slot.placement, slot.placement.face);
   if (face && !fitsInside(at(regions, k), face)) {
-    let lo = 0;
-    let hi = k;
-    for (let i = 0; i < 14; i++) {
-      const mid = (lo + hi) / 2;
-      if (fitsInside(at(regions, mid), face)) lo = mid;
-      else hi = mid;
+    const largest = (ox: number, oy: number, steps: number) => {
+      [dx, dy] = [ox, oy];
+      let [lo, hi] = [0, k];
+      for (let i = 0; i < steps; i++) {
+        const mid = (lo + hi) / 2;
+        if (fitsInside(at(regions, mid), face)) lo = mid;
+        else hi = mid;
+      }
+      return lo;
+    };
+    let best = { s: largest(0, 0, 14), x: 0, y: 0 };
+    const fb = boundsOf(face);
+    if (fb && best.s < k * 0.9) {
+      const n = 9;
+      for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++) {
+          const x = fb.minX + ((i + 0.5) / n) * (fb.maxX - fb.minX);
+          const y = fb.minY + ((j + 0.5) / n) * (fb.maxY - fb.minY);
+          if (!face.some((g) => pointInPolygon([x, y], g.outer))) continue;
+          const s = largest(x, y, 10);
+          // A clearly better spot only: the owner's click wins a near tie.
+          if (s > best.s * 1.08) best = { s, x, y };
+        }
+      if (best.x !== 0 || best.y !== 0) best.s = largest(best.x, best.y, 14);
     }
-    if (lo <= 0) return null;
-    k = lo;
+    [dx, dy] = [best.x, best.y];
+    if (best.s <= 0) return null;
+    k = best.s;
   }
   const place = (r: readonly Region[]) => at(r, k);
   if (inks.length === 0)

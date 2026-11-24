@@ -275,9 +275,14 @@ async function duplicate(api: ApiClient, id: string) {
   );
   if (!source.ok) throw new Response(source.message, { status: source.status });
   const p = source.data;
-  for (let n = 1; n <= 20; n++) {
+  // -copy, -copy-2 … -copy-20, then a unique one: a product copied many times still copies.
+  const slugFor = (n: number) =>
+    n <= 20
+      ? `${p.slug.slice(0, 70)}-copy${n > 1 ? `-${n}` : ''}`
+      : `${p.slug.slice(0, 60)}-copy-${Date.now().toString(36)}${n}`;
+  for (let n = 1; n <= 22; n++) {
     const created = await api.post<AdminProduct>('/products', {
-      slug: `${p.slug}-copy${n > 1 ? `-${n}` : ''}`.slice(0, 80),
+      slug: slugFor(n),
       name: `${p.name} (copy)`.slice(0, 120),
       description: p.description,
       ...(p.categoryId ? { categoryId: p.categoryId } : {}),
