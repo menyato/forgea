@@ -28,6 +28,7 @@ enum TextStyle {
   COUPLE
   STANDING_INITIAL
   TROPHY
+  STANDING_LOGO
 }
 
 /// The decorations around a big initial (@forgea/text3d TextDecor).

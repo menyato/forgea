@@ -43,15 +43,54 @@ export function boardShapes(
   settings: TextSettings,
   logos: ReadonlyMap<string, LogoShape> = new Map(),
 ): BoardShapes {
+  // A logo standing: the logo itself is the first thing on its face, in the accent colour.
+  const own =
+    settings.style === 'STANDING_LOGO' ? logoOf(design, settings, logos) : [];
+  const ownColour = design.accentColour ?? design.textColour;
   return {
-    base: baseOf(fonts, design, settings),
-    items: (design.items ?? []).flatMap((item) => {
-      const regions = itemRegions(fonts, design, item, logos);
-      return regions.length
-        ? [{ id: item.id, colour: item.colour, regions }]
-        : [];
-    }),
+    base: own.length
+      ? standingBase(own, settings)
+      : baseOf(fonts, design, settings),
+    items: [
+      ...(own.length ? [{ id: 'logo', colour: ownColour, regions: own }] : []),
+      ...(design.items ?? []).flatMap((item) => {
+        const regions = itemRegions(fonts, design, item, logos);
+        return regions.length
+          ? [{ id: item.id, colour: item.colour, regions }]
+          : [];
+      }),
+    ],
   };
+}
+
+/** A standing logo's own logo, `letterHeightMm` tall, centred (none: no logo chosen yet). */
+function logoOf(
+  design: TextDesign,
+  settings: TextSettings,
+  logos: ReadonlyMap<string, LogoShape>,
+): Region[] {
+  const logo = design.logoId ? logos.get(design.logoId) : undefined;
+  if (!logo) return [];
+  const b = boundsOf(logo.outline);
+  if (!b) return [];
+  const k = settings.letterHeightMm / (b.maxY - b.minY);
+  return centred(mapRegions(logo.outline, ([x, y]) => [x * k, y * k]));
+}
+
+/**
+ * The backing a logo stands on: its silhouette with a border, gaps between its parts closed, a
+ * foot bar along its bottom so it stands without rocking, the bottom flat.
+ */
+function standingBase(logo: Region[], settings: TextSettings): Region[] {
+  const h = settings.letterHeightMm;
+  const border = Math.max(2.5, h * 0.05);
+  const close = Math.max(3, h * 0.06);
+  let sil = grown(grown(union(logo), border + close), -close);
+  sil = sil.map((r) => ({ ...r, holes: [] }));
+  const b = boundsOf(sil)!;
+  const footW = Math.max((b.maxX - b.minX) * 0.7, h * 0.6);
+  const footH = Math.max(4, h * 0.07);
+  return union([...sil, rect(-footW / 2, b.minY - footH * 0.4, footW, footH)]);
 }
 
 /**

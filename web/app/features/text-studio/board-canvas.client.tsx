@@ -231,6 +231,19 @@ export default function BoardCanvas({
             pointerEvents="none"
           />
         )}
+        {[...(drawn?.items ?? [])]
+          .filter(([id]) => !items.some((i) => i.id === id))
+          .map(([id, shape]) => (
+            <path
+              key={id}
+              d={pathOf(shape.regions)}
+              fill={hex.get(design.accentColour ?? design.textColour)}
+              fillRule="evenodd"
+              stroke="rgba(0,0,0,0.35)"
+              strokeWidth={unit * 0.5}
+              pointerEvents="none"
+            />
+          ))}
         {items.map((item) => {
           const shape = drawn?.items.get(item.id);
           if (!shape) return null;

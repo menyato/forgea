@@ -598,6 +598,95 @@ describe('Text studio (e2e)', () => {
     });
   });
 
+  it("a customer's logo standing: made of the logo offered (or theirs), with their name under it", async () => {
+    const logo = (
+      await http()
+        .post('/logos')
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .field('name', `Studio badge ${tag}`)
+        .attach(
+          'file',
+          Buffer.from(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0 H100 V100 H0 Z M30 30 V70 H70 V30 Z"/></svg>',
+          ),
+          'badge.svg',
+        )
+        .expect(201)
+    ).body as { id: string };
+    const logoSlug = `logo-standing-${tag}`;
+    await as(admin.cookie)
+      .post('/products', {
+        slug: logoSlug,
+        name: `Your logo standing ${tag}`,
+        description: 'Your logo, standing.',
+        materialId,
+        grams: '60',
+        printHours: '4',
+        isCustom: false,
+        active: true,
+        imageKeys: [],
+        options: [],
+        sizes: [],
+        text: {
+          style: 'STANDING_LOGO',
+          maxChars: 1,
+          letterHeightMm: '100',
+          letterDepthMm: '2',
+          baseDepthMm: '12',
+          maxWidthMm: '200',
+          colourGroupId: groupId,
+          extraColourPrice: '2.00',
+          sizesMm: [],
+          defaultColourId: colours.white,
+          logoIds: [logo.id],
+          ownLogo: true,
+        },
+      })
+      .expect(201);
+    const detail = (await http().get(`/products/${logoSlug}`).expect(200))
+      .body as ProductDetail;
+    expect(detail.text!.logos.map((l) => l.id)).toEqual([logo.id]);
+    // Its 3D card is made of the first logo it offers.
+    expect(detail.modelKey).toMatch(/^clean\/.+\.glb$/);
+    const priced = (design: object) =>
+      http()
+        .post(`/products/${logoSlug}/price`)
+        .set(CSRF)
+        .send({ options: [], design });
+    const design = {
+      text: '',
+      fontId: cairo.id,
+      textColour: colours.white,
+      accentColour: colours.gold,
+      logoId: logo.id,
+      items: [
+        {
+          id: 'n',
+          kind: 'TEXT',
+          text: 'Forgea Lab',
+          x: 0,
+          y: -66,
+          size: 12,
+          rotation: 0,
+          colour: colours.gold,
+        },
+      ],
+    };
+    expect(
+      Number((await priced(design).expect(200)).body.unitPrice),
+    ).toBeGreaterThan(1);
+    // Without a logo there is nothing to stand; a logo not offered is refused.
+    const { logoId: _, ...none } = design;
+    expect((await priced(none).expect(400)).body.message).toMatch(
+      /Add your logo/,
+    );
+    expect(
+      (await priced({ ...design, logoId: randomUUID() }).expect(400)).body
+        .message,
+    ).toMatch(/logos offered/);
+  });
+
   it('designed freely: a standing initial with text, decorations and logos placed on it', async () => {
     const boardSlug = `standing-${tag}`;
     await as(admin.cookie)

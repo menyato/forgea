@@ -49,6 +49,14 @@ export function BoardDesigner({
   useFontFaces(offer.fonts);
   const hydrated = useHydrated();
   const standing = offer.style === 'STANDING_INITIAL';
+  // A logo standing: the logo it is made of (offered or the customer's own) and its colour.
+  const logoStanding = offer.style === 'STANDING_LOGO';
+  const [baseLogoId, setBaseLogoId] = useState(offer.logos[0]?.id ?? '');
+  const [logoColour, setLogoColour] = useState(
+    offer.colours.find(
+      (c) => c.id !== (offer.defaultColourId ?? offer.colours[0]?.id),
+    )?.id ?? '',
+  );
   const looks = looksFor(offer);
   const heights = [offer.letterHeightMm, ...offer.sizesMm].sort(
     (a, b) => Number(a) - Number(b),
@@ -93,11 +101,21 @@ export function BoardDesigner({
     text: standing ? initial.trim() : '',
     fontId: font,
     textColour: baseColour,
+    ...(logoStanding && baseLogoId
+      ? {
+          logoId: baseLogoId,
+          ...(logoColour ? { accentColour: logoColour } : {}),
+        }
+      : {}),
     ...(heightMm !== offer.letterHeightMm ? { heightMm } : {}),
     items,
   };
   const designJson = JSON.stringify(design);
-  const designed = !standing || initial.trim() !== '';
+  const designed = standing
+    ? initial.trim() !== ''
+    : logoStanding
+      ? baseLogoId !== ''
+      : true;
   const live = useLivePrice(designJson, designed && font !== '');
 
   const cart = useFetcher<{ ok?: boolean; error?: string }>();
@@ -272,6 +290,43 @@ export function BoardDesigner({
           </fieldset>
         )}
 
+        {logoStanding && (
+          <fieldset className="grid gap-3">
+            <legend className="mb-1 text-sm font-medium">
+              Your logo{' '}
+              <span className="font-normal text-text-muted">
+                (upload yours below, or pick one)
+              </span>
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {shownOffer.logos.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  title={l.name}
+                  aria-pressed={baseLogoId === l.id}
+                  onClick={() => setBaseLogoId(l.id)}
+                  className="grid w-20 justify-items-center gap-1 rounded-md border border-border p-1.5 text-xs aria-pressed:border-accent aria-pressed:bg-accent/10"
+                >
+                  <LogoOutline
+                    outline={l.outline}
+                    label={l.name}
+                    className="h-12 w-12"
+                  />
+                  <span className="w-full truncate text-center">{l.name}</span>
+                </button>
+              ))}
+            </div>
+            <Swatches
+              legend="The logo's colour"
+              name="design-logo-colour"
+              colours={offer.colours}
+              value={logoColour}
+              onChange={(v) => v && setLogoColour(v)}
+            />
+          </fieldset>
+        )}
+
         {standing && (
           <div className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
             <label className="grid gap-1.5">
@@ -352,7 +407,13 @@ export function BoardDesigner({
         )}
 
         <Swatches
-          legend={standing ? "The letter's colour" : "The plaque's colour"}
+          legend={
+            standing
+              ? "The letter's colour"
+              : logoStanding
+                ? "The backing's colour"
+                : "The plaque's colour"
+          }
           name="design-base-colour"
           colours={offer.colours}
           value={baseColour}
@@ -458,7 +519,14 @@ export function BoardDesigner({
                         },
                       ],
                 );
-                add({ kind: 'LOGO', logoId: logo.id, size: round1(h * 0.25) });
+                // A logo standing is made of the logo; elsewhere it goes on the piece.
+                if (logoStanding) setBaseLogoId(logo.id);
+                else
+                  add({
+                    kind: 'LOGO',
+                    logoId: logo.id,
+                    size: round1(h * 0.25),
+                  });
               }}
             />
           )}
@@ -504,7 +572,9 @@ export function BoardDesigner({
               <span className="text-base font-normal text-text-muted">
                 {designed
                   ? 'Working out the price…'
-                  : 'Type the letter to see the price'}
+                  : logoStanding
+                    ? 'Add your logo to see the price'
+                    : 'Type the letter to see the price'}
               </span>
             )}
             {live.price && live.stale && (
@@ -552,7 +622,11 @@ export function BoardDesigner({
             className="flex-1 py-2.5 text-base"
           >
             {!designed ? (
-              'Type the letter first'
+              logoStanding ? (
+                'Add your logo first'
+              ) : (
+                'Type the letter first'
+              )
             ) : cart.state !== 'idle' ? (
               <Busy label="Adding…" />
             ) : added ? (

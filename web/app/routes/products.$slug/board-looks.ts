@@ -310,6 +310,58 @@ const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
       ],
     },
   ],
+  STANDING_LOGO: [
+    {
+      label: 'Name below',
+      initial: '',
+      base: '#1d1d1f',
+      accent: '#d4a72c',
+      items: [
+        {
+          kind: 'TEXT',
+          text: 'Forgea Lab',
+          font: 'plain',
+          x: 0,
+          y: -0.66,
+          size: 0.13,
+          colour: 'accent',
+        },
+      ],
+    },
+    {
+      label: 'Name and year',
+      initial: '',
+      base: '#ffffff',
+      accent: '#1d1d1f',
+      items: [
+        {
+          kind: 'TEXT',
+          text: 'Forgea Lab',
+          font: 'plain',
+          x: 0,
+          y: -0.64,
+          size: 0.12,
+          colour: 'accent',
+        },
+        {
+          kind: 'TEXT',
+          text: 'SINCE 2026',
+          font: 'plain',
+          x: 0,
+          y: -0.8,
+          size: 0.06,
+          colour: 'accent',
+        },
+      ],
+    },
+    {
+      label: 'The logo alone',
+      initial: '',
+      base: '#1d1d1f',
+      accent: '#d4a72c',
+      items: [],
+    },
+  ],
   TROPHY: [
     {
       label: 'Best teacher',
@@ -484,19 +536,22 @@ export function lookFor(
   const accent = colour(look.accent);
   // The owner's example name, when set, replaces the look's: in its name line and as the initial.
   const sample = offer.sample?.trim();
-  let named = false;
+  // Its name line: the look's script line, else its first line of text.
+  const nameLine = Math.max(
+    look.items.findIndex((i) => i.kind === 'TEXT' && i.font === 'script'),
+    -1,
+  );
+  const named =
+    nameLine >= 0 ? nameLine : look.items.findIndex((i) => i.kind === 'TEXT');
   const base = colour(look.base);
-  const items = look.items.flatMap((i): BoardItem[] => {
+  const items = look.items.flatMap((i, n): BoardItem[] => {
     const logo =
       i.kind === 'LOGO'
         ? (offer.logos.find((l) => i.logo?.test(l.name)) ?? offer.logos[0])
         : undefined;
     if (i.kind === 'LOGO' && !logo) return [];
     const font = i.font ? fontFor(offer.fonts, i.font) : undefined;
-    const text =
-      sample && i.kind === 'TEXT' && i.font === 'script' && !named
-        ? ((named = true), sample)
-        : i.text;
+    const text = sample && n === named ? sample : i.text;
     return [
       {
         id: itemId(),

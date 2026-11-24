@@ -50,6 +50,8 @@ export function designProblem(
   if (BOARD_STYLES.includes(settings.style)) {
     // The base: a standing initial's one letter (a trophy's plaque has none).
     const initial = design.text.trim();
+    if (settings.style === 'STANDING_LOGO' && !design.logoId)
+      return 'Add your logo';
     if (settings.style === 'STANDING_INITIAL') {
       if (lettersOf(initial).length !== 1) return 'Type one letter';
       const missing = fonts.missing(

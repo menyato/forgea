@@ -257,6 +257,22 @@ export class TextStudio {
     if (shape && !p.textShapes.includes(shape))
       throw new BadRequestException('Choose one of the shapes offered');
     const logos = keychain ? offeredLogos : [];
+    // A logo standing: the logo it is made of (offered, or the customer's own) and its colour.
+    const standingLogo =
+      settings.style === 'STANDING_LOGO' && design.logoId
+        ? (offeredLogos.find((l) => l.id === design.logoId) ??
+          (p.textOwnLogo ? await this.customerLogo(design.logoId) : undefined))
+        : undefined;
+    if (settings.style === 'STANDING_LOGO' && !standingLogo)
+      throw new BadRequestException(
+        design.logoId ? 'Choose one of the logos offered' : 'Add your logo',
+      );
+    if (
+      settings.style === 'STANDING_LOGO' &&
+      design.accentColour !== undefined &&
+      !colours.has(design.accentColour)
+    )
+      throw new BadRequestException('Choose one of the colours offered');
     // One the product offers, or the customer's own where the product lets them bring one.
     const logo =
       keychain && design.logoId
@@ -308,6 +324,12 @@ export class TextStudio {
       ...(shape ? { shape } : {}),
       ...(logo ? { logoId: logo.id } : {}),
       ...(logoColours ? { logoColours } : {}),
+      ...(standingLogo ? { logoId: standingLogo.id } : {}),
+      ...(standingLogo &&
+      design.accentColour &&
+      design.accentColour !== design.textColour
+        ? { accentColour: design.accentColour }
+        : {}),
       ...(board ? { items } : {}),
     };
     const used = new Set([
@@ -318,6 +340,9 @@ export class TextStudio {
     ]);
     const shapes: [string, StoredLogo][] = [
       ...(logo ? [[logo.id, logo] as [string, StoredLogo]] : []),
+      ...(standingLogo
+        ? [[standingLogo.id, standingLogo] as [string, StoredLogo]]
+        : []),
       ...[...itemLogos.values()].map((l) => [l.id, l] as [string, StoredLogo]),
     ];
     const measured = given
@@ -386,7 +411,7 @@ export class TextStudio {
           : null,
         letterHeightMm: height,
         shape: shape ? KEYCHAIN_SHAPE_LABELS[shape] : null,
-        logo: logo?.name ?? null,
+        logo: logo?.name ?? standingLogo?.name ?? null,
         logoColours: logoColours?.map((c) => colours.get(c)!) ?? null,
         items: board
           ? items.map((i) => ({
@@ -511,6 +536,11 @@ export class TextStudio {
     const accent = ACCENT_STYLES.includes(settings.style)
       ? pick(p.textDefaultAccentId)
       : undefined;
+    const sampleLogo =
+      settings.style === 'STANDING_LOGO'
+        ? (await this.offeredLogos(p))[0]
+        : undefined;
+    if (settings.style === 'STANDING_LOGO' && !sampleLogo) return null;
     const files = await this.shaper.stl(
       [{ id: font.id, read: () => this.uploads.read(font.fileKey) }],
       {
@@ -520,6 +550,16 @@ export class TextStudio {
         textColour: letters.id,
         ...(base ? { baseColour: base.id } : {}),
         ...(accent ? { accentColour: accent.id } : {}),
+        ...(settings.style === 'STANDING_LOGO' && sampleLogo
+          ? {
+              logoId: sampleLogo.id,
+              accentColour: (
+                base ??
+                values.find((v) => v.id !== letters.id) ??
+                letters
+              ).id,
+            }
+          : {}),
         // A board piece shows the shop's name on its face, in the second colour.
         ...(BOARD_STYLES.includes(settings.style)
           ? {
@@ -529,7 +569,10 @@ export class TextStudio {
                   kind: 'TEXT' as const,
                   text: p.textSample ?? 'Forgea',
                   x: 0,
-                  y: 0,
+                  y:
+                    settings.style === 'STANDING_LOGO'
+                      ? -Math.round(settings.letterHeightMm * 0.62)
+                      : 0,
                   size: Math.round(settings.letterHeightMm * 0.16),
                   rotation: 0,
                   colour: (
@@ -543,6 +586,7 @@ export class TextStudio {
           : {}),
       },
       settings,
+      sampleLogo ? [[sampleLogo.id, sampleLogo]] : [],
     );
     if ('problem' in files || files.length === 0) return null;
     const data = sampleGlb(
@@ -666,4 +710,5 @@ const SAMPLE_TEXT: Record<TextSettings['style'], string> = {
   COUPLE: 'Forge & Lab',
   STANDING_INITIAL: 'F',
   TROPHY: '',
+  STANDING_LOGO: '',
 };

@@ -24,6 +24,7 @@ export const TEXT_STYLES = [
   'COUPLE',
   'STANDING_INITIAL',
   'TROPHY',
+  'STANDING_LOGO',
 ] as const;
 export type TextStyle = (typeof TEXT_STYLES)[number];
 
@@ -36,6 +37,7 @@ export const TEXT_STYLE_LABELS: Readonly<Record<TextStyle, string>> = {
   COUPLE: 'Two names and a heart',
   STANDING_INITIAL: 'Standing initial, designed freely',
   TROPHY: 'Trophy, designed freely',
+  STANDING_LOGO: 'Your logo standing, designed freely',
 };
 
 /**
@@ -46,6 +48,7 @@ export const TEXT_STYLE_LABELS: Readonly<Record<TextStyle, string>> = {
 export const BOARD_STYLES: readonly TextStyle[] = [
   'STANDING_INITIAL',
   'TROPHY',
+  'STANDING_LOGO',
 ];
 
 /** Decorations an item can be (drawn shapes, no font). */

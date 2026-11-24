@@ -96,6 +96,15 @@ const STARTS: Record<
     extraColourPrice: '2.00',
     sizesMm: ['120', '180'],
   },
+  STANDING_LOGO: {
+    maxChars: 1,
+    letterHeightMm: '110',
+    letterDepthMm: '2',
+    baseDepthMm: '12',
+    maxWidthMm: '200',
+    extraColourPrice: '2.00',
+    sizesMm: ['80', '150'],
+  },
   TROPHY: {
     maxChars: 1,
     letterHeightMm: '140',
@@ -121,6 +130,8 @@ const HELP: Record<ProductTextSettings['style'], string> = {
     'Two names with a heart between them on one backing, standing. Most characters is per name.',
   STANDING_INITIAL:
     "One big letter that stands on its own; customers place names, dates, weights, decorations and logos on it where they like (drag and drop). The size is the letter's height; the thickness is the backing.",
+  STANDING_LOGO:
+    "The customer's logo (theirs, uploaded, or one of the logos you tick) standing on its own backing and foot, like the Forgea logo showcase; they add their name, a year or decorations around it. The size is the logo's height.",
   TROPHY:
     "A plaque on a foot; customers place a title, names, a year, decorations and logos (a profession's, or their own) on it where they like. The size is the plaque's height.",
 };

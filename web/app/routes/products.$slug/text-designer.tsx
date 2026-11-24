@@ -63,6 +63,7 @@ const SAMPLE: Record<ProductTextOffer['style'], string> = {
   // Designed freely on their own page (BoardDesigner).
   STANDING_INITIAL: 'A',
   TROPHY: '',
+  STANDING_LOGO: '',
 };
 
 /** What the accent colour paints, by style. */

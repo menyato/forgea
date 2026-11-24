@@ -112,6 +112,7 @@ function layoutAt(
     // Designed freely: a base with items placed on it (board.ts).
     case 'STANDING_INITIAL':
     case 'TROPHY':
+    case 'STANDING_LOGO':
       return boardLayout(fonts, design, settings, logos);
   }
 
