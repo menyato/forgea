@@ -364,8 +364,14 @@ export interface DesignSlot {
   heightMm: number;
   /** Longer text (or a wider logo) is scaled down to fit, mm. */
   maxWidthMm: number;
-  /** How far it stands out of the surface, mm. */
+  /** How far it stands out of the surface (RAISED) or goes into it (FLUSH), mm. */
   depthMm: number;
+  /**
+   * RAISED (the default): it stands `depthMm` out of the surface. FLUSH: it goes `depthMm` into
+   * the surface, its top level with it: an inlay in its own colour (the slicer prints the
+   * overlap in the slot's filament).
+   */
+  relief?: SlotRelief;
   /** The colour it prints in: an option value id of the product's colour choices. */
   colour: string;
   /** Text: what it says until a customer changes it (may be empty: nothing shown). */
@@ -375,7 +381,15 @@ export interface DesignSlot {
   /** Logo: which of the studio's logos, and whether it shows until a customer turns it off. */
   logoId?: string;
   defaultOn?: boolean;
+  /**
+   * Logo: the studio's logos customers may pick from for this place (as a sign on a plate:
+   * the cedar, a profession). `logoId` is the one it starts with.
+   */
+  logoChoices?: string[];
 }
+
+export const SLOT_RELIEFS = ['RAISED', 'FLUSH'] as const;
+export type SlotRelief = (typeof SLOT_RELIEFS)[number];
 
 /** What a customer chose for one slot; anything left out is the owner's default. */
 export interface SlotChoice {

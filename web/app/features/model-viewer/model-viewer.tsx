@@ -60,6 +60,8 @@ export function ModelViewer({
   onMeasured,
   extras,
   onPick,
+  onDrag,
+  still = false,
   className = '',
 }: {
   modelKey: string;
@@ -73,6 +75,10 @@ export function ModelViewer({
   extras?: readonly ModelExtra[] | undefined;
   /** Called with the spot clicked on the model (the dashboard places text there). */
   onPick?: ((pick: ModelPick) => void) | undefined;
+  /** Press on the model and drag: the spot under the pointer as it moves, then where it was let go. */
+  onDrag?: ((pick: ModelPick, done: boolean) => void) | undefined;
+  /** Never turns on its own (an editor, where things are placed on it). */
+  still?: boolean;
   className?: string;
 }) {
   const hydrated = useHydrated();
@@ -98,10 +104,11 @@ export function ModelViewer({
               color={color}
               recolour={recolour}
               // Turning on its own would move what someone is about to click.
-              spin={!prefersReducedMotion() && !onPick}
+              spin={!prefersReducedMotion() && !onPick && !still}
               onMeasured={onMeasured}
               extras={extras}
               onPick={onPick}
+              onDrag={onDrag}
             />
           </Suspense>
         </SceneBoundary>

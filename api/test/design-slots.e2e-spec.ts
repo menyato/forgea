@@ -24,6 +24,23 @@ const fontFile = (file: string) =>
 const BADGE =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0 H100 V100 H0 Z M30 30 V70 H70 V30 Z"/></svg>';
 
+/** A product as the dashboard sends it back when saving (its slots given by the test). */
+const editable = (p: AdminProduct) => ({
+  slug: p.slug,
+  name: p.name,
+  description: p.description,
+  materialId: p.materialId,
+  grams: p.grams,
+  printHours: p.printHours,
+  isCustom: p.isCustom,
+  active: p.active,
+  imageKeys: p.imageKeys,
+  options: [],
+  sizes: [],
+  ...(p.modelFileKey ? { modelFileKey: p.modelFileKey } : {}),
+  ...(p.partColourGroupId ? { partColourGroupId: p.partColourGroupId } : {}),
+});
+
 /**
  * Text and logos on any product: the studio's logos read from SVG, a product's slots checked
  * when saved, the shop pricing a customer's name and logo choice, the cart and the order
@@ -222,6 +239,74 @@ describe('Text and logo slots (e2e)', () => {
       .set(CSRF)
       .send({ options: [], slots: [{ slotId: 'name', colour: randomUUID() }] })
       .expect(400);
+  });
+
+  it('a logo place offers the studio logos customers pick from, and may print flush', async () => {
+    const ring = (
+      await http()
+        .post('/logos')
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .field('name', `Ring ${tag}`)
+        .attach(
+          'file',
+          Buffer.from(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45"/><circle cx="50" cy="50" r="25"/></svg>',
+          ),
+          'ring.svg',
+        )
+        .expect(201)
+    ).body as LogoView;
+    const sign = {
+      ...slots()[1],
+      id: 'sign',
+      label: 'Sign',
+      relief: 'FLUSH',
+      logoChoices: [logo.id, ring.id],
+    };
+    const current = (
+      await as(admin.cookie).get(`/products/manage/${product.id}`).expect(200)
+    ).body as AdminProduct;
+    // Only the studio's own logos may be offered.
+    await http()
+      .put(`/products/${product.id}`)
+      .set(CSRF)
+      .set('Cookie', admin.cookie)
+      .send({
+        ...editable(current),
+        slots: [...slots(), { ...sign, logoChoices: [randomUUID()] }],
+      })
+      .expect(400);
+    const saved = (
+      await http()
+        .put(`/products/${product.id}`)
+        .set(CSRF)
+        .set('Cookie', admin.cookie)
+        .send({ ...editable(current), slots: [...slots(), sign] })
+        .expect(200)
+    ).body as AdminProduct;
+    const kept = saved.slots.find((s) => s.id === 'sign')!;
+    expect(kept.relief).toBe('FLUSH');
+    expect(kept.logoChoices).toEqual([logo.id, ring.id]);
+    const page = (await http().get(`/products/${product.slug}`).expect(200))
+      .body as ProductDetail;
+    expect(page.slots?.logos.map((l) => l.name)).toContain(`Ring ${tag}`);
+    // A customer picks one of them; any other logo is refused.
+    expect(await price([{ slotId: 'sign', logoId: ring.id }])).toBeGreaterThan(
+      0,
+    );
+    await http()
+      .post(`/products/${product.slug}/price`)
+      .set(CSRF)
+      .send({ options: [], slots: [{ slotId: 'sign', logoId: randomUUID() }] })
+      .expect(400);
+    // Back as it was for the tests that follow.
+    await http()
+      .put(`/products/${product.id}`)
+      .set(CSRF)
+      .set('Cookie', admin.cookie)
+      .send({ ...editable(current), slots: slots() })
+      .expect(200);
   });
 
   it('the cart and the order keep the name, and the studio downloads the model with it in place', async () => {

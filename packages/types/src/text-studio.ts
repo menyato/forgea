@@ -166,7 +166,13 @@ export interface ProductSlotsOffer {
   /** Every slot (the ones customers can't change show as the owner set them). */
   slots: DesignSlot[];
   /** The logos its slots use, as print outlines (1 across, centred). */
-  logos: { id: string; outline: Region[]; inks: LogoInk[] | null }[];
+  logos: {
+    id: string;
+    outline: Region[];
+    inks: LogoInk[] | null;
+    /** The studio's name for it (shown where customers pick a logo). */
+    name?: string;
+  }[];
   /** The fonts its text slots may be written in. */
   fonts: Pick<FontView, 'id' | 'name' | 'fileKey' | 'latin' | 'arabic'>[];
   /** The colours slots may print in (the product's part colours, or its text colours). */

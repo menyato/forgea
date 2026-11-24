@@ -51,6 +51,9 @@ export function SlotInputs({
                   placeholder={s.defaultText || 'Type it here'}
                   value={choices[s.id]?.text ?? s.defaultText ?? ''}
                   onChange={(e) => set(s.id, { text: e.currentTarget.value })}
+                  // Its starting text is selected: typing replaces it (it may already be as
+                  // long as the place allows).
+                  onFocus={(e) => e.currentTarget.select()}
                   className="rounded-md border border-border bg-surface px-3 py-2"
                 />
                 {offer.fonts.length > 1 && (
@@ -80,6 +83,59 @@ export function SlotInputs({
               </>
             ) : (
               <>
+                {s.logoChoices?.length ? (
+                  <div
+                    role="radiogroup"
+                    aria-label={`${s.label}: which one`}
+                    className="grid grid-cols-4 gap-2 sm:grid-cols-6"
+                  >
+                    {s.logoChoices.map((id) => {
+                      const logo = offer.logos.find((l) => l.id === id);
+                      if (!logo) return null;
+                      const chosen = state.logoId === id && state.on;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={chosen}
+                          aria-label={logo.name ?? 'Logo'}
+                          title={logo.name}
+                          onClick={() => {
+                            // A studio logo starts in the place's colour (or its own colours).
+                            const { logoColours: _old, ...rest } =
+                              choices[s.id] ?? {};
+                            void _old;
+                            onChange({
+                              ...choices,
+                              [s.id]: {
+                                ...rest,
+                                logoId: id,
+                                on: true,
+                                ...(logo.inks?.length
+                                  ? {
+                                      logoColours: logo.inks.map(
+                                        (ink) =>
+                                          nearestColour(ink.hex, offer.colours)
+                                            ?.id ?? state.colour,
+                                      ),
+                                    }
+                                  : {}),
+                              },
+                            });
+                          }}
+                          className={`grid aspect-square place-items-center rounded-md border p-2 text-text ${
+                            chosen
+                              ? 'border-accent bg-accent/10'
+                              : 'border-border hover:border-text-muted'
+                          }`}
+                        >
+                          <LogoOutline outline={logo.outline} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {state.logoId && (
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -264,3 +320,27 @@ export const slotChoicesJson = (
   JSON.stringify(
     Object.entries(choices).map(([slotId, c]) => ({ slotId, ...c })),
   );
+
+/** A logo's print outline drawn flat (1 across, y up), in the text colour. */
+function LogoOutline({
+  outline,
+}: {
+  outline: ProductSlotsOffer['logos'][number]['outline'];
+}) {
+  const d = outline
+    .flatMap((r) => [r.outer, ...r.holes])
+    .map(
+      (c) =>
+        `M${c.map(([x, y]) => `${x.toFixed(3)} ${(-y).toFixed(3)}`).join('L')}Z`,
+    )
+    .join('');
+  return (
+    <svg
+      viewBox="-0.55 -0.55 1.1 1.1"
+      className="h-full w-full"
+      aria-hidden="true"
+    >
+      <path d={d} fill="currentColor" fillRule="evenodd" />
+    </svg>
+  );
+}

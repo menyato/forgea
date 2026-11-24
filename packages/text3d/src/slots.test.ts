@@ -195,6 +195,30 @@ describe('a slot kept on its face', () => {
   });
 });
 
+describe('raised or flush', () => {
+  it('raised stands out of the surface; flush goes into it, its top level with it', () => {
+    const top = {
+      ...name,
+      placement: {
+        origin: [0, 0, 5] as [number, number, number],
+        normal: [0, 0, 1] as [number, number, number],
+        up: [0, 1, 0] as [number, number, number],
+      },
+    };
+    const zOf = (slot: DesignSlot) => {
+      const [b] = buildSlots(fonts, [slot], {}, new Map());
+      return new Box3().setFromBufferAttribute(
+        b!.geometry.getAttribute('position') as never,
+      );
+    };
+    const raised = zOf({ ...top, depthMm: 1 });
+    expect(raised.max.z).toBeCloseTo(6, 3);
+    const flush = zOf({ ...top, depthMm: 1, relief: 'FLUSH' });
+    expect(flush.min.z).toBeCloseTo(4, 3);
+    expect(flush.max.z).toBeLessThan(5.05);
+  });
+});
+
 describe('slots on a model', () => {
   it('raises the default text on the face it was placed on, sized to its height', () => {
     const [built] = buildSlots(fonts, [name], {}, new Map());

@@ -76,14 +76,68 @@ const SIDES: {
 const mid = (b: Box, axis: 0 | 1 | 2) => (b.min[axis] + b.max[axis]) / 2;
 const round = (v: Vec): Vec => v.map((n) => Math.round(n * 100) / 100) as Vec;
 
-/** The text's up turned a quarter about the face's normal (sideways text, then upside down…). */
-function turned(p: SlotPlacement): SlotPlacement {
-  const [nx, ny, nz] = p.normal;
-  const [ux, uy, uz] = p.up;
-  // n × u: a quarter turn of u about n.
+const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: Vec, b: Vec): Vec => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const unit = (a: Vec): Vec => {
+  const l = Math.hypot(...a) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+
+/** The place's own flat frame: `r` along the text, `u` up the letters, `n` out of the surface. */
+function frameOf(p: SlotPlacement) {
+  const n = unit(p.normal);
+  let u = p.up.map((v, i) => v - n[i]! * dot(p.up, n)) as Vec;
+  if (Math.hypot(...u) < 1e-4) u = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [0, 0, 1];
+  u = unit(u);
+  return { r: unit(cross(u, n)), u, n };
+}
+
+/** The text's up turned by `degrees` about the face's normal (counter-clockwise as seen). */
+function turned(p: SlotPlacement, degrees = 90): SlotPlacement {
+  const { u, n } = frameOf(p);
+  const a = (degrees * Math.PI) / 180;
+  const side = cross(n, u);
   return {
     ...p,
-    up: round([ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux]),
+    up: round(u.map((v, i) => v * Math.cos(a) + side[i]! * Math.sin(a)) as Vec),
+  };
+}
+
+/** Moved `dx` mm along the text and `dy` mm up it, on its own face (the face it keeps). */
+function moved(p: SlotPlacement, dx: number, dy: number): SlotPlacement {
+  const { r, u } = frameOf(p);
+  return {
+    ...p,
+    origin: round(p.origin.map((v, i) => v + r[i]! * dx + u[i]! * dy) as Vec),
+  };
+}
+
+/**
+ * Where the middle of its face is from it, along the text (x) and up it (y), mm; null without
+ * a recorded face. The middle of the face's box, as an owner centres by eye.
+ */
+function faceCentre(p: SlotPlacement): { x: number; y: number } | null {
+  const outer = p.face?.[0];
+  if (!outer) return null;
+  const { r, u } = frameOf(p);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i + 2 < outer.length; i += 3) {
+    const d: Vec = [
+      outer[i]! - p.origin[0],
+      outer[i + 1]! - p.origin[1],
+      outer[i + 2]! - p.origin[2],
+    ];
+    xs.push(dot(d, r));
+    ys.push(dot(d, u));
+  }
+  return {
+    x: (Math.min(...xs) + Math.max(...xs)) / 2,
+    y: (Math.min(...ys) + Math.max(...ys)) / 2,
   };
 }
 
@@ -164,25 +218,31 @@ export function SlotsEditor({
       live = false;
     };
   }, []);
-  const onPick = useCallback(
-    (pick: ModelPick) => {
+  // Placing: press on the model and drag; the place follows the pointer and settles, with
+  // the flat face under it, where it is let go (a click places it at once).
+  const onDrag = useCallback(
+    (pick: ModelPick, done: boolean) => {
       if (!placing) return;
+      const slot = value.find((x) => x.id === placing);
+      if (!slot) return;
       const normal = round(pick.normal);
+      // The same way out of the surface: the text keeps the way it was turned.
+      const sameFace = dot(unit(normal), unit(slot.placement.normal)) > 0.99;
       const placement: SlotPlacement = {
         origin: round(pick.origin),
         normal,
-        up: upFor(normal),
+        up: sameFace ? slot.placement.up : upFor(normal),
       };
       // Its text and logo stay inside that face: nothing hangs off the edge of the print.
-      const face = faceAround?.(pick.triangles(), placement);
+      const face = done ? faceAround?.(pick.triangles(), placement) : undefined;
       onChange(
-        value.map((s) =>
-          s.id === placing
-            ? { ...s, placement: face ? { ...placement, face } : placement }
-            : s,
+        value.map((x) =>
+          x.id === placing
+            ? { ...x, placement: face ? { ...placement, face } : placement }
+            : x,
         ),
       );
-      setPlacing(null);
+      if (done) setPlacing(null);
     },
     [placing, value, onChange, faceAround],
   );
@@ -228,7 +288,9 @@ export function SlotsEditor({
     <div className="grid gap-4">
       <p className="text-sm text-text-muted">
         Add a name or a logo on the model. Put each one on a side, or press{' '}
-        <strong>Place it where I click</strong> and click the model. Tick{' '}
+        <strong>Place it on the model</strong>, then press on the model and drag
+        it where you want it; the arrows move it a little at a time and{' '}
+        <strong>Centre</strong> puts it in the middle of its face. Tick{' '}
         <strong>Customers may change it</strong> to let them type their own
         name, pick the font and colour, turn the logo off or add their own logo;
         the rest always prints as you set it.
@@ -254,14 +316,15 @@ export function SlotsEditor({
           label={`${name || 'the product'} with its text and logos`}
           extras={extras}
           onMeasured={onMeasured}
-          onPick={placing ? onPick : undefined}
+          onDrag={placing ? onDrag : undefined}
+          still
           className="max-h-[26rem] rounded-lg border border-border"
         />
       )}
       <p aria-live="polite" className="text-sm">
         {placing ? (
           <span className="font-medium text-accent">
-            Click the model where it should go.
+            Press on the model where it should go and drag it into place.
           </span>
         ) : problem ? (
           <span className="text-danger">{problem}</span>
@@ -358,6 +421,43 @@ export function SlotsEditor({
                       </option>
                     ))}
                 </SelectField>
+                <fieldset className="grid gap-1.5 sm:col-span-2">
+                  <legend className="text-sm font-medium">
+                    Customers pick from these logos
+                  </legend>
+                  <p className="text-xs text-text-muted">
+                    Tick the logos they may choose for this place (the one above
+                    is where it starts). None ticked: it is always the logo
+                    above.
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {logos
+                      .filter((l) => l.active || s.logoChoices?.includes(l.id))
+                      .map((l) => (
+                        <label
+                          key={l.id}
+                          className="flex items-center gap-1.5 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            name={`slot-choice-${s.id}-${l.id}`}
+                            checked={s.logoChoices?.includes(l.id) ?? false}
+                            onChange={(e) => {
+                              const on = e.currentTarget.checked;
+                              set(s.id, {
+                                logoChoices: on
+                                  ? [...(s.logoChoices ?? []), l.id]
+                                  : (s.logoChoices ?? []).filter(
+                                      (x) => x !== l.id,
+                                    ),
+                              });
+                            }}
+                          />
+                          {l.name}
+                        </label>
+                      ))}
+                  </div>
+                </fieldset>
                 <CheckboxField
                   label="Shows until a customer turns it off"
                   name={`slot-on-${s.id}`}
@@ -394,8 +494,25 @@ export function SlotsEditor({
               }
               hint="Longer text gets smaller to fit"
             />
+            <SelectField
+              label="On the surface"
+              name={`slot-relief-${s.id}`}
+              value={s.relief ?? 'RAISED'}
+              onChange={(e) =>
+                set(s.id, {
+                  relief:
+                    e.currentTarget.value === 'FLUSH' ? 'FLUSH' : 'RAISED',
+                })
+              }
+              hint="Flush: set into the print, level with it, in its own colour"
+            >
+              <option value="RAISED">Raised above it</option>
+              <option value="FLUSH">Flush (inlaid)</option>
+            </SelectField>
             <Field
-              label="Raised (mm)"
+              label={
+                s.relief === 'FLUSH' ? 'Depth into it (mm)' : 'Raised (mm)'
+              }
               name={`slot-depth-${s.id}`}
               type="number"
               min={0.4}
@@ -435,14 +552,16 @@ export function SlotsEditor({
               variant={placing === s.id ? 'primary' : 'secondary'}
               onClick={() => setPlacing(placing === s.id ? null : s.id)}
             >
-              {placing === s.id ? 'Cancel placing' : 'Place it where I click'}
+              {placing === s.id ? 'Cancel placing' : 'Place it on the model'}
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => set(s.id, { placement: turned(s.placement) })}
-            >
-              Turn it ↻
-            </Button>
+          </div>
+          <PlaceControls
+            id={s.id}
+            label={s.label}
+            placement={s.placement}
+            onPlacement={(placement) => set(s.id, { placement })}
+          />
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <Button
               variant="quiet"
               onClick={() => onChange(value.filter((x) => x.id !== s.id))}
@@ -479,6 +598,98 @@ export function SlotsEditor({
         )}
       </div>
       {listError && <p className="text-sm text-danger">{listError}</p>}
+    </div>
+  );
+}
+
+/**
+ * Fine control of a place: arrows move it along its face (1 mm, or 0.2 mm when Fine), Centre
+ * puts it in the middle of its face (across, up and down, or both), and it turns by 15° or 90°.
+ */
+function PlaceControls({
+  id,
+  label,
+  placement,
+  onPlacement,
+}: {
+  id: string;
+  label: string;
+  placement: SlotPlacement;
+  onPlacement: (p: SlotPlacement) => void;
+}) {
+  const [fine, setFine] = useState(false);
+  const step = fine ? 0.2 : 1;
+  const centre = faceCentre(placement);
+  const go = (dx: number, dy: number) => onPlacement(moved(placement, dx, dy));
+  const arrow = (text: string, name: string, dx: number, dy: number) => (
+    <Button
+      variant="secondary"
+      aria-label={`Move ${label} ${name}`}
+      onClick={() => go(dx, dy)}
+    >
+      {text}
+    </Button>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-text-muted">Move:</span>
+      {arrow('←', 'left', -step, 0)}
+      {arrow('↑', 'up', 0, step)}
+      {arrow('↓', 'down', 0, -step)}
+      {arrow('→', 'right', step, 0)}
+      <label className="flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          name={`slot-fine-${id}`}
+          checked={fine}
+          onChange={(e) => setFine(e.currentTarget.checked)}
+        />
+        Fine (0.2 mm)
+      </label>
+      <span className="ml-2 text-text-muted">Centre:</span>
+      <Button
+        variant="secondary"
+        disabled={!centre}
+        onClick={() => centre && go(centre.x, 0)}
+      >
+        Across
+      </Button>
+      <Button
+        variant="secondary"
+        disabled={!centre}
+        onClick={() => centre && go(0, centre.y)}
+      >
+        Up and down
+      </Button>
+      <Button
+        variant="secondary"
+        disabled={!centre}
+        onClick={() => centre && go(centre.x, centre.y)}
+      >
+        Both
+      </Button>
+      <span className="ml-2 text-text-muted">Turn:</span>
+      <Button
+        variant="secondary"
+        aria-label={`Turn ${label} 15 degrees left`}
+        onClick={() => onPlacement(turned(placement, 15))}
+      >
+        ↺ 15°
+      </Button>
+      <Button
+        variant="secondary"
+        aria-label={`Turn ${label} 15 degrees right`}
+        onClick={() => onPlacement(turned(placement, -15))}
+      >
+        ↻ 15°
+      </Button>
+      <Button
+        variant="secondary"
+        aria-label={`Turn ${label} a quarter`}
+        onClick={() => onPlacement(turned(placement, -90))}
+      >
+        ↻ 90°
+      </Button>
     </div>
   );
 }

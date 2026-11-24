@@ -74,11 +74,15 @@ export function buildSlots(
     if (!flat) continue;
     for (const { colour, regions } of flat) {
       if (regions.length === 0) continue;
+      // Raised: from just under the surface (so they print as one piece) to its height.
+      // Flush: sunk into the surface, its top a hair above it (so the view shows it, not the
+      // surface it shares; 0.01 mm prints the same).
+      const flush = slot.relief === 'FLUSH';
       const geometry = partGeometry({
         colour,
         regions,
-        z0: -EMBED_MM,
-        z1: slot.depthMm,
+        z0: flush ? -slot.depthMm : -EMBED_MM,
+        z1: flush ? 0.01 : slot.depthMm,
       });
       geometry.applyMatrix4(placementMatrix(slot));
       built.push({

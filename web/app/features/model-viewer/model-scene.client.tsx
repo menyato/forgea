@@ -6,7 +6,7 @@ import {
   useLoader,
   useThree,
 } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { type MutableRefObject, useEffect, useMemo, useRef } from 'react';
 import {
   Box3,
   BufferGeometry,
@@ -48,6 +48,8 @@ export interface SceneProps {
   onMeasured?: ((m: ModelMeasurement) => void) | undefined;
   extras?: readonly ModelExtra[] | undefined;
   onPick?: ((pick: ModelPick) => void) | undefined;
+  /** Pressing on the model and dragging: the spot under the pointer as it moves, then where it was let go. */
+  onDrag?: ((pick: ModelPick, done: boolean) => void) | undefined;
 }
 
 /** The WebGL scene. Imported lazily, in the browser only: three.js never runs on the server. */
@@ -69,7 +71,17 @@ export default function ModelScene(props: SceneProps) {
   );
 }
 
-function Stl({ src, color, spin, onMeasured, extras, onPick }: SceneProps) {
+function Stl({
+  src,
+  color,
+  spin,
+  onMeasured,
+  extras,
+  onPick,
+  onDrag,
+}: SceneProps) {
+  const controls = useRef<OrbitControls | null>(null);
+  const drag = useDrag(onDrag, 1, controls);
   const loaded = useLoader(STLLoader, src);
   const { geometry, mesh } = useMemo(() => {
     const g = uprightStl(loaded);
@@ -81,8 +93,8 @@ function Stl({ src, color, spin, onMeasured, extras, onPick }: SceneProps) {
     onMeasured?.(measure(mesh, 1));
   }, [mesh, onMeasured]);
   return (
-    <Framed object={mesh} spin={spin}>
-      <mesh geometry={geometry} onClick={picker(onPick, 1)}>
+    <Framed object={mesh} spin={spin} controlsRef={controls}>
+      <mesh geometry={geometry} onClick={picker(onPick, 1)} {...drag}>
         <meshStandardMaterial
           color={new Color(color)}
           roughness={0.5}
@@ -103,8 +115,11 @@ function Glb({
   onMeasured,
   extras,
   onPick,
+  onDrag,
 }: SceneProps) {
   const gltf = useLoader(GLTFLoader, src, (loader) => gltfLoader(loader));
+  const controls = useRef<OrbitControls | null>(null);
+  const drag = useDrag(onDrag, 1000, controls);
   // A copy made from an STL takes the chosen colour, like the STL itself.
   const parts = !paintable && recolour !== undefined;
   const model = useMemo(() => {
@@ -112,7 +127,10 @@ function Glb({
     // Its own copy (meshes shared): the loader caches one scene per file, and an object lives
     // in one scene only. Two viewers of one model (a product's preview and its text editor)
     // would otherwise share it, the second framing it with the first one's offset.
-    if (!paintable) return gltf.scene.clone();
+    // A 3MF printed in one colour takes the colour chosen in the shop, as an STL does; one
+    // in several colours keeps its own (its parts are recoloured one by one, above).
+    if (!paintable && !(color && oneColour(gltf.scene)))
+      return gltf.scene.clone();
     const painted = markPaintable(gltf.scene.clone());
     paint(painted, color);
     return painted;
@@ -129,8 +147,8 @@ function Glb({
     onMeasured?.(measure(model, 1000));
   }, [model, onMeasured]);
   return (
-    <Framed object={model} spin={spin}>
-      <primitive object={model} onClick={picker(onPick, 1000)} />
+    <Framed object={model} spin={spin} controlsRef={controls}>
+      <primitive object={model} onClick={picker(onPick, 1000)} {...drag} />
       {/* glTF is in metres: the extras, in millimetres, shrink to match. */}
       <Extras extras={extras} scale={0.001} />
     </Framed>
@@ -174,22 +192,93 @@ function picker(onPick: ((pick: ModelPick) => void) | undefined, toMm: number) {
   if (!onPick) return undefined;
   return (e: ThreeEvent<MouseEvent>) => {
     // A drag to turn the model is not a click on it.
-    if (e.delta > 4 || !e.face) return;
+    if (e.delta > 4) return;
+    const pick = pickOf(e, toMm);
+    if (!pick) return;
     e.stopPropagation();
-    const root = e.eventObject;
-    const local = root.worldToLocal(e.point.clone());
-    const normal = e.face.normal
-      .clone()
-      .transformDirection(e.object.matrixWorld)
-      .transformDirection(root.matrixWorld.clone().invert())
-      .normalize();
-    // Y up (the scene) back to Z up (the file): x, y, z = x, -z, y.
-    onPick({
-      origin: [local.x * toMm, -local.z * toMm, local.y * toMm],
-      normal: [normal.x, -normal.z, normal.y],
-      triangles: () => fileTriangles(root, toMm),
-    });
+    onPick(pick);
   };
+}
+
+/** The spot under the pointer and the face's outward direction, in the model file's frame. */
+function pickOf(
+  e: ThreeEvent<MouseEvent> | ThreeEvent<PointerEvent>,
+  toMm: number,
+): ModelPick | null {
+  if (!e.face) return null;
+  const root = e.eventObject;
+  const local = root.worldToLocal(e.point.clone());
+  const normal = e.face.normal
+    .clone()
+    .transformDirection(e.object.matrixWorld)
+    .transformDirection(root.matrixWorld.clone().invert())
+    .normalize();
+  // Y up (the scene) back to Z up (the file): x, y, z = x, -z, y.
+  return {
+    origin: [local.x * toMm, -local.z * toMm, local.y * toMm],
+    normal: [normal.x, -normal.z, normal.y],
+    triangles: () => fileTriangles(root, toMm),
+  };
+}
+
+/**
+ * Drag and drop on the model: pressing on it stops the turntable controls (the model holds
+ * still), each move reports the spot under the pointer, letting go anywhere reports the last.
+ */
+function useDrag(
+  onDrag: SceneProps['onDrag'],
+  toMm: number,
+  controls: MutableRefObject<OrbitControls | null>,
+) {
+  const last = useRef<ModelPick | null>(null);
+  const active = useRef(false);
+  useEffect(() => {
+    if (!onDrag) return;
+    const up = () => {
+      if (!active.current) return;
+      active.current = false;
+      if (controls.current) controls.current.enabled = true;
+      if (last.current) onDrag(last.current, true);
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [onDrag, controls]);
+  if (!onDrag) return {};
+  return {
+    onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      const pick = pickOf(e, toMm);
+      if (!pick) return;
+      e.stopPropagation();
+      active.current = true;
+      if (controls.current) controls.current.enabled = false;
+      last.current = pick;
+      onDrag(pick, false);
+    },
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => {
+      if (!active.current) return;
+      const pick = pickOf(e, toMm);
+      if (!pick) return;
+      e.stopPropagation();
+      last.current = pick;
+      onDrag(pick, false);
+    },
+  };
+}
+
+/** Whether every mesh of a model is drawn in one colour (a one-colour print). */
+function oneColour(model: Object3D): boolean {
+  const colours = new Set<string>();
+  model.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material])
+      if (m && 'color' in m && m.color instanceof Color)
+        colours.add(m.color.getHexString());
+  });
+  return colours.size === 1;
 }
 
 /** Every mesh's triangles under `root`, in the file's millimetres (Z up). */
@@ -241,10 +330,13 @@ export function Plate({ radius, y }: { radius: number; y: number }) {
 function Framed({
   object,
   spin,
+  controlsRef,
   children,
 }: {
   object: Object3D;
   spin: boolean;
+  /** Where the turntable controls are kept, so a drag on the model can hold them still. */
+  controlsRef?: MutableRefObject<OrbitControls | null>;
   children: React.ReactNode;
 }) {
   const { camera, gl, invalidate } = useThree();
@@ -272,6 +364,7 @@ function Framed({
     controls.minDistance = radius * 1.2;
     controls.maxDistance = distance * 4;
     controls.addEventListener('change', () => invalidate());
+    if (controlsRef) controlsRef.current = controls;
     // OrbitControls claims every touch; give vertical swipes back to the page so phones can
     // scroll past the viewer. Sideways drags still turn the model, two fingers still zoom.
     gl.domElement.style.touchAction = 'pan-y';
@@ -284,8 +377,9 @@ function Framed({
     return () => {
       cancelAnimationFrame(frame);
       controls.dispose();
+      if (controlsRef) controlsRef.current = null;
     };
-  }, [camera, gl, invalidate, radius, spin]);
+  }, [camera, gl, invalidate, radius, spin, controlsRef]);
 
   return (
     <>

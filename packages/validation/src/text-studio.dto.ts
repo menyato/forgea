@@ -23,6 +23,8 @@ import {
   KEYCHAIN_SHAPES,
   type KeychainShape,
   MAX_LOGO_INKS,
+  SLOT_RELIEFS,
+  type SlotRelief,
   SUBTITLE_MAX_CHARS,
 } from '@forgea/text3d/design';
 import { Trim } from './email.js';
@@ -377,6 +379,21 @@ export class DesignSlotDto {
   @IsOptional()
   @IsBoolean()
   defaultOn?: boolean;
+
+  /** Raised out of the surface (default) or flush with it, an inlay. */
+  @IsOptional()
+  @IsIn(SLOT_RELIEFS)
+  relief?: SlotRelief;
+
+  /** Logo: the studio's logos customers may pick from. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @IsUUID('all', {
+    each: true,
+    message: 'Choose the logos from the Logos page',
+  })
+  logoChoices?: string[];
 }
 
 /** What a customer chose for one of a product's slots. */

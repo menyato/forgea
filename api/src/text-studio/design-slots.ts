@@ -115,7 +115,10 @@ export class DesignSlots {
     );
     const fonts = new Set((await this.fonts.active()).map((f) => f.id));
     const logos = await this.logos.named(
-      slots.flatMap((s) => (s.logoId ? [s.logoId] : [])),
+      slots.flatMap((s) => [
+        ...(s.logoId ? [s.logoId] : []),
+        ...(s.logoChoices ?? []),
+      ]),
     );
     return slots.map((s): DesignSlot => {
       if (!colours.has(s.colour))
@@ -128,7 +131,13 @@ export class DesignSlots {
       } else if (s.logoId) {
         if (!logos.get(s.logoId)?.active)
           throw new BadRequestException(`${s.label}: choose one of the logos`);
-      } else if (!s.editable) {
+      }
+      if (s.kind === 'LOGO' && s.logoChoices?.length) {
+        if (s.logoChoices.some((id) => !logos.get(id)?.active))
+          throw new BadRequestException(
+            `${s.label}: choose the logos customers pick from among yours`,
+          );
+      } else if (s.kind === 'LOGO' && !s.logoId && !s.editable) {
         // Without a logo of the studio's, the place is the customer's to fill.
         throw new BadRequestException(
           `${s.label}: choose a logo, or let customers change it to add their own`,
@@ -150,6 +159,7 @@ export class DesignSlots {
         heightMm: s.heightMm,
         maxWidthMm: s.maxWidthMm,
         depthMm: s.depthMm,
+        ...(s.relief === 'FLUSH' ? { relief: 'FLUSH' as const } : {}),
         colour: s.colour,
         ...(s.kind === 'TEXT'
           ? {
@@ -160,6 +170,9 @@ export class DesignSlots {
           : {
               ...(s.logoId ? { logoId: s.logoId } : {}),
               defaultOn: s.defaultOn ?? true,
+              ...(s.logoChoices?.length
+                ? { logoChoices: [...new Set(s.logoChoices)] }
+                : {}),
             }),
       };
     });
@@ -178,11 +191,18 @@ export class DesignSlots {
     const slots = this.of(p);
     if (slots.length === 0) return null;
     const hasText = slots.some((s) => s.kind === 'TEXT');
+    const logoIds = slots.flatMap((s) => [
+      ...(s.logoId ? [s.logoId] : []),
+      ...(s.logoChoices ?? []),
+    ]);
+    const names = await this.logos.named(logoIds);
     return {
       slots,
-      logos: (
-        await this.logos.outlines(slots.flatMap((s) => s.logoId ?? []))
-      ).map(([id, shape]) => ({ id, ...shape })),
+      logos: (await this.logos.outlines(logoIds)).map(([id, shape]) => ({
+        id,
+        ...shape,
+        ...(names.get(id)?.name ? { name: names.get(id)!.name } : {}),
+      })),
       fonts: hasText
         ? (await this.fonts.active()).map((f) => ({
             id: f.id,
@@ -253,7 +273,10 @@ export class DesignSlots {
       );
     const colourNames = new Map(this.colours(p).map((c) => [c.id, c.label]));
     const logoNames = await this.logos.named(
-      slots.flatMap((s) => s.logoId ?? []),
+      slots.flatMap((s) => [
+        ...(s.logoId ? [s.logoId] : []),
+        ...(s.logoChoices ?? []),
+      ]),
     );
     return {
       choices,
@@ -279,7 +302,7 @@ export class DesignSlots {
             logo:
               slot.kind === 'LOGO'
                 ? choice.logoId
-                  ? 'Your logo'
+                  ? (logoNames.get(choice.logoId)?.name ?? 'Your logo')
                   : (logoNames.get(slot.logoId ?? '')?.name ?? null)
                 : null,
             colour: parts
@@ -342,7 +365,12 @@ export class DesignSlots {
         throw new BadRequestException(
           `${slot.label}: choose one of the colours offered`,
         );
-      if (c.logoId !== undefined && !theirs.has(c.logoId))
+      // A logo picked from the studio's offered for this place, or the customer's own.
+      if (
+        c.logoId !== undefined &&
+        !theirs.has(c.logoId) &&
+        !(slot.logoChoices ?? []).includes(c.logoId)
+      )
         throw new BadRequestException(`${slot.label}: add your logo again`);
       // A colour for each of the logo's own colours, each one offered.
       const logoColours =
