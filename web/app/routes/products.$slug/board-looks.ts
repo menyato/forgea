@@ -27,6 +27,8 @@ interface LookItem {
 }
 export interface BoardLook {
   label: string;
+  /** A standing initial's looks are a girl's or a boy's (the product says which it offers). */
+  for?: 'girl' | 'boy';
   /** A standing initial's letter. */
   initial: string;
   base: string;
@@ -64,10 +66,11 @@ const BABY = (name: string): LookItem[] => [
   },
 ];
 
-export const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
+const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
   STANDING_INITIAL: [
     {
       label: 'Baby girl',
+      for: 'girl',
       initial: 'L',
       base: '#f2ece2',
       accent: '#e8afcf',
@@ -102,6 +105,7 @@ export const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
     },
     {
       label: 'Baby boy',
+      for: 'boy',
       initial: 'A',
       base: '#f2ece2',
       accent: '#6fb1e8',
@@ -134,7 +138,59 @@ export const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
       ],
     },
     {
-      label: 'Little prince(ss)',
+      label: 'Flower garden',
+      for: 'girl',
+      initial: 'S',
+      base: '#f2ece2',
+      accent: '#e8afcf',
+      items: [
+        {
+          kind: 'TEXT',
+          text: 'Sara',
+          font: 'script',
+          x: 0,
+          y: 0.02,
+          size: 0.2,
+          colour: 'accent',
+        },
+        {
+          kind: 'TEXT',
+          text: '14.03.2026',
+          font: 'plain',
+          x: 0,
+          y: -0.3,
+          size: 0.065,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'FLOWER',
+          x: -0.3,
+          y: 0.16,
+          size: 0.08,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'FLOWER',
+          x: 0.32,
+          y: 0.12,
+          size: 0.06,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'HEART',
+          x: 0.3,
+          y: -0.12,
+          size: 0.05,
+          colour: 'accent',
+        },
+      ],
+    },
+    {
+      label: 'Little princess',
+      for: 'girl',
       initial: 'M',
       base: '#ffffff',
       accent: '#d4a72c',
@@ -163,6 +219,92 @@ export const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
           x: 0,
           y: -0.32,
           size: 0.065,
+          colour: 'accent',
+        },
+      ],
+    },
+    {
+      label: 'Little prince',
+      for: 'boy',
+      initial: 'K',
+      base: '#ffffff',
+      accent: '#3a6ea5',
+      items: [
+        {
+          kind: 'MOTIF',
+          motif: 'CROWN',
+          x: 0,
+          y: 0.18,
+          size: 0.09,
+          colour: 'accent',
+        },
+        {
+          kind: 'TEXT',
+          text: 'Karim',
+          font: 'script',
+          x: 0,
+          y: 0.02,
+          size: 0.2,
+          colour: 'accent',
+        },
+        {
+          kind: 'TEXT',
+          text: '01.01.2026',
+          font: 'plain',
+          x: 0,
+          y: -0.32,
+          size: 0.065,
+          colour: 'accent',
+        },
+      ],
+    },
+    {
+      label: 'Little star',
+      for: 'boy',
+      initial: 'Z',
+      base: '#f2ece2',
+      accent: '#d4a72c',
+      items: [
+        {
+          kind: 'TEXT',
+          text: 'Zain',
+          font: 'script',
+          x: 0,
+          y: 0.02,
+          size: 0.2,
+          colour: 'accent',
+        },
+        {
+          kind: 'TEXT',
+          text: '3.400 kg',
+          font: 'plain',
+          x: 0,
+          y: -0.32,
+          size: 0.065,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'STAR',
+          x: -0.3,
+          y: 0.16,
+          size: 0.08,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'STAR',
+          x: 0.3,
+          y: 0.18,
+          size: 0.05,
+          colour: 'accent',
+        },
+        {
+          kind: 'MOTIF',
+          motif: 'STAR',
+          x: 0.34,
+          y: -0.1,
+          size: 0.04,
           colour: 'accent',
         },
       ],
@@ -365,4 +507,17 @@ export function lookFor(
     ];
   });
   return { initial: look.initial, baseColour: base, items };
+}
+
+/** The looks a product starts from: a standing initial set for a girl (hearts, flowers,
+ * butterflies) or a boy (stars, crown) shows only those; otherwise every look of its style. */
+export function looksFor(offer: ProductTextOffer): BoardLook[] {
+  const all = BOARD_LOOKS[offer.style] ?? [];
+  const who =
+    offer.style !== 'STANDING_INITIAL' || !offer.decor
+      ? null
+      : offer.decor === 'STARS' || offer.decor === 'CROWN'
+        ? 'boy'
+        : 'girl';
+  return who ? all.filter((l) => l.for === who) : all;
 }

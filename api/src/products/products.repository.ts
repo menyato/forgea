@@ -355,9 +355,12 @@ const fields = (dto: SaveProductDto) => ({
   textDefaultColourId: dto.text?.defaultColourId ?? null,
   textDefaultBaseId: dto.text?.defaultBaseColourId ?? null,
   textDefaultAccentId: dto.text?.defaultAccentColourId ?? null,
-  // Decorations belong to a big initial only (CHECK).
+  // Decorations belong to a big initial (required) and a standing initial (its looks: a girl's
+  // or a boy's; none: every look) only (CHECK).
   textDecor:
-    dto.text?.style === 'INITIAL_NAME' ? (dto.text.decor ?? null) : null,
+    dto.text?.style === 'INITIAL_NAME' || dto.text?.style === 'STANDING_INITIAL'
+      ? (dto.text.decor ?? null)
+      : null,
   // Shapes belong to name keychains; logos to them and to pieces designed freely.
   textShapes: dto.text?.style === 'KEYCHAIN' ? dto.text.shapes : [],
   textLogoIds: takesLogos(dto.text?.style) ? dto.text!.logoIds : [],

@@ -193,7 +193,11 @@ export function TextSettingsPanel({
                 style,
                 ...STARTS[style],
                 decor:
-                  style === 'INITIAL_NAME' ? (value.decor ?? 'HEARTS') : null,
+                  style === 'INITIAL_NAME'
+                    ? (value.decor ?? 'HEARTS')
+                    : style === 'STANDING_INITIAL'
+                      ? value.decor
+                      : null,
                 // Shapes belong to keychains; logos to them and to pieces designed freely.
                 shapes: style === 'KEYCHAIN' ? value.shapes : [],
                 logoIds: takesLogos(style) ? value.logoIds : [],
@@ -295,6 +299,24 @@ export function TextSettingsPanel({
                   ))}
               </div>
             </fieldset>
+          )}
+          {value.style === 'STANDING_INITIAL' && (
+            <SelectField
+              label="Looks it starts from"
+              name="text-looks"
+              value={value.decor ?? ''}
+              onChange={(e) =>
+                set({
+                  decor: (e.currentTarget.value ||
+                    null) as ProductTextSettings['decor'],
+                })
+              }
+              hint="A girl's looks (hearts, flowers, butterflies) or a boy's (stars, moon, crown): the product page offers those, customers change anything after"
+            >
+              <option value="">Every look</option>
+              <option value="HEARTS">A girl's looks</option>
+              <option value="STARS">A boy's looks</option>
+            </SelectField>
           )}
           {value.style === 'INITIAL_NAME' && (
             <SelectField

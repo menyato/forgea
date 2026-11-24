@@ -18,7 +18,7 @@ import { LogoOutline } from '~/features/admin-logos/logo-outline';
 import { useHydrated } from '~/features/model-viewer/model-viewer';
 import { OwnLogoField } from '~/features/own-logo/own-logo-field';
 import { useFontFaces } from '~/features/text-studio/use-font-faces';
-import { BOARD_LOOKS, fontFor, itemId, lookFor } from './board-looks';
+import { fontFor, itemId, lookFor, looksFor } from './board-looks';
 import { Loading, Swatches, TEXT_INPUT } from './text-designer-parts';
 import { useLivePrice } from './use-live-price';
 
@@ -49,7 +49,7 @@ export function BoardDesigner({
   useFontFaces(offer.fonts);
   const hydrated = useHydrated();
   const standing = offer.style === 'STANDING_INITIAL';
-  const looks = BOARD_LOOKS[offer.style] ?? [];
+  const looks = looksFor(offer);
   const heights = [offer.letterHeightMm, ...offer.sizesMm].sort(
     (a, b) => Number(a) - Number(b),
   );

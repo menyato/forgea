@@ -624,12 +624,17 @@ describe('Text studio (e2e)', () => {
           extraColourPrice: '2.00',
           sizesMm: [],
           defaultColourId: colours.white,
+          // A boy's looks (a standing initial keeps its decorations as the looks it offers).
+          decor: 'STARS',
         },
       })
       .expect(201);
     const detail = (await http().get(`/products/${boardSlug}`).expect(200))
       .body as ProductDetail;
-    expect(detail.text).toMatchObject({ style: 'STANDING_INITIAL' });
+    expect(detail.text).toMatchObject({
+      style: 'STANDING_INITIAL',
+      decor: 'STARS',
+    });
     expect(detail.modelKey).toMatch(/^clean\/.+\.glb$/);
     const boardPrice = (design: object) =>
       http()
