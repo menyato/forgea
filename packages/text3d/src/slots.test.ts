@@ -116,6 +116,16 @@ describe('a slot kept on its face', () => {
     expect(Math.max(...xs)).toBeCloseTo(16, 1);
   });
 
+  it('leaves out a lower face beside it (a disc next to its caliper)', () => {
+    const disc = boxTriangles([-40, -40, 0], [0, 40, 2.5]);
+    const face = faceAround(
+      [...boxTriangles([0, 0, 0], [16, 6, 4]), ...disc],
+      placement,
+    )!;
+    const xs = face.flatMap((k) => k.filter((_, i) => i % 3 === 0));
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-0.01);
+  });
+
   it('makes a long name smaller until it sits inside the face', () => {
     const face = faceAround(boxTriangles([0, 0, 0], [16, 6, 4]), placement)!;
     const slot = { ...onTop, placement: { ...placement, face } };

@@ -12,8 +12,11 @@ import {
 
 /** Faces turned more than this from the clicked one are not part of it (a rounded edge's). */
 const FACE_ANGLE_COS = Math.cos((25 * Math.PI) / 180);
-/** Nor is anything further than this in front of or behind the clicked point, mm. */
-const FACE_DEPTH_MM = 3;
+/**
+ * Nor anything further than this in front of or behind the clicked point, mm: the same flat
+ * level only (a step down beside it, as a brake disc beside its caliper, is another face).
+ */
+const FACE_DEPTH_MM = 0.3;
 /** Nor anything further away than this along the surface, mm (big flat models stay quick). */
 const FACE_REACH_MM = 250;
 /** Text and logos keep this far inside the face's edge, mm. */
