@@ -89,6 +89,12 @@ export function boardLayout(
   frame = joined(frame, bb, Math.max(3, h * 0.035));
   // Nothing below the base's own bottom: it stands flat on it.
   frame = difference(frame, [rect(-1e4, bb.minY - 1e4, 2e4, 1e4)]);
+  // What is left of a letter's hole once things cover most of it is a stray dot: filled.
+  const smallest = (h * 0.07) ** 2;
+  frame = frame.map((r) => ({
+    ...r,
+    holes: r.holes.filter((hole) => Math.abs(signedArea(hole)) >= smallest),
+  }));
 
   const parts: BoardPart[] = [];
   if (settings.style === 'TROPHY') {

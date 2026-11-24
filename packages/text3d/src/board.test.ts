@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { boardShapes } from './board.js';
 import { type BoardItem, FontSet, type TextSettings } from './index.js';
 import { layoutDesign } from './layout.js';
-import { boundsOf } from './outline.js';
+import { boundsOf, signedArea } from './outline.js';
 
 const font = (file: string) =>
   new Uint8Array(
@@ -104,6 +104,25 @@ describe('a piece designed freely (standing initial)', () => {
       (p) => p.colour === 'beige' && p.z0 === 0,
     )!;
     expect(base.regions).toHaveLength(1);
+  });
+
+  it("keeps a letter's hole, but fills what little of it things leave", () => {
+    const a = { ...design([]), text: 'A' };
+    const open = layoutDesign(fonts, a, standing).parts.find(
+      (p) => p.z0 === 0,
+    )!;
+    expect(open.regions.some((r) => r.holes.length > 0)).toBe(true);
+    // A name across the hole covers most of it: no stray dot is left.
+    const covered = layoutDesign(
+      fonts,
+      { ...a, items: [item({ text: 'Lina', size: 30, y: 8 })] },
+      standing,
+    ).parts.find((p) => p.z0 === 0)!;
+    for (const r of covered.regions)
+      for (const hole of r.holes)
+        expect(Math.abs(signedArea(hole))).toBeGreaterThanOrEqual(
+          (150 * 0.07) ** 2,
+        );
   });
 
   it('turns an item as asked', () => {
