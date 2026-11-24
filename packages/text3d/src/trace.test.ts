@@ -208,6 +208,30 @@ describe('traceLogoSvg', () => {
     expect(svg).not.toContain('data-inks');
     expect(logoFromSvg(svg).inks).toBeNull();
   });
+
+  it('a chrome logo is two colours: its silver shading is one, its dark lettering another', () => {
+    // A star in bands of silver (as chrome is drawn) beside dark navy and graphite lettering.
+    const cw = 80;
+    const chrome = new Uint8Array(cw * cw * 4);
+    for (let y = 0; y < cw; y++)
+      for (let x = 0; x < cw; x++) {
+        const star = x >= 4 && x < 36 && y >= 10 && y < 70;
+        const text = x >= 44 && x < 76 && y >= 10 && y < 70;
+        const silver = [242, 214, 198, 225][Math.floor((y - 10) / 15)] ?? 255;
+        chrome.set(
+          star
+            ? [silver, silver, silver + 2, 255]
+            : text
+              ? y < 40
+                ? [14, 20, 31, 255]
+                : [64, 72, 79, 255]
+              : [255, 255, 255, 255],
+          (y * cw + x) * 4,
+        );
+      }
+    const logo = logoFromSvg(traceLogoSvg(chrome, cw, cw)!);
+    expect(logo.inks).toHaveLength(2);
+  });
 });
 
 describe('logoFromSvg', () => {

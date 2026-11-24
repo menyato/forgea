@@ -5,7 +5,7 @@ import type {
   OptionGroupView,
   ProductSlotsOffer,
 } from '@forgea/types';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { CheckboxField, Field, SelectField } from '~/components/ui/field';
@@ -17,6 +17,7 @@ import {
 } from '~/features/model-viewer/model-viewer';
 
 type Box = ModelMeasurement['box'];
+type FaceAround = typeof import('@forgea/text3d').faceAround;
 type Vec = [number, number, number];
 
 /** Where text goes on each side of the model's box (the front faces the viewer: -Y). */
@@ -152,27 +153,38 @@ export function SlotsEditor({
       old && JSON.stringify(old) === JSON.stringify(m.box) ? old : m.box,
     );
   }, []);
+  // The flat face under a click is read with @forgea/text3d, loaded in the browser only.
+  const [faceAround, setFaceAround] = useState<FaceAround | null>(null);
+  useEffect(() => {
+    let live = true;
+    void import('@forgea/text3d').then((m) => {
+      if (live) setFaceAround(() => m.faceAround);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const onPick = useCallback(
     (pick: ModelPick) => {
       if (!placing) return;
       const normal = round(pick.normal);
+      const placement: SlotPlacement = {
+        origin: round(pick.origin),
+        normal,
+        up: upFor(normal),
+      };
+      // Its text and logo stay inside that face: nothing hangs off the edge of the print.
+      const face = faceAround?.(pick.triangles(), placement);
       onChange(
         value.map((s) =>
           s.id === placing
-            ? {
-                ...s,
-                placement: {
-                  origin: round(pick.origin),
-                  normal,
-                  up: upFor(normal),
-                },
-              }
+            ? { ...s, placement: face ? { ...placement, face } : placement }
             : s,
         ),
       );
       setPlacing(null);
     },
-    [placing, value, onChange],
+    [placing, value, onChange, faceAround],
   );
 
   if (!modelKey)
@@ -438,6 +450,11 @@ export function SlotsEditor({
               Remove
             </Button>
           </div>
+          <p className="text-sm text-text-muted">
+            {s.placement.face
+              ? 'Kept inside the face it sits on: longer text is made smaller, never off the edge.'
+              : 'Place it where you click on the model to keep it inside that face.'}
+          </p>
         </fieldset>
       ))}
       <div className="flex flex-wrap gap-2">

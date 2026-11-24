@@ -5,7 +5,7 @@
  * worker into print outlines). No 3D code here (`@forgea/text3d/trace`).
  */
 
-import { MAX_LOGO_INKS } from './design.js';
+import { MAX_LOGO_INKS, sameInk } from './design.js';
 
 type Pt = [number, number];
 
@@ -234,7 +234,34 @@ function inkColours(
       (c, i) => !settled.slice(0, i).some((o) => distance(o, c) < SAME_COLOUR),
     );
   }
-  centres = centres.slice(0, MAX_LOGO_INKS);
+  // Colours a person would call one (a chrome logo's greys, a gradient) become one, the
+  // larger area's weight counting most; then the largest MAX_LOGO_INKS are kept.
+  const hex = (c: Rgb) =>
+    `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+  const found = centres.map((c) => ({ c, n: 0 }));
+  for (const p of points) found[nearest(p, centres)]!.n++;
+  for (;;) {
+    let pair: [number, number] | null = null;
+    let pairD = Infinity;
+    for (let i = 0; i < found.length; i++)
+      for (let j = i + 1; j < found.length; j++) {
+        const d = distance(found[i]!.c, found[j]!.c);
+        if (d < pairD && sameInk(hex(found[i]!.c), hex(found[j]!.c)))
+          [pair, pairD] = [[i, j], d];
+      }
+    if (!pair) break;
+    const [a, b] = [found[pair[0]]!, found[pair[1]]!];
+    const n = a.n + b.n;
+    a.c = [0, 1, 2].map(
+      (k) => (a.c[k]! * a.n + b.c[k]! * b.n) / n,
+    ) as unknown as Rgb;
+    a.n = n;
+    found.splice(pair[1], 1);
+  }
+  centres = found
+    .sort((a, b) => b.n - a.n)
+    .map((f) => f.c)
+    .slice(0, MAX_LOGO_INKS);
   if (centres.length < 2) return null;
 
   const labels = new Int8Array(mask.length).fill(-1);
@@ -258,8 +285,6 @@ function inkColours(
         if (counts[i]! > counts[best]!) best = i;
       if (counts[best]! >= 5) smoothed[p] = best;
     }
-  const hex = (c: Rgb) =>
-    `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
   return { palette: centres.map(hex), labels: smoothed };
 }
 

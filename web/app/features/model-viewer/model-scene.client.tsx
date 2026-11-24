@@ -187,8 +187,32 @@ function picker(onPick: ((pick: ModelPick) => void) | undefined, toMm: number) {
     onPick({
       origin: [local.x * toMm, -local.z * toMm, local.y * toMm],
       normal: [normal.x, -normal.z, normal.y],
+      triangles: () => fileTriangles(root, toMm),
     });
   };
+}
+
+/** Every mesh's triangles under `root`, in the file's millimetres (Z up). */
+function fileTriangles(root: Object3D, toMm: number): Float32Array {
+  root.updateWorldMatrix(true, true);
+  const toRoot = root.matrixWorld.clone().invert();
+  const out: number[] = [];
+  const p = new Vector3();
+  root.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const g: BufferGeometry = o.geometry;
+    const pos = g.getAttribute('position');
+    if (!pos) return;
+    const m = toRoot.clone().multiply(o.matrixWorld);
+    const index = g.getIndex();
+    const count = index ? index.count : pos.count;
+    for (let i = 0; i < count; i++) {
+      p.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(m);
+      // Y up (the scene) back to Z up (the file), as the pick itself.
+      out.push(p.x * toMm, -p.z * toMm, p.y * toMm);
+    }
+  });
+  return new Float32Array(out);
 }
 
 /** Reflections from a generated studio, so materials read as plastic. */

@@ -23,6 +23,11 @@ export interface ModelExtra {
 export interface ModelPick {
   origin: [number, number, number];
   normal: [number, number, number];
+  /**
+   * The model's triangles in the same frame (x, y, z per corner), read only when asked: the
+   * slots editor records the flat face under the click from them.
+   */
+  triangles: () => Float32Array;
 }
 
 import { PrintingLogo } from '~/components/brand/printing-logo';

@@ -1,5 +1,5 @@
 import type { BufferGeometry } from 'three';
-import { Matrix4, Vector3 } from 'three';
+import { Matrix4 } from 'three';
 import {
   type DesignSlot,
   type LogoShape,
@@ -8,6 +8,7 @@ import {
   slotTextProblem,
 } from './design.js';
 import { difference } from './clip.js';
+import { faceRegions, fitsInside, slotFrame } from './face.js';
 import { partGeometry, volumeMm3 } from './geometry.js';
 import { boundsOf, mapRegions, type Region } from './outline.js';
 import type { FontSet } from './shaper.js';
@@ -125,8 +126,22 @@ function slotRegions(
   if (width > slot.maxWidthMm) k *= slot.maxWidthMm / width;
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
-  const place = (r: readonly Region[]) =>
-    mapRegions(r, ([x, y]) => [(x - cx) * k, (y - cy) * k]);
+  const at = (r: readonly Region[], s: number) =>
+    mapRegions(r, ([x, y]) => [(x - cx) * s, (y - cy) * s]);
+  // On a recorded face, smaller until it sits inside it (never off the edge of the print).
+  const face = faceRegions(slot.placement, slot.placement.face);
+  if (face && !fitsInside(at(regions, k), face)) {
+    let lo = 0;
+    let hi = k;
+    for (let i = 0; i < 14; i++) {
+      const mid = (lo + hi) / 2;
+      if (fitsInside(at(regions, mid), face)) lo = mid;
+      else hi = mid;
+    }
+    if (lo <= 0) return null;
+    k = lo;
+  }
+  const place = (r: readonly Region[]) => at(r, k);
   if (inks.length === 0)
     return [{ colour: state.colour, regions: place(regions) }];
   // Each colour over the ones before it (as the logo is drawn).
@@ -146,14 +161,6 @@ function slotRegions(
  * the model's: the text faces along `normal`, upright along `up` as far as the face allows.
  */
 export function placementMatrix(slot: DesignSlot): Matrix4 {
-  const { origin, normal, up } = slot.placement;
-  const n = new Vector3(...normal).normalize();
-  let u = new Vector3(...up);
-  // Up made square to the normal; on a face whose normal is "up" itself, the back is up.
-  u.sub(n.clone().multiplyScalar(u.dot(n)));
-  if (u.lengthSq() < 1e-8)
-    u = Math.abs(n.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(0, 0, 1);
-  u.normalize();
-  const r = new Vector3().crossVectors(u, n).normalize();
-  return new Matrix4().makeBasis(r, u, n).setPosition(new Vector3(...origin));
+  const { origin, r, u, n } = slotFrame(slot.placement);
+  return new Matrix4().makeBasis(r, u, n).setPosition(origin);
 }

@@ -74,6 +74,9 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    section. Choose **Colours they print in** (a colour option with swatches), then **Add text**
    or **Add a logo**. Put each one on a side (**Front**, **Back**, **Left**, **Right**, **Top**)
    or press **Place it where I click** and click the model; **Turn it** turns it a quarter.
+   A place set by clicking remembers the flat face under it: a longer name is made smaller
+   until it fits inside that face, so nothing hangs off the edge (the page says "Kept inside
+   the face it sits on"). Places set before 24 Nov 2026 need one more click to learn their face.
    Set its height, widest size, how far it stands out and its colour. Tick **Customers may
    change it** to let them type their own name, pick a font and a colour, turn the logo off
    or put **their own logo** there; a logo place with **Logo: None** stays empty until the

@@ -4,6 +4,7 @@ import {
   type LogoShape,
   MAX_LOGO_INKS,
   nearestColour,
+  sameInk,
 } from './design.js';
 import {
   boundsOf,
@@ -142,16 +143,27 @@ function keptInks(
     .filter((i) => i.area > 0)
     .sort((a, b) => b.area - a.area);
   const total = all.reduce((n, i) => n + i.area, 0);
-  const kept = all
-    .filter((i) => i.area >= total * 0.005)
-    .slice(0, MAX_LOGO_INKS);
+  // Largest first; a shade of a colour already kept (a gradient's steps) is part of it.
+  const kept: typeof all = [];
+  for (const i of all)
+    if (
+      kept.length < MAX_LOGO_INKS &&
+      i.area >= total * 0.005 &&
+      !kept.some((k) => sameInk(k.hex, i.hex))
+    )
+      kept.push(i);
   if (kept.length < 2) return null;
   for (const extra of all.filter((i) => !kept.includes(i))) {
-    const near = nearestColour(
-      extra.hex,
-      kept.map((i) => ({ ...i, swatchHex: i.hex })),
-    )!;
-    const into = kept.find((i) => i.hex === near.hex)!;
+    const into =
+      kept.find((k) => sameInk(k.hex, extra.hex)) ??
+      kept.find(
+        (k) =>
+          k.hex ===
+          nearestColour(
+            extra.hex,
+            kept.map((i) => ({ ...i, swatchHex: i.hex })),
+          )!.hex,
+      )!;
     into.regions = union([...into.regions, ...extra.regions]);
   }
   return kept.map((i) => ({ hex: i.hex, regions: frame(i.regions) }));

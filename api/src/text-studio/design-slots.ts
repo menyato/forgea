@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { estimatePrint } from '@forgea/pricing';
 import type { DesignSlot, SlotChoice } from '@forgea/text3d';
+import { MAX_FACE_POINTS } from '@forgea/text3d/design';
 import type { ProductSlotsOffer, SlotSummary } from '@forgea/types';
 import type { DesignSlotDto, SlotChoiceDto } from '@forgea/validation';
 import { PrismaService } from '../database/prisma.service.js';
@@ -142,6 +143,9 @@ export class DesignSlots {
           origin: s.placement.origin,
           normal: s.placement.normal,
           up: s.placement.up,
+          ...(s.placement.face
+            ? { face: checkedFace(s.label, s.placement.face) }
+            : {}),
         },
         heightMm: s.heightMm,
         maxWidthMm: s.maxWidthMm,
@@ -385,4 +389,25 @@ function logoIdsOf(
     ...slots.flatMap((s) => s.logoId ?? []),
     ...Object.values(choices).flatMap((c) => c.logoId ?? []),
   ];
+}
+
+/**
+ * A slot's face as the dashboard recorded it (`faceAround`): contours of x, y, z numbers in the
+ * model's millimetres, at most MAX_FACE_POINTS points in all. 400 otherwise.
+ */
+function checkedFace(label: string, face: readonly unknown[]): number[][] {
+  const bad = () =>
+    new BadRequestException(`${label}: place it on the model again`);
+  let points = 0;
+  const out = face.map((k) => {
+    if (!Array.isArray(k) || k.length < 9 || k.length % 3 !== 0) throw bad();
+    points += k.length / 3;
+    return k.map((v: unknown) => {
+      if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > 5000)
+        throw bad();
+      return v;
+    });
+  });
+  if (points > MAX_FACE_POINTS) throw bad();
+  return out;
 }

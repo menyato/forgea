@@ -5,6 +5,7 @@ import {
   buildDesign,
   buildSlots,
   designProblem,
+  faceAround,
   KEYCHAIN_SHAPES,
   type DesignSlot,
   FontSet,
@@ -71,6 +72,89 @@ describe('logos from SVG', () => {
     const cmds = pathCommands('m10 10 h10 v10 s5 5 10 0 t10 0 z');
     expect(cmds.map((c) => c.type).join('')).toBe('MLLCQZ');
     expect(cmds[1]!.values).toEqual([20, 10]);
+  });
+});
+
+/** A box's triangles (x, y, z per corner): its six faces, two triangles each. */
+function boxTriangles(min: number[], max: number[]): number[] {
+  const [x0, y0, z0] = min as [number, number, number];
+  const [x1, y1, z1] = max as [number, number, number];
+  const q = (a: number[], b: number[], c: number[], d: number[]) => [
+    ...a,
+    ...b,
+    ...c,
+    ...a,
+    ...c,
+    ...d,
+  ];
+  return [
+    ...q([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]), // top, facing +Z
+    ...q([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]), // bottom
+    ...q([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]), // front, -Y
+    ...q([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]),
+    ...q([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]),
+    ...q([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]),
+  ];
+}
+
+describe('a slot kept on its face', () => {
+  // The top of a small bar, 16 x 6 mm (as a brake caliper's top): a long name must not hang off.
+  const placement = {
+    origin: [8, 3, 4] as [number, number, number],
+    normal: [0, 0, 1] as [number, number, number],
+    up: [0, 1, 0] as [number, number, number],
+  };
+  const onTop: DesignSlot = { ...name, placement, heightMm: 4, maxWidthMm: 24 };
+
+  it('records the flat area under the click, and only that face', () => {
+    const face = faceAround(boxTriangles([0, 0, 0], [16, 6, 4]), placement)!;
+    expect(face).toHaveLength(1);
+    const zs = face[0]!.filter((_, i) => i % 3 === 2);
+    expect(zs.every((z) => Math.abs(z - 4) < 1e-6)).toBe(true);
+    const xs = face[0]!.filter((_, i) => i % 3 === 0);
+    expect(Math.min(...xs)).toBeCloseTo(0, 1);
+    expect(Math.max(...xs)).toBeCloseTo(16, 1);
+  });
+
+  it('makes a long name smaller until it sits inside the face', () => {
+    const face = faceAround(boxTriangles([0, 0, 0], [16, 6, 4]), placement)!;
+    const slot = { ...onTop, placement: { ...placement, face } };
+    const choice = { name: { text: 'Abdullah' } };
+    const [loose] = buildSlots(fonts, [onTop], choice, new Map());
+    const [kept] = buildSlots(fonts, [slot], choice, new Map());
+    const wide = new Box3().setFromBufferAttribute(
+      loose!.geometry.getAttribute('position') as never,
+    );
+    expect(wide.max.x - wide.min.x).toBeGreaterThan(16);
+    const box = new Box3().setFromBufferAttribute(
+      kept!.geometry.getAttribute('position') as never,
+    );
+    expect(box.min.x).toBeGreaterThanOrEqual(0.5);
+    expect(box.max.x).toBeLessThanOrEqual(15.5);
+    expect(box.min.y).toBeGreaterThanOrEqual(0.5);
+    expect(box.max.y).toBeLessThanOrEqual(5.5);
+  });
+
+  it('turning the text keeps the face', () => {
+    const face = faceAround(boxTriangles([0, 0, 0], [16, 6, 4]), placement)!;
+    const turned = {
+      ...onTop,
+      placement: {
+        ...placement,
+        up: [1, 0, 0] as [number, number, number],
+        face,
+      },
+    };
+    const [kept] = buildSlots(
+      fonts,
+      [turned],
+      { name: { text: 'Abdullah' } },
+      new Map(),
+    );
+    const box = new Box3().setFromBufferAttribute(
+      kept!.geometry.getAttribute('position') as never,
+    );
+    expect(box.max.y - box.min.y).toBeLessThanOrEqual(5);
   });
 });
 

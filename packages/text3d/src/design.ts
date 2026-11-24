@@ -195,6 +195,19 @@ export function nearestColour<T extends { swatchHex: string | null }>(
   return best;
 }
 
+/**
+ * Whether two colours found in a picture are one colour of the logo as it prints: two greys
+ * (chrome, shading, a gradient) unless one is far lighter (black against silver), otherwise
+ * colours a person would call the same (CIE Lab, lightness counting half).
+ */
+export function sameInk(a: string, b: string): boolean {
+  const [la, lb] = [lab(a), lab(b)];
+  const chroma = ([, x, y]: readonly number[]) => Math.hypot(x!, y!);
+  if (chroma(la) < NEUTRAL_CHROMA && chroma(lb) < NEUTRAL_CHROMA)
+    return Math.abs(la[0] - lb[0]) < 40;
+  return Math.hypot((la[0] - lb[0]) / 2, la[1] - lb[1], la[2] - lb[2]) < 22;
+}
+
 /** #rrggbb (sRGB) as CIE L*a*b* (D65). */
 function lab(hex: string): [number, number, number] {
   const [r, g, b] = [1, 3, 5].map((i) => {
@@ -320,6 +333,9 @@ export const SLOT_KINDS = ['TEXT', 'LOGO'] as const;
 export type SlotKind = (typeof SLOT_KINDS)[number];
 
 /** Where a slot sits, in the model file's own millimetres (Z up, as slicers read it). */
+/** A slot's recorded face keeps at most this many points (it travels with the product). */
+export const MAX_FACE_POINTS = 1500;
+
 export interface SlotPlacement {
   /** The centre of the text or logo, on the model's surface. */
   origin: [number, number, number];
@@ -327,6 +343,12 @@ export interface SlotPlacement {
   normal: [number, number, number];
   /** Which way is up for the text, roughly (made square to `normal`). */
   up: [number, number, number];
+  /**
+   * The flat area under it (`faceAround`: model file frame, mm, each contour x, y, z, …):
+   * text and logos are made smaller until they sit inside it, so nothing hangs off the edge.
+   * Recorded when the owner clicks the place on the model; older slots have none.
+   */
+  face?: number[][];
 }
 
 export interface DesignSlot {

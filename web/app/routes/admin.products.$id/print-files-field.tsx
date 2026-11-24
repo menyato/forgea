@@ -76,7 +76,7 @@ export function PrintFilesField({
     onFiles(files.map((f) => (f.key === key ? { ...f, name } : f)));
 
   return (
-    <div className="grid gap-4 text-sm">
+    <div className="grid grid-cols-1 gap-4 text-sm">
       <p className="text-text-muted">
         The model above is what customers see. Add the sliced files it is
         printed from (Bambu Studio: slice, then File → Export → Export plate
@@ -136,13 +136,13 @@ export function PrintFilesField({
       )}
 
       {files.length > 0 && (
-        <ul aria-label="Print files" className="grid gap-3">
+        <ul aria-label="Print files" className="grid grid-cols-1 gap-3">
           {files.map((f, i) => {
             const read = total?.files.find((x) => x.fileKey === f.key);
             return (
               <li
                 key={f.key}
-                className="grid gap-2 rounded-md border border-border p-3"
+                className="grid min-w-0 grid-cols-1 gap-2 rounded-md border border-border p-3"
               >
                 <div className="flex items-center gap-2">
                   <input
@@ -154,7 +154,7 @@ export function PrintFilesField({
                     maxLength={PRINT_FILE_NAME_MAX_LENGTH}
                     value={f.name}
                     onChange={(e) => rename(f.key, e.currentTarget.value)}
-                    className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 font-medium"
+                    className="w-0 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 font-medium"
                   />
                   <a
                     href={`/media/${f.key}`}

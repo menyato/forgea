@@ -301,6 +301,13 @@ export class SlotPlacementDto {
   @Min(-1, { each: true, ...COORD })
   @Max(1, { each: true, ...COORD })
   up!: [number, number, number];
+
+  /** The flat area under it (@forgea/text3d `faceAround`); its numbers are checked by the API. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(16)
+  @IsArray({ each: true })
+  face?: number[][];
 }
 
 /** Text or a logo added to a product's model (see @forgea/text3d DesignSlot). */

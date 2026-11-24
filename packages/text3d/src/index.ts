@@ -22,6 +22,7 @@ export {
   slotsProblem,
   type BuiltSlot,
 } from './slots.js';
+export { faceAround } from './face.js';
 export { logoFromSvg, logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
 export type { Region } from './outline.js';
 export { FontSet, fontScripts, type FontSource } from './shaper.js';
