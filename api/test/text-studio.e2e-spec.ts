@@ -542,6 +542,62 @@ describe('Text studio (e2e)', () => {
     });
   });
 
+  it('a starting colour switched off since is not offered: the page starts on an offered one', async () => {
+    const group = await prisma.optionGroup.create({
+      data: {
+        name: `Colours off ${tag}`,
+        values: {
+          create: [
+            { label: 'Copper', swatchHex: '#b87333', sortOrder: 0 },
+            { label: 'Black', swatchHex: '#111111', sortOrder: 1 },
+          ],
+        },
+      },
+      include: { values: true },
+    });
+    const copper = group.values.find((v) => v.label === 'Copper')!;
+    const offSlug = `colour-off-${tag}`;
+    await as(admin.cookie)
+      .post('/products', {
+        slug: offSlug,
+        name: `Colour off ${tag}`,
+        description: 'Its starting colour goes.',
+        materialId,
+        grams: '20',
+        printHours: '1',
+        isCustom: false,
+        active: true,
+        imageKeys: [],
+        options: [],
+        sizes: [],
+        text: {
+          style: 'NAME',
+          maxChars: 12,
+          letterHeightMm: '30',
+          letterDepthMm: '4',
+          baseDepthMm: '3',
+          maxWidthMm: '200',
+          colourGroupId: group.id,
+          extraColourPrice: '1.00',
+          sizesMm: [],
+          defaultColourId: copper.id,
+          defaultBaseColourId: copper.id,
+        },
+      })
+      .expect(201);
+    await prisma.optionValue.update({
+      where: { id: copper.id },
+      data: { active: false },
+    });
+    const detail = (await http().get(`/products/${offSlug}`).expect(200))
+      .body as ProductDetail;
+    expect(detail.text!.colours.map((c) => c.label)).toEqual(['Black']);
+    expect(detail.text).toMatchObject({
+      defaultColourId: null,
+      defaultBaseColourId: null,
+    });
+  });
+
   it('designed freely: a standing initial with text, decorations and logos placed on it', async () => {
     const boardSlug = `standing-${tag}`;
     await as(admin.cookie)

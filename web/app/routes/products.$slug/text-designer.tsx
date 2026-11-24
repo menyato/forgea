@@ -746,9 +746,11 @@ export function TextDesigner({
               <Money amount={price} />
             ) : (
               <span className="text-base font-normal text-text-muted">
-                {typed
+                {designed
                   ? 'Working out the price…'
-                  : 'Type your text to see the price'}
+                  : keychain && offer.ownLogo
+                    ? 'Type your name or add your logo to see the price'
+                    : 'Type your text to see the price'}
               </span>
             )}
             {price && stale && (

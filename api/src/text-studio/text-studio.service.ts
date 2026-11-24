@@ -105,13 +105,20 @@ export class TextStudio {
     const view = this.settingsView(p);
     if (!view) return null;
     const { colourGroupId: _, ...rest } = view;
+    const colours = (p.textColourGroup?.values ?? []).map((v) => ({
+      id: v.id,
+      label: v.label,
+      swatchHex: v.swatchHex,
+    }));
+    // A starting colour no longer offered (its filament switched off) starts as none.
+    const offered = (id: string | null) =>
+      id && colours.some((c) => c.id === id) ? id : null;
     return {
       ...rest,
-      colours: (p.textColourGroup?.values ?? []).map((v) => ({
-        id: v.id,
-        label: v.label,
-        swatchHex: v.swatchHex,
-      })),
+      defaultColourId: offered(rest.defaultColourId),
+      defaultBaseColourId: offered(rest.defaultBaseColourId),
+      defaultAccentColourId: offered(rest.defaultAccentColourId),
+      colours,
       logos: await this.offeredLogos(p),
       fonts: (await this.fonts.active()).map((f) => ({
         id: f.id,
