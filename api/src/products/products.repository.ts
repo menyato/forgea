@@ -39,8 +39,15 @@ export class ProductsRepository {
         : query.model === 'without'
           ? { modelFileKey: null }
           : {}),
+      // Made from the customer's logo: a logo keychain, or their logo standing (pieces that only
+      // also take a logo, like a standing initial, are with the names).
       ...(query.design === 'logo'
-        ? { textOwnLogo: true }
+        ? {
+            OR: [
+              { textOwnLogo: true, textStyle: 'KEYCHAIN' as const },
+              { textStyle: 'STANDING_LOGO' as const },
+            ],
+          }
         : query.design === 'yours'
           ? {
               OR: [
