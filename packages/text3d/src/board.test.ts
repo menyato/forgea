@@ -90,6 +90,21 @@ describe('a piece designed freely (standing initial)', () => {
     expect(frame.minY).toBeGreaterThanOrEqual(letter.minY - 0.01);
   });
 
+  it('a name placed under the letter gets a flat foot of its own: backed, standing on it', () => {
+    const below = item({ id: 'below', text: 'Lina', size: 20, y: -95 });
+    const text = boundsOf(
+      boardShapes(fonts, design([below]), standing).items[0]!.regions,
+    )!;
+    const base = layoutDesign(fonts, design([below]), standing).parts.find(
+      (p) => p.colour === 'beige' && p.z0 === 0,
+    )!;
+    const frame = boundsOf(base.regions)!;
+    expect(frame.minY).toBeLessThanOrEqual(text.minY);
+    expect(frame.minX).toBeLessThanOrEqual(text.minX);
+    expect(frame.maxX).toBeGreaterThanOrEqual(text.maxX);
+    expect(base.regions).toHaveLength(1);
+  });
+
   it('something placed off the letter is joined to it by a stem: the piece prints as one', () => {
     const far = item({
       id: 'far',

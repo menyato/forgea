@@ -115,20 +115,34 @@ export function boardLayout(
   // The base is the design's own colour; items bring theirs.
   const baseColour = design.textColour;
 
-  let frame = union([
-    ...shapes.base,
-    ...grown(
-      shapes.items.flatMap((i) => i.regions),
-      margin,
-    ),
-  ]);
+  const backed = grown(
+    shapes.items.flatMap((i) => i.regions),
+    margin,
+  );
+  // Something placed lower than the base's bottom (a name under a logo) gets a flat foot of
+  // its own under it, so it is backed and the piece still stands flat; a trophy's foot goes
+  // under its whole plaque anyway.
+  const low = boundsOf(backed.filter((r) => boundsOf([r])!.minY < bb.minY));
+  const floor = low ? low.minY : bb.minY;
+  const foot =
+    low && settings.style !== 'TROPHY'
+      ? [
+          rect(
+            low.minX - margin * 2,
+            floor,
+            low.maxX - low.minX + margin * 4,
+            Math.max(4, h * 0.07),
+          ),
+        ]
+      : [];
+  let frame = union([...shapes.base, ...backed, ...foot]);
   // Narrow gaps between things fill in smoothly (grown, then shrunk back); anything still
   // off the base would print as a loose bit, so a stem joins it to the base.
   const close = Math.max(3, h * 0.04);
   frame = union([...frame, ...grown(grown(frame, close), -close)]);
   frame = joined(frame, bb, Math.max(3, h * 0.035));
-  // Nothing below the base's own bottom: it stands flat on it.
-  frame = difference(frame, [rect(-1e4, bb.minY - 1e4, 2e4, 1e4)]);
+  // Nothing below its bottom: it stands flat on it.
+  frame = difference(frame, [rect(-1e4, floor - 1e4, 2e4, 1e4)]);
   // What is left of a letter's hole once things cover most of it is a stray dot: filled. A hole
   // keeps only while it is at least half the letter's own hole it lies in (and not tiny).
   const smallest = (h * 0.07) ** 2;

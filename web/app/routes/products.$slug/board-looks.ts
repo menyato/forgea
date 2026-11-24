@@ -33,6 +33,8 @@ export interface BoardLook {
   initial: string;
   base: string;
   accent: string;
+  /** A logo standing's logo colour. */
+  logo?: string;
   items: LookItem[];
 }
 
@@ -316,6 +318,7 @@ const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
       initial: '',
       base: '#1d1d1f',
       accent: '#d4a72c',
+      logo: '#ffffff',
       items: [
         {
           kind: 'TEXT',
@@ -333,6 +336,7 @@ const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
       initial: '',
       base: '#ffffff',
       accent: '#1d1d1f',
+      logo: '#1d1d1f',
       items: [
         {
           kind: 'TEXT',
@@ -359,6 +363,7 @@ const BOARD_LOOKS: Partial<Record<TextStyle, BoardLook[]>> = {
       initial: '',
       base: '#1d1d1f',
       accent: '#d4a72c',
+      logo: '#d4a72c',
       items: [],
     },
   ],
@@ -530,7 +535,12 @@ export function lookFor(
   look: BoardLook,
   offer: ProductTextOffer,
   heightMm: number,
-): { initial: string; baseColour: string; items: BoardItem[] } {
+): {
+  initial: string;
+  baseColour: string;
+  logoColour?: string;
+  items: BoardItem[];
+} {
   const colour = (hex: string) =>
     nearestColour(hex, offer.colours)?.id ?? offer.colours[0]?.id ?? '';
   const accent = colour(look.accent);
@@ -571,6 +581,7 @@ export function lookFor(
   return {
     initial: (sample && [...sample][0]?.toUpperCase()) || look.initial,
     baseColour: base,
+    ...(look.logo ? { logoColour: colour(look.logo) } : {}),
     items,
   };
 }

@@ -52,11 +52,17 @@ export function BoardDesigner({
   // A logo standing: the logo it is made of (offered or the customer's own) and its colour.
   const logoStanding = offer.style === 'STANDING_LOGO';
   const [baseLogoId, setBaseLogoId] = useState(offer.logos[0]?.id ?? '');
-  const [logoColour, setLogoColour] = useState(
-    offer.colours.find(
-      (c) => c.id !== (offer.defaultColourId ?? offer.colours[0]?.id),
-    )?.id ?? '',
-  );
+  const [logoColour, setLogoColour] = useState(() => {
+    // The first look's logo colour, else any colour but the backing's.
+    const first = looksFor(offer)[0];
+    return (
+      (first && lookFor(first, offer, 0).logoColour) ??
+      offer.colours.find(
+        (c) => c.id !== (offer.defaultColourId ?? offer.colours[0]?.id),
+      )?.id ??
+      ''
+    );
+  });
   const looks = looksFor(offer);
   const heights = [offer.letterHeightMm, ...offer.sizesMm].sort(
     (a, b) => Number(a) - Number(b),
@@ -267,6 +273,7 @@ export function BoardDesigner({
                     setLookLabel(look.label);
                     if (standing) setInitial(made.initial);
                     setBaseColour(made.baseColour);
+                    if (made.logoColour) setLogoColour(made.logoColour);
                     setItems(made.items);
                     setSelected(null);
                   }}
