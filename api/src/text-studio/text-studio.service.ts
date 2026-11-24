@@ -97,6 +97,7 @@ export class TextStudio {
       shapes: p.textShapes as KeychainShape[],
       logoIds: p.textLogoIds,
       ownLogo: p.textOwnLogo,
+      sample: p.textSample,
     };
   }
 
@@ -513,10 +514,8 @@ export class TextStudio {
     const files = await this.shaper.stl(
       [{ id: font.id, read: () => this.uploads.read(font.fileKey) }],
       {
-        text:
-          settings.style === 'COUPLE'
-            ? SAMPLE_TEXT.COUPLE
-            : SAMPLE_TEXT[settings.style].slice(0, settings.maxChars),
+        // The owner's example name when there is one (a board piece: its initial, the name on it).
+        text: sampleText(settings.style, p.textSample, settings.maxChars),
         fontId: font.id,
         textColour: letters.id,
         ...(base ? { baseColour: base.id } : {}),
@@ -528,7 +527,7 @@ export class TextStudio {
                 {
                   id: 'sample',
                   kind: 'TEXT' as const,
-                  text: 'Forgea',
+                  text: p.textSample ?? 'Forgea',
                   x: 0,
                   y: 0,
                   size: Math.round(settings.letterHeightMm * 0.16),
@@ -591,6 +590,24 @@ export class TextStudio {
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** What a product's 3D sample says: the owner's example name, or the shop's, as its style takes it. */
+function sampleText(
+  style: TextSettings['style'],
+  sample: string | null,
+  maxChars: number,
+): string {
+  if (!sample)
+    return style === 'COUPLE'
+      ? SAMPLE_TEXT.COUPLE
+      : SAMPLE_TEXT[style].slice(0, maxChars);
+  if (style === 'TROPHY') return '';
+  if (style === 'STANDING_INITIAL')
+    return lettersOf(sample)[0] ?? SAMPLE_TEXT.STANDING_INITIAL;
+  if (style === 'COUPLE')
+    return sample.includes('&') ? sample : SAMPLE_TEXT.COUPLE;
+  return [...sample].slice(0, maxChars).join('');
+}
 
 /**
  * The browser's measurement, if it could be this design's: its colours are the design's, and

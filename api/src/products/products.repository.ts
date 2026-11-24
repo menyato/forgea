@@ -364,6 +364,7 @@ const fields = (dto: SaveProductDto) => ({
   // Shapes belong to name keychains; logos to them and to pieces designed freely.
   textShapes: dto.text?.style === 'KEYCHAIN' ? dto.text.shapes : [],
   textLogoIds: takesLogos(dto.text?.style) ? dto.text!.logoIds : [],
+  textSample: dto.text?.sample?.trim() || null,
   textOwnLogo: takesLogos(dto.text?.style)
     ? (dto.text!.ownLogo ?? false)
     : false,

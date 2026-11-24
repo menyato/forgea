@@ -48,6 +48,8 @@ export interface ProductTextSettings {
   logoIds: string[];
   /** Name keychains: customers may bring their own logo (beside their name or alone). */
   ownLogo: boolean;
+  /** The example name the shop shows (the sample, its looks, its 3D card); null: the shop's. */
+  sample: string | null;
 }
 
 /** What the product page offers a customer to design with. */

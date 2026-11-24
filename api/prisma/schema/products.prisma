@@ -69,6 +69,9 @@ model Product {
   /// Name keychains: customers may bring their own logo (a picture or drawing), beside their
   /// name or alone.
   textOwnLogo          Boolean      @default(false)
+  /// The name the shop shows as the example (the designer's sample, its looks, its 3D card),
+  /// the owner's own; none: the shop's.
+  textSample           String?      @db.VarChar(40)
   /// Added for every colour beyond the first (a multi-colour print), USD.
   textExtraColourPrice Decimal      @default(0) @db.Decimal(10, 2)
 

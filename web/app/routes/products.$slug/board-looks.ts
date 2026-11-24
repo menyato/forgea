@@ -482,6 +482,9 @@ export function lookFor(
   const colour = (hex: string) =>
     nearestColour(hex, offer.colours)?.id ?? offer.colours[0]?.id ?? '';
   const accent = colour(look.accent);
+  // The owner's example name, when set, replaces the look's: in its name line and as the initial.
+  const sample = offer.sample?.trim();
+  let named = false;
   const base = colour(look.base);
   const items = look.items.flatMap((i): BoardItem[] => {
     const logo =
@@ -490,11 +493,15 @@ export function lookFor(
         : undefined;
     if (i.kind === 'LOGO' && !logo) return [];
     const font = i.font ? fontFor(offer.fonts, i.font) : undefined;
+    const text =
+      sample && i.kind === 'TEXT' && i.font === 'script' && !named
+        ? ((named = true), sample)
+        : i.text;
     return [
       {
         id: itemId(),
         kind: i.kind,
-        ...(i.text ? { text: i.text } : {}),
+        ...(text ? { text } : {}),
         ...(font ? { fontId: font } : {}),
         ...(i.motif ? { motif: i.motif } : {}),
         ...(logo ? { logoId: logo.id } : {}),
@@ -506,7 +513,11 @@ export function lookFor(
       },
     ];
   });
-  return { initial: look.initial, baseColour: base, items };
+  return {
+    initial: (sample && [...sample][0]?.toUpperCase()) || look.initial,
+    baseColour: base,
+    items,
+  };
 }
 
 /** The looks a product starts from: a standing initial set for a girl (hearts, flowers,

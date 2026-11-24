@@ -199,7 +199,7 @@ export function TextDesigner({
   const designJson = JSON.stringify(design);
   const shown = designed
     ? design
-    : { ...design, text: SAMPLE[offer.style], letters: [] };
+    : { ...design, text: offer.sample || SAMPLE[offer.style], letters: [] };
 
   const live = useLivePrice(designJson, designed && font !== '');
   const { onMeasured, measuredJson, stale, price } = live;
@@ -319,7 +319,7 @@ export function TextDesigner({
                 maxLength={offer.maxChars + 4}
                 value={text}
                 onChange={(e) => setText(e.currentTarget.value)}
-                placeholder={SAMPLE[offer.style]}
+                placeholder={offer.sample || SAMPLE[offer.style]}
                 aria-invalid={problem && typed ? true : undefined}
                 aria-describedby="design-problem"
                 className={TEXT_INPUT}

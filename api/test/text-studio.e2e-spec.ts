@@ -626,6 +626,8 @@ describe('Text studio (e2e)', () => {
           defaultColourId: colours.white,
           // A boy's looks (a standing initial keeps its decorations as the looks it offers).
           decor: 'STARS',
+          // The owner's example name: the shop shows it, and the 3D card is made from it.
+          sample: 'Adam',
         },
       })
       .expect(201);
@@ -634,6 +636,7 @@ describe('Text studio (e2e)', () => {
     expect(detail.text).toMatchObject({
       style: 'STANDING_INITIAL',
       decor: 'STARS',
+      sample: 'Adam',
     });
     expect(detail.modelKey).toMatch(/^clean\/.+\.glb$/);
     const boardPrice = (design: object) =>

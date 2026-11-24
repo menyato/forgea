@@ -306,6 +306,13 @@ export class ProductTextDto {
   @IsOptional()
   @IsBoolean()
   ownLogo?: boolean;
+
+  /** The example name the shop shows (the sample, its looks, its 3D card); none: the shop's. */
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(40)
+  sample?: string;
 }
 
 /** A new font, from an uploaded file (POST /uploads/font). */

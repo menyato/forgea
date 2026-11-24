@@ -30,6 +30,7 @@ const STARTS: Record<
     | 'shapes'
     | 'logoIds'
     | 'ownLogo'
+    | 'sample'
   >
 > = {
   KEYCHAIN: {
@@ -172,6 +173,7 @@ export function TextSettingsPanel({
                   shapes: [],
                   logoIds: [],
                   ownLogo: false,
+                  sample: null,
                   ...STARTS.KEYCHAIN,
                 }
               : null,
@@ -213,6 +215,19 @@ export function TextSettingsPanel({
               </option>
             ))}
           </SelectField>
+          <Field
+            label="Example name (optional)"
+            name="text-sample"
+            autoComplete="off"
+            maxLength={40}
+            value={value.sample ?? ''}
+            onChange={(e) => set({ sample: e.currentTarget.value || null })}
+            hint={
+              value.style === 'COUPLE'
+                ? 'Two names with & between them, e.g. Maya & Karim: what the shop shows before a customer types, and on its card'
+                : 'What the shop shows before a customer types, in its starting looks and on its card; empty: Forgea'
+            }
+          />
           <SelectField
             label="Colours customers choose from"
             name="text-colour-group"
