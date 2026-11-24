@@ -8,9 +8,16 @@ import { CartController } from './cart.controller.js';
 import { CartRepository } from './cart.repository.js';
 import { CartService } from './cart.service.js';
 import { TextStudioModule } from '../text-studio/text-studio.module.js';
+import { OffersModule } from '../offers/offers.module.js';
 
 @Module({
-  imports: [DatabaseModule, PricingModule, ProductsModule, TextStudioModule],
+  imports: [
+    DatabaseModule,
+    PricingModule,
+    ProductsModule,
+    TextStudioModule,
+    OffersModule,
+  ],
   controllers: [CartController],
   providers: [CartService, CartRepository, CartCookie, AbandonedCartsCleaner],
   // Checkout (orders module) reads and clears the cart.

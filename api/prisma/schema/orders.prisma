@@ -109,8 +109,13 @@ model OrderItem {
   printJobs      PrintJob[]
   piece          Piece?
 
+  /// Claimed free under this offer (its unit price is 0); counts toward the offer's claims.
+  freeOfferId String?    @db.Uuid
+  freeOffer   FreeOffer? @relation(fields: [freeOfferId], references: [id], onDelete: Restrict)
+
   @@index([orderId])
   @@index([productId])
+  @@index([freeOfferId])
   @@map("order_items")
 }
 

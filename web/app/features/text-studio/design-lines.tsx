@@ -9,10 +9,16 @@ export function DesignLines({ design: d }: { design: DesignSummary }) {
   return (
     <span className="grid gap-0.5 text-sm">
       <span className="block min-w-0 break-words">
-        <span dir="auto" className="font-semibold">
-          “{d.text}”
-        </span>{' '}
-        in {d.font}, {d.textColour}
+        {d.text ? (
+          <>
+            <span dir="auto" className="font-semibold">
+              “{d.text}”
+            </span>{' '}
+            in {d.font}, {d.textColour}
+          </>
+        ) : (
+          <>Plaque in {d.textColour}</>
+        )}
         {d.accentColour
           ? `, ${d.style === 'COUPLE' ? 'heart' : 'initial'} ${d.accentColour}`
           : ''}
@@ -34,6 +40,11 @@ export function DesignLines({ design: d }: { design: DesignSummary }) {
       {d.subtitle && (
         <span dir="auto" className="block">
           Under the name: “{d.subtitle}”
+        </span>
+      )}
+      {d.items && d.items.length > 0 && (
+        <span dir="auto" className="block min-w-0 break-words">
+          On it: {d.items.map((i) => `${i.label} in ${i.colour}`).join(' · ')}
         </span>
       )}
       {d.letters && d.letters.length > 0 && (

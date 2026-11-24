@@ -1,10 +1,5 @@
 import { renderer } from '~/features/model-viewer/three-console.client';
-import {
-  buildDesign,
-  type BuiltDesign,
-  designProblem,
-  type TextSettings,
-} from '@forgea/text3d';
+import { buildDesign, type BuiltDesign, designProblem } from '@forgea/text3d';
 import type {
   DesignMeasurement,
   ProductTextOffer,
@@ -16,25 +11,8 @@ import { Box3, Color, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Plate, StudioLight } from '~/features/model-viewer/model-scene.client';
 import { fontsFor } from './font-set.client';
+import { settingsOf } from './text-settings';
 import { useSceneColors } from '~/features/model-viewer/theme-colors';
-
-/** The product's settings at the size chosen (the widest piece grows with it), as the API does. */
-const settingsOf = (
-  offer: ProductTextOffer,
-  heightMm: string | undefined,
-): TextSettings => {
-  const base = Number(offer.letterHeightMm);
-  const h = heightMm === undefined ? base : Number(heightMm);
-  return {
-    style: offer.style,
-    maxChars: offer.maxChars,
-    letterHeightMm: h,
-    letterDepthMm: Number(offer.letterDepthMm),
-    baseDepthMm: Number(offer.baseDepthMm),
-    maxWidthMm: (Number(offer.maxWidthMm) * h) / base,
-    ...(offer.decor ? { decor: offer.decor } : {}),
-  };
-};
 
 /**
  * The piece as the customer designs it, in 3D: made in the browser by the same code the
@@ -69,6 +47,7 @@ export default function TextPreview({
         d.fontId,
         ...(d.accentFontId ? [d.accentFontId] : []),
         ...(d.letters ?? []).flatMap((l) => l.fontId ?? []),
+        ...(d.items ?? []).flatMap((i) => i.fontId ?? []),
       ];
       fontsFor(offer.fonts, ids)
         .then((set) => {

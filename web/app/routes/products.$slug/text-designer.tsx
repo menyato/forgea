@@ -14,7 +14,6 @@ import {
   type TextDecor,
 } from '@forgea/text3d/design';
 import type {
-  DesignMeasurement,
   ProductDetail,
   ProductTextOffer,
   TextDesignInput,
@@ -39,6 +38,7 @@ import {
   fontFamilyOf,
   useFontFaces,
 } from '~/features/text-studio/use-font-faces';
+import { useLivePrice } from './use-live-price';
 import {
   TEXT_INPUT,
   QuickLooks,
@@ -60,6 +60,9 @@ const SAMPLE: Record<ProductTextOffer['style'], string> = {
   LETTERS: 'ABC',
   INITIAL_NAME: 'Lina',
   COUPLE: `Sara${COUPLE_JOIN}Ali`,
+  // Designed freely on their own page (BoardDesigner).
+  STANDING_INITIAL: 'A',
+  TROPHY: '',
 };
 
 /** What the accent colour paints, by style. */
@@ -198,48 +201,9 @@ export function TextDesigner({
     ? design
     : { ...design, text: SAMPLE[offer.style], letters: [] };
 
-  // What the preview built (in this browser), for the design it was built from.
-  const [measured, setMeasured] = useState<{
-    design: string;
-    json: string;
-  } | null>(null);
-  const onMeasured = useCallback(
-    (design: string, m: DesignMeasurement) =>
-      setMeasured({ design, json: JSON.stringify(m) }),
-    [],
-  );
-  const measuredJson = measured?.design === designJson ? measured.json : null;
-
-  // The price, from the API, a moment after the design settles: priced from what the
-  // browser built, so the server does no geometry while the customer types. If the preview
-  // can't build it (no WebGL, an old browser), the API builds it after a short wait.
-  const pricing = useFetcher<{ unitPrice?: string; error?: string }>();
-  const { submit: requestPrice } = pricing;
-  // The design the latest answer is for: until the current one is priced, it shows as updating.
-  const [pricedFor, setPricedFor] = useState<string | null>(null);
-  useEffect(() => {
-    if (!designed || !font) return;
-    const timer = setTimeout(
-      () => {
-        setPricedFor(designJson);
-        void requestPrice(
-          {
-            options: '[]',
-            design: designJson,
-            ...(measuredJson ? { measured: measuredJson } : {}),
-          },
-          { method: 'post' },
-        );
-      },
-      measuredJson ? 250 : 2500,
-    );
-    return () => clearTimeout(timer);
-  }, [requestPrice, designJson, measuredJson, designed, font]);
-  const stale = pricedFor !== designJson || pricing.state !== 'idle';
-  const price =
-    designed && pricing.data?.unitPrice ? pricing.data.unitPrice : null;
-  // A refusal counts only for the design on screen (the next change may fix it).
-  const priceError = designed && !stale ? pricing.data?.error : undefined;
+  const live = useLivePrice(designJson, designed && font !== '');
+  const { onMeasured, measuredJson, stale, price } = live;
+  const priceError = live.error;
 
   const cart = useFetcher<{ ok?: boolean; error?: string }>();
   const [addedFor, setAddedFor] = useState<string | null>(null);

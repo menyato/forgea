@@ -9,6 +9,7 @@ import { PricingModule } from '../pricing/pricing.module.js';
 import { PrintJobsModule } from '../print-jobs/print-jobs.module.js';
 import { StockModule } from '../stock/stock.module.js';
 import { UsersModule } from '../users/users.module.js';
+import { OffersModule } from '../offers/offers.module.js';
 import { CheckoutService } from './checkout.service.js';
 import { CustomerOrdersService } from './customer-orders.service.js';
 import { OrderRemoval } from './order-removal.service.js';
@@ -30,6 +31,7 @@ import { ReorderService } from './reorder.service.js';
     AccountingModule,
     StockModule,
     PrintJobsModule,
+    OffersModule,
   ],
   controllers: [OrdersController],
   providers: [

@@ -5,6 +5,7 @@ import { keysetPage } from '../common/pagination/keyset.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { OptionKind } from '../generated/prisma/enums.js';
+import { BOARD_STYLES, type TextStyle } from '@forgea/text3d/design';
 import { SAMPLE_MODEL_NAMES } from '../text-studio/text-studio.service.js';
 import {
   type ConfigurableProduct,
@@ -357,11 +358,12 @@ const fields = (dto: SaveProductDto) => ({
   // Decorations belong to a big initial only (CHECK).
   textDecor:
     dto.text?.style === 'INITIAL_NAME' ? (dto.text.decor ?? null) : null,
-  // Shapes and logos belong to name keychains only.
+  // Shapes belong to name keychains; logos to them and to pieces designed freely.
   textShapes: dto.text?.style === 'KEYCHAIN' ? dto.text.shapes : [],
-  textLogoIds: dto.text?.style === 'KEYCHAIN' ? dto.text.logoIds : [],
-  textOwnLogo:
-    dto.text?.style === 'KEYCHAIN' ? (dto.text.ownLogo ?? false) : false,
+  textLogoIds: takesLogos(dto.text?.style) ? dto.text!.logoIds : [],
+  textOwnLogo: takesLogos(dto.text?.style)
+    ? (dto.text!.ownLogo ?? false)
+    : false,
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
   priceOverride: dto.priceOverride ?? null,
@@ -429,3 +431,11 @@ const optionRows = (dto: SaveProductDto) => ({
     ),
   },
 });
+
+/** Name keychains and pieces designed freely offer logos (the studio's, or the customer's). */
+function takesLogos(style: TextStyle | undefined): boolean {
+  return (
+    style === 'KEYCHAIN' ||
+    (style !== undefined && BOARD_STYLES.includes(style))
+  );
+}

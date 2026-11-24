@@ -64,6 +64,11 @@ export class AddCartItemDto {
   @ValidateNested({ each: true })
   @Type(() => SlotChoiceDto)
   slots: SlotChoiceDto[] = [];
+
+  /** Claiming the free offer running now for this product (the API checks it). */
+  @IsOptional()
+  @IsUUID()
+  freeOfferId?: string;
 }
 
 export class UpdateCartItemDto {

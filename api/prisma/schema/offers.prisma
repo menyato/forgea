@@ -1,0 +1,26 @@
+/// A free piece for a limited time (the owner's giveaway: "a free mini keychain this week").
+/// Customers claim it from the product's page, designed as they like (name, number, sign):
+/// the line costs nothing, one per customer, while the offer runs and claims are left.
+model FreeOffer {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  productId   String   @db.Uuid
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// What the shop's banner says, e.g. "Your free mini keychain".
+  title       String
+  /// A line under it (how to claim, what it includes); optional.
+  description String?
+  startsAt    DateTime @db.Timestamptz(3)
+  endsAt      DateTime @db.Timestamptz(3)
+  /// At most this many claimed in all (orders not cancelled); none: no limit.
+  maxClaims   Int?
+  /// Switched off: claims stop at once (orders already placed keep theirs).
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("free_offers")
+}

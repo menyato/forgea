@@ -1,12 +1,12 @@
 import { difference, union } from './clip.js';
+import type { BoardMotif } from './design.js';
 import { circle, type Contour, type Point, type Region } from './outline.js';
 
 /**
  * Decorations drawn as shapes (no font): each `size` mm across, centred on 0, 0 (the crown
  * stands on 0, 0).
  */
-export type Motif =
-  'HEART' | 'STAR' | 'FLOWER' | 'MOON' | 'CROWN' | 'BUTTERFLY';
+export type Motif = BoardMotif;
 
 export function motif(kind: Motif, size: number): Region[] {
   switch (kind) {

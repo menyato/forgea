@@ -1,6 +1,11 @@
 import { unlessAsking } from '~/lib/revalidate';
 import { isPalette, paletteCss, type SiteTheme } from '@forgea/brand';
-import type { CartView, Profile, StoreSettings } from '@forgea/types';
+import type {
+  CartView,
+  CurrentFreeOffer,
+  Profile,
+  StoreSettings,
+} from '@forgea/types';
 import {
   isRouteErrorResponse,
   Link,
@@ -22,6 +27,7 @@ import '@fontsource-variable/league-spartan';
 import './app.css';
 import { PrintingLogo } from './components/brand/printing-logo';
 import { ErrorScreen } from './components/error-screen';
+import { OfferBanner } from './components/layout/offer-banner';
 import { SiteFooter } from './components/layout/site-footer';
 import { SiteHeader } from './components/layout/site-header';
 import { useOptimisticTheme } from './features/theme/theme-toggle';
@@ -53,7 +59,7 @@ export const middleware: Route.MiddlewareFunction[] = [
 
 export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [me, cart, store, siteTheme, theme] = await Promise.all([
+  const [me, cart, store, siteTheme, theme, offer] = await Promise.all([
     api.hasSession ? api.me() : Promise.resolve(null),
     // A first visit has no cart yet: nothing to ask.
     api.hasSession || api.hasCart
@@ -62,6 +68,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     api.shared<StoreSettings>('/store-settings'),
     api.shared<{ theme: SiteTheme | null }>('/site-theme'),
     readTheme(request),
+    // The free offer running now (none: nothing comes back), for the shop's banner.
+    api.shared<CurrentFreeOffer | undefined>('/offers/current'),
   ]);
   // The owner's palette (Theme page); checked again here because it goes into a <style>.
   const palette = siteTheme.ok ? siteTheme.data.theme?.palette : undefined;
@@ -72,6 +80,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     store: store.ok ? store.data : null,
     paletteCss: isPalette(palette) ? paletteCss(palette) : null,
     theme,
+    offer: offer.ok && offer.data?.id ? offer.data : null,
     // The real public address, for canonical links and link previews (features/seo).
     siteUrl: serverEnv().PUBLIC_WEB_URL,
   };
@@ -120,6 +129,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           whatsappPhone={data?.store?.whatsappPhone ?? null}
           theme={theme}
         />
+        {!inDashboard && data?.offer && <OfferBanner offer={data.offer} />}
         <PageLoading />
         <div id="main">{children}</div>
         {/* The dashboard is a workplace: the shop's footer stays with the shop. */}

@@ -60,6 +60,7 @@ export class CartController {
         dto.design,
         dto.measured,
         dto.slots,
+        dto.freeOfferId,
       ),
     );
   }

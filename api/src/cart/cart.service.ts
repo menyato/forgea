@@ -12,6 +12,7 @@ import type {
   DesignMeasurement,
   TextDesignInput,
 } from '@forgea/types';
+import { OffersService } from '../offers/offers.service.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { ProductConfigurator } from '../products/product-configurator.js';
 import { ProductsRepository } from '../products/products.repository.js';
@@ -60,6 +61,7 @@ export class CartService {
     private readonly configurator: ProductConfigurator,
     private readonly studio: TextStudio,
     private readonly slots: DesignSlots,
+    private readonly offers: OffersService,
   ) {}
 
   async view(owner: CartOwner): Promise<CartResult> {
@@ -75,9 +77,13 @@ export class CartService {
     design?: TextDesignInput,
     measured?: DesignMeasurement,
     slotChoices: readonly SlotChoiceDto[] = [],
+    /** Claiming the free offer running for this product (one piece, priced 0). */
+    freeOfferId?: string,
   ): Promise<CartResult> {
     const product = await this.products.findActive(productId);
     if (!product) throw new NotFoundException('This product is not available');
+    // 400 with the reason when the offer isn't running for this piece now.
+    if (freeOfferId) await this.offers.claimable(freeOfferId, productId);
     // 400 with a message for the shopper when a choice is missing or not offered.
     const configuration = this.configurator.configure(product, selections);
     // A personalised piece is checked before it goes in (400 if it can't be made), priced from
@@ -112,12 +118,15 @@ export class CartService {
           ...(slots && Object.keys(slots.choices).length
             ? [`slots:${designKey(slots.choices)}`]
             : []),
+          // The free piece is its own line, whatever else is in the cart.
+          ...(freeOfferId ? [`free:${freeOfferId}`] : []),
         ].join('|'),
         selections: configuration.selections,
         design: measurement,
         slots,
+        freeOfferId: freeOfferId ?? null,
       },
-      quantity,
+      freeOfferId ? 1 : quantity,
     );
     return {
       view: await this.reload(owner, newGuestCartId),
@@ -251,6 +260,13 @@ export class CartService {
       line.slots = line.slotsMeasured?.summary ?? [];
       line.slotsOrdered = orderedSlots(item.product, line.slotsMeasured);
     }
+    // A free piece stays free while its offer runs (checkout checks the offer again).
+    const free = await this.offers.running(
+      lines.flatMap((l) => (l.freeOfferId ? [l.freeOfferId] : [])),
+    );
+    for (const line of lines)
+      if (line.freeOfferId && free.has(line.freeOfferId))
+        line.unitPrice = '0.00';
     return { cartId: cart.id, lines };
   }
 
@@ -327,6 +343,10 @@ export class CartService {
     const items = cart?.items.filter((i) => i.product.active) ?? [];
     if (items.length === 0) return [];
     const calculator = known ?? (await this.pricing.costCalculator());
+    // Lines claimed under an offer cost nothing while it runs; after, their usual price.
+    const free = await this.offers.running(
+      items.flatMap((i) => (i.freeOfferId ? [i.freeOfferId] : [])),
+    );
     return items.flatMap((i): CheckoutLine[] => {
       const configuration = this.configureSaved(i.product, i.options);
       if (!configuration) return [];
@@ -352,14 +372,18 @@ export class CartService {
           slug: i.product.slug,
           name: i.product.name,
           materialCode: i.product.material.code,
-          unitPrice: measurement
-            ? this.studio.price(calculator, i.product, measurement)
-            : this.configurator.unitPrice(calculator, i.product, priced),
+          unitPrice:
+            i.freeOfferId && free.has(i.freeOfferId)
+              ? '0.00'
+              : measurement
+                ? this.studio.price(calculator, i.product, measurement)
+                : this.configurator.unitPrice(calculator, i.product, priced),
           quantity: i.quantity,
           isCustom: i.product.isCustom,
           options: configuration.chosen,
           design: measurement?.summary ?? null,
           slots: slotsMeasured?.summary ?? [],
+          freeOfferId: i.freeOfferId,
           measurement,
           slotsMeasured,
         },

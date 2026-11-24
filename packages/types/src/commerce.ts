@@ -20,6 +20,8 @@ export interface CartLine {
   design: DesignSummary | null;
   /** The text and logos on its model, as chosen. */
   slots: SlotSummary[];
+  /** Claimed free under this offer (priced 0 while it runs; one piece). */
+  freeOfferId: string | null;
 }
 
 /**

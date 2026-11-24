@@ -11,6 +11,7 @@ import {
   Box3,
   BufferGeometry,
   Color,
+  FrontSide,
   Mesh,
   type Object3D,
   PerspectiveCamera,
@@ -318,10 +319,12 @@ export function StudioLight() {
 /** The print plate the model stands on, in the theme's plate colour. */
 export function Plate({ radius, y }: { radius: number; y: number }) {
   const { plate } = useSceneColors();
+  // Only its top face, drawn from above: turned to look under the model, the plate is not
+  // there, so the underside's details show.
   return (
-    <mesh position={[0, y - radius * 0.02, 0]}>
-      <cylinderGeometry args={[radius, radius, radius * 0.04, 64]} />
-      <meshStandardMaterial color={plate} roughness={0.85} />
+    <mesh position={[0, y - radius * 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <circleGeometry args={[radius, 64]} />
+      <meshStandardMaterial color={plate} roughness={0.85} side={FrontSide} />
     </mesh>
   );
 }

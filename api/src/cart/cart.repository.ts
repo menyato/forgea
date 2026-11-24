@@ -23,6 +23,8 @@ export interface LineKey {
   design?: object | null;
   /** Its text and logo slots as chosen and measured (DesignSlots), kept with the line. */
   slots?: object | null;
+  /** Claimed free under this offer: always one piece. */
+  freeOfferId?: string | null;
 }
 
 @Injectable()
@@ -93,8 +95,13 @@ export class CartRepository {
     itemId: string,
     quantity: number,
   ): Promise<boolean> {
+    // A free piece stays one (the database refuses more).
     const { count } = await this.prisma.cartItem.updateMany({
-      where: { id: itemId, cartId },
+      where: {
+        id: itemId,
+        cartId,
+        ...(quantity > 1 ? { freeOfferId: null } : {}),
+      },
       data: { quantity },
     });
     return count === 1;
@@ -135,6 +142,7 @@ export class CartRepository {
             selections: item.options as unknown as OptionSelection[],
             design: item.design as object | null,
             slots: item.slotChoices as object | null,
+            freeOfferId: item.freeOfferId,
           },
           item.quantity,
         );
@@ -161,10 +169,10 @@ async function addTo(
   // instead of both reading the same quantity and one of them being lost.
   await tx.$queryRaw`SELECT "id" FROM "carts" WHERE "id" = ${cartId}::uuid FOR UPDATE`;
   const existing = await tx.cartItem.findUnique({ where });
-  const total = Math.min(
-    (existing?.quantity ?? 0) + quantity,
-    CART_QUANTITY_MAX,
-  );
+  // A free piece is one, however often it is added.
+  const total = line.freeOfferId
+    ? 1
+    : Math.min((existing?.quantity ?? 0) + quantity, CART_QUANTITY_MAX);
   await tx.cartItem.upsert({
     where,
     create: {
@@ -176,6 +184,7 @@ async function addTo(
       ...(line.slots
         ? { slotChoices: line.slots as Prisma.InputJsonValue }
         : {}),
+      ...(line.freeOfferId ? { freeOfferId: line.freeOfferId } : {}),
       quantity: total,
     },
     update: { quantity: total },

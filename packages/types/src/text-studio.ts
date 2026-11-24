@@ -1,5 +1,6 @@
 import type { TextDecor, TextStyle } from './generated/prisma/enums.js';
 import type {
+  BoardItem,
   DesignSlot,
   KeychainShape,
   LogoInk,
@@ -100,7 +101,8 @@ export interface TextDesignInput {
   shape?: KeychainShape;
   logoId?: string;
   /** The logo in its own colours: a colour (option value id) for each of its `inks`. */
-  logoColours?: string[];
+  logoColours?: string[]; /** Standing initials and trophies: the items on its face, as placed (colours are ids). */
+  items?: BoardItem[];
 }
 
 /** How a design reads in the cart, an order and the dashboard (names, not ids). */
@@ -129,6 +131,8 @@ export interface DesignSummary {
   logo: string | null;
   /** The logo in its own colours: each of its colours' filament, by name (null: one colour). */
   logoColours: string[] | null;
+  /** Standing initials and trophies: what is on its face, in order, by name. */
+  items?: { kind: BoardItem['kind']; label: string; colour: string }[] | null;
   /** The piece's size, mm (width × depth × height as it lies on the bed). */
   sizeMm: { x: number; y: number; z: number };
 }

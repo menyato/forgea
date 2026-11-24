@@ -46,6 +46,7 @@ import { PiecesModule } from './pieces/pieces.module.js';
 import { TextStudioModule } from './text-studio/text-studio.module.js';
 import { DeletionsModule } from './deletions/deletions.module.js';
 import { InsightsModule } from './insights/insights.module.js';
+import { OffersModule } from './offers/offers.module.js';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { InsightsModule } from './insights/insights.module.js';
     TextStudioModule,
     InsightsModule,
     DeletionsModule,
+    OffersModule,
   ],
   providers: [
     // Global guards run in this order: rate limit → CSRF → who are you → may you.

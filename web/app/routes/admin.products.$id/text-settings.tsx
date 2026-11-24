@@ -1,5 +1,6 @@
 import {
   ACCENT_STYLES,
+  BOARD_STYLES,
   KEYCHAIN_SHAPE_LABELS,
   KEYCHAIN_SHAPES,
   TEXT_DECOR_LABELS,
@@ -85,6 +86,24 @@ const STARTS: Record<
     extraColourPrice: '2.00',
     sizesMm: ['40'],
   },
+  STANDING_INITIAL: {
+    maxChars: 1,
+    letterHeightMm: '150',
+    letterDepthMm: '2',
+    baseDepthMm: '20',
+    maxWidthMm: '200',
+    extraColourPrice: '2.00',
+    sizesMm: ['120', '180'],
+  },
+  TROPHY: {
+    maxChars: 1,
+    letterHeightMm: '140',
+    letterDepthMm: '2',
+    baseDepthMm: '6',
+    maxWidthMm: '200',
+    extraColourPrice: '2.00',
+    sizesMm: ['180'],
+  },
 };
 
 const HELP: Record<ProductTextSettings['style'], string> = {
@@ -99,6 +118,10 @@ const HELP: Record<ProductTextSettings['style'], string> = {
     "The name's first letter big, the whole name across it and decorations around it, standing. The size is the initial's height.",
   COUPLE:
     'Two names with a heart between them on one backing, standing. Most characters is per name.',
+  STANDING_INITIAL:
+    "One big letter that stands on its own; customers place names, dates, weights, decorations and logos on it where they like (drag and drop). The size is the letter's height; the thickness is the backing.",
+  TROPHY:
+    "A plaque on a foot; customers place a title, names, a year, decorations and logos (a profession's, or their own) on it where they like. The size is the plaque's height.",
 };
 
 /**
@@ -171,10 +194,10 @@ export function TextSettingsPanel({
                 ...STARTS[style],
                 decor:
                   style === 'INITIAL_NAME' ? (value.decor ?? 'HEARTS') : null,
-                // Shapes and logos belong to keychains.
+                // Shapes belong to keychains; logos to them and to pieces designed freely.
                 shapes: style === 'KEYCHAIN' ? value.shapes : [],
-                logoIds: style === 'KEYCHAIN' ? value.logoIds : [],
-                ownLogo: style === 'KEYCHAIN' ? value.ownLogo : false,
+                logoIds: takesLogos(style) ? value.logoIds : [],
+                ownLogo: takesLogos(style) ? value.ownLogo : false,
               });
               setSizesText(STARTS[style].sizesMm.join(', '));
             }}
@@ -231,7 +254,7 @@ export function TextSettingsPanel({
               </div>
             </fieldset>
           )}
-          {value.style === 'KEYCHAIN' && (
+          {takesLogos(value.style) && (
             <CheckboxField
               label="Customers may bring their own logo"
               name="text-own-logo"
@@ -240,10 +263,12 @@ export function TextSettingsPanel({
               hint="They drop a picture or an SVG; it is traced into a raised logo, beside their name or alone"
             />
           )}
-          {value.style === 'KEYCHAIN' && logos.some((l) => l.active) && (
+          {takesLogos(value.style) && logos.some((l) => l.active) && (
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-medium">
-                Logos customers may add beside their name
+                {value.style === 'KEYCHAIN'
+                  ? 'Logos customers may add beside their name'
+                  : 'Logos customers may place on it'}
               </legend>
               <div className="flex flex-wrap gap-3">
                 {logos
@@ -414,4 +439,9 @@ export function TextSettingsPanel({
       )}
     </div>
   );
+}
+
+/** Name keychains and pieces designed freely offer logos (the studio's, or the customer's). */
+function takesLogos(style: ProductTextSettings['style']): boolean {
+  return style === 'KEYCHAIN' || BOARD_STYLES.includes(style);
 }

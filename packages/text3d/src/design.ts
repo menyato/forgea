@@ -22,6 +22,8 @@ export const TEXT_STYLES = [
   'LETTERS',
   'INITIAL_NAME',
   'COUPLE',
+  'STANDING_INITIAL',
+  'TROPHY',
 ] as const;
 export type TextStyle = (typeof TEXT_STYLES)[number];
 
@@ -32,7 +34,74 @@ export const TEXT_STYLE_LABELS: Readonly<Record<TextStyle, string>> = {
   LETTERS: 'Single letters',
   INITIAL_NAME: 'Big initial with the name',
   COUPLE: 'Two names and a heart',
+  STANDING_INITIAL: 'Standing initial, designed freely',
+  TROPHY: 'Trophy, designed freely',
 };
+
+/**
+ * Pieces customers design freely, like a board: a base (the big initial standing on its own,
+ * or a trophy's plaque) with items on its face (text lines, decorations, logos) that they drag
+ * where they like, size, turn and colour.
+ */
+export const BOARD_STYLES: readonly TextStyle[] = [
+  'STANDING_INITIAL',
+  'TROPHY',
+];
+
+/** Decorations an item can be (drawn shapes, no font). */
+export const BOARD_MOTIFS = [
+  'HEART',
+  'STAR',
+  'FLOWER',
+  'MOON',
+  'CROWN',
+  'BUTTERFLY',
+] as const;
+export type BoardMotif = (typeof BOARD_MOTIFS)[number];
+
+export const BOARD_MOTIF_LABELS: Readonly<Record<BoardMotif, string>> = {
+  HEART: 'Heart',
+  STAR: 'Star',
+  FLOWER: 'Flower',
+  MOON: 'Moon',
+  CROWN: 'Crown',
+  BUTTERFLY: 'Butterfly',
+};
+
+export const BOARD_ITEM_KINDS = ['TEXT', 'MOTIF', 'LOGO'] as const;
+export type BoardItemKind = (typeof BOARD_ITEM_KINDS)[number];
+
+/**
+ * One item on a board piece's face: where its centre is (mm from the base's centre, y up),
+ * how tall it is, how it is turned and its colour. Later items lie over earlier ones.
+ */
+export interface BoardItem {
+  /** Stable while the customer edits (their editor keys items by it). */
+  id: string;
+  kind: BoardItemKind;
+  /** TEXT: what it says, and its font (none: the design's). */
+  text?: string;
+  fontId?: string;
+  /** MOTIF: which decoration. */
+  motif?: BoardMotif;
+  /** LOGO: one of the studio's logos the product offers, or the customer's own. */
+  logoId?: string;
+  x: number;
+  y: number;
+  /** Its height, mm (text: its capitals). */
+  size: number;
+  /** Turned counter-clockwise, degrees. */
+  rotation: number;
+  /** The colour it prints in: one of the product's colours. */
+  colour: string;
+}
+
+export const BOARD_LIMITS = {
+  maxItems: 16,
+  minSizeMm: 4,
+  maxSizeMm: 150,
+  maxTextChars: 40,
+} as const;
 
 /** Styles that stand on a foot (a name, initials) rather than lie flat. */
 export const STANDING_STYLES: readonly TextStyle[] = [
@@ -136,6 +205,8 @@ export interface TextDesign {
    * order). Left out: the whole logo prints in the letters' colour.
    */
   logoColours?: string[];
+  /** STANDING_INITIAL and TROPHY: the items on its face, as the customer placed them. */
+  items?: BoardItem[];
 }
 
 /** One colour of a logo: where it is (in the logo's own frame) and the colour it was drawn in. */
@@ -297,6 +368,50 @@ export function subtitleProblem(text: string | undefined): string | null {
   return null;
 }
 
+/**
+ * Why a board piece's items can't be made, or null: how many, each one's size, where it is
+ * (on or near the base: `reachMm` from its centre), and each text line's characters.
+ */
+export function boardItemsProblem(
+  items: readonly BoardItem[],
+  reachMm: number,
+): string | null {
+  if (items.length > BOARD_LIMITS.maxItems)
+    return `At most ${BOARD_LIMITS.maxItems} things on one piece`;
+  for (const item of items) {
+    if (
+      !Number.isFinite(item.size) ||
+      item.size < BOARD_LIMITS.minSizeMm ||
+      item.size > BOARD_LIMITS.maxSizeMm
+    )
+      return `Sizes from ${BOARD_LIMITS.minSizeMm} to ${BOARD_LIMITS.maxSizeMm} mm`;
+    if (
+      ![item.x, item.y, item.rotation].every(Number.isFinite) ||
+      Math.hypot(item.x, item.y) > reachMm
+    )
+      return 'Keep everything on the piece';
+    if (item.kind === 'TEXT') {
+      const t = (item.text ?? '').trim();
+      if (t === '') return 'Type the text, or remove the empty line';
+      if ([...t].length > BOARD_LIMITS.maxTextChars)
+        return `Up to ${BOARD_LIMITS.maxTextChars} characters in a line`;
+      if (!SUBTITLE_ALLOWED.test(t))
+        return 'Use letters, numbers, spaces and . , : / - only';
+      if (ARABIC.test(t) && LATIN.test(t))
+        return 'Arabic or English letters in a line, not both';
+    } else if (item.kind === 'MOTIF') {
+      if (!item.motif || !BOARD_MOTIFS.includes(item.motif))
+        return 'Choose a decoration';
+    } else if (!item.logoId) return 'Choose a logo';
+  }
+  return null;
+}
+
+/** How far from a board piece's centre its items may sit (mm): around the base, not far off. */
+export function boardReachMm(settings: TextSettings): number {
+  return Math.max(settings.letterHeightMm, settings.maxWidthMm) * 0.75;
+}
+
 /** The colours a design uses (each a separate filament: a multi-colour print). */
 export function coloursOf(design: TextDesign, style: TextStyle): string[] {
   const colours = new Set([design.textColour]);
@@ -310,6 +425,8 @@ export function coloursOf(design: TextDesign, style: TextStyle): string[] {
   if (design.baseColour && style !== 'LETTERS') colours.add(design.baseColour);
   if (style === 'KEYCHAIN' && design.logoId)
     for (const c of design.logoColours ?? []) colours.add(c);
+  if (BOARD_STYLES.includes(style))
+    for (const item of design.items ?? []) colours.add(item.colour);
   return [...colours];
 }
 
@@ -321,6 +438,9 @@ export function fontsOf(design: TextDesign, style: TextStyle): string[] {
   }
   if (design.accentFontId && style === 'INITIAL_NAME')
     fonts.add(design.accentFontId);
+  if (BOARD_STYLES.includes(style))
+    for (const item of design.items ?? [])
+      if (item.kind === 'TEXT' && item.fontId) fonts.add(item.fontId);
   return [...fonts];
 }
 

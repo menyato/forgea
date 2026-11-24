@@ -12,6 +12,7 @@ import {
   OrderStatus,
   type QuotationStatus,
 } from '../generated/prisma/enums.js';
+import { OffersService } from '../offers/offers.service.js';
 import { PricingService } from '../pricing/pricing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { StoreSettingsService } from '../store-settings/store-settings.service.js';
@@ -74,6 +75,7 @@ export class CheckoutService {
     private readonly users: UsersRepository,
     private readonly notifications: Notifications,
     private readonly store: StoreSettingsService,
+    private readonly offers: OffersService,
     config: ConfigService<EnvironmentVariables, true>,
   ) {
     this.keySecret = config.get('COOKIE_SECRET', { infer: true });
@@ -119,8 +121,15 @@ export class CheckoutService {
         options: l.options,
         design: l.measurement,
         slots: l.slotsOrdered,
+        // Free only while its offer runs (priced 0 then): then it counts as a claim.
+        freeOfferId: Number(l.unitPrice) === 0 ? l.freeOfferId : null,
       })),
       rush: dto.rush,
+      claims: async (tx) => {
+        for (const l of lines)
+          if (l.freeOfferId && Number(l.unitPrice) === 0)
+            await this.offers.claimIn(tx, l.freeOfferId, userId);
+      },
     });
   }
 
@@ -250,6 +259,7 @@ export class CheckoutService {
       /** Quotations carry their own negotiated discounts: no automatic bulk discount. */
       bulkDiscounts?: boolean;
       actorId?: string;
+      claims?: NewOrder['claims'];
     },
   ): Promise<CheckoutResult> {
     const quote = await this.pricing.quoteOrder(
@@ -276,6 +286,7 @@ export class CheckoutService {
       },
       ...(o.source ? { source: o.source } : {}),
       ...(o.actorId ? { actorId: o.actorId } : {}),
+      ...(o.claims ? { claims: o.claims } : {}),
     });
     // Remembered so the next checkout is pre-filled and staff can call before delivering.
     const user = await this.users.updateContact(userId, {

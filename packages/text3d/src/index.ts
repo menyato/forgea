@@ -1,5 +1,8 @@
 import type { BufferGeometry } from 'three';
 import {
+  BOARD_STYLES,
+  boardItemsProblem,
+  boardReachMm,
   coupleNames,
   lettersOf,
   type LogoShape,
@@ -22,6 +25,7 @@ export {
   slotsProblem,
   type BuiltSlot,
 } from './slots.js';
+export { boardLayout, boardShapes, type BoardShapes } from './board.js';
 export { faceAround } from './face.js';
 export { logoFromSvg, logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
 export type { Region } from './outline.js';
@@ -43,6 +47,32 @@ export function designProblem(
   design: TextDesign,
   settings: TextSettings,
 ): string | null {
+  if (BOARD_STYLES.includes(settings.style)) {
+    // The base: a standing initial's one letter (a trophy's plaque has none).
+    const initial = design.text.trim();
+    if (settings.style === 'STANDING_INITIAL') {
+      if (lettersOf(initial).length !== 1) return 'Type one letter';
+      const missing = fonts.missing(
+        design.accentFontId ?? design.fontId,
+        initial,
+      );
+      if (missing.length)
+        return `This font has no ${missing.join(' ')}: choose another font`;
+    }
+    const items = design.items ?? [];
+    const problem = boardItemsProblem(items, boardReachMm(settings));
+    if (problem) return problem;
+    for (const item of items) {
+      if (item.kind !== 'TEXT') continue;
+      const missing = fonts.missing(
+        item.fontId ?? design.fontId,
+        item.text!.trim(),
+      );
+      if (missing.length)
+        return `This font has no ${missing.join(' ')}: choose another font`;
+    }
+    return null;
+  }
   const problem =
     textProblem(
       design.text,

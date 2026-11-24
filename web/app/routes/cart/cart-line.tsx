@@ -30,37 +30,49 @@ export function CartLineRow({ line }: { line: CartLine }) {
         {line.design && <DesignLines design={line.design} />}
         <SlotLines slots={line.slots} />
         <p className="text-sm text-text-muted">
-          {line.materialCode} · <Money amount={line.unitPrice} /> each
+          {line.materialCode} ·{' '}
+          {line.freeOfferId && Number(line.unitPrice) === 0 ? (
+            <strong className="text-accent">Free (limited time offer)</strong>
+          ) : (
+            <>
+              <Money amount={line.unitPrice} /> each
+            </>
+          )}
           {line.isCustom && ' · made to order (50% deposit)'}
         </p>
       </div>
-      <update.Form
-        method="post"
-        action="/cart"
-        className="flex items-end gap-2"
-      >
-        <input type="hidden" name="intent" value="update" />
-        <input type="hidden" name="lineId" value={line.id} />
-        <label className="grid gap-1 text-sm">
-          <span>Quantity</span>
-          <input
-            type="number"
-            name="quantity"
-            autoComplete="off"
-            min={1}
-            max={CART_QUANTITY_MAX}
-            defaultValue={line.quantity}
-            className="w-20 rounded-md border border-border bg-surface px-2 py-1.5"
-          />
-        </label>
-        <Button
-          type="submit"
-          variant="secondary"
-          disabled={update.state !== 'idle'}
+      {/* A free piece is one: nothing to change but remove it. */}
+      {line.freeOfferId ? (
+        <p className="text-sm text-text-muted">One per customer</p>
+      ) : (
+        <update.Form
+          method="post"
+          action="/cart"
+          className="flex items-end gap-2"
         >
-          Update
-        </Button>
-      </update.Form>
+          <input type="hidden" name="intent" value="update" />
+          <input type="hidden" name="lineId" value={line.id} />
+          <label className="grid gap-1 text-sm">
+            <span>Quantity</span>
+            <input
+              type="number"
+              name="quantity"
+              autoComplete="off"
+              min={1}
+              max={CART_QUANTITY_MAX}
+              defaultValue={line.quantity}
+              className="w-20 rounded-md border border-border bg-surface px-2 py-1.5"
+            />
+          </label>
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={update.state !== 'idle'}
+          >
+            Update
+          </Button>
+        </update.Form>
+      )}
       <remove.Form method="post" action="/cart">
         <input type="hidden" name="intent" value="remove" />
         <input type="hidden" name="lineId" value={line.id} />

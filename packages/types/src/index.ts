@@ -27,6 +27,7 @@ export type * from './dashboard.js';
 export type * from './catalog-transfer.js';
 export type * from './crm.js';
 export type * from './text-studio.js';
+export type * from './offers.js';
 export { HTTP } from './http.js';
 export type * from './auth.js';
 export {

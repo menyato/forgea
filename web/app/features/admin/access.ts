@@ -65,6 +65,13 @@ export const PAGES: readonly {
     label: 'Customers',
     group: 'Sales',
   },
+  {
+    path: '/admin/offers',
+    access: 'offers.manage',
+    label: 'Free offers',
+    group: 'Sales',
+  },
+  { path: '/admin/offers/new', access: 'offers.manage' },
   // The old address of the stages page: it now leads to Lead stages.
   { path: '/admin/pipeline', access: 'pipeline.manage' },
   {

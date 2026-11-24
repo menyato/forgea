@@ -7,6 +7,9 @@ import {
 } from '@forgea/pricing';
 import {
   ACCENT_STYLES,
+  BOARD_MOTIF_LABELS,
+  BOARD_STYLES,
+  type BoardItem,
   COUPLE_JOIN,
   coupleNames,
   KEYCHAIN_SHAPE_LABELS,
@@ -109,7 +112,7 @@ export class TextStudio {
         label: v.label,
         swatchHex: v.swatchHex,
       })),
-      logos: await this.keychainLogos(p),
+      logos: await this.offeredLogos(p),
       fonts: (await this.fonts.active()).map((f) => ({
         id: f.id,
         name: f.name,
@@ -191,6 +194,52 @@ export class TextStudio {
       if (id !== undefined && !fonts.has(id))
         throw new BadRequestException('Choose one of the fonts offered');
     }
+    // A board piece's items: the product's colours and fonts, its logos or the customer's own.
+    const board = BOARD_STYLES.includes(settings.style);
+    const offeredLogos =
+      board || settings.style === 'KEYCHAIN' ? await this.offeredLogos(p) : [];
+    const items: BoardItem[] = [];
+    const itemLogos = new Map<
+      string,
+      StoredLogo & { id: string; name: string }
+    >();
+    for (const item of board ? (design.items ?? []) : []) {
+      if (!colours.has(item.colour))
+        throw new BadRequestException('Choose one of the colours offered');
+      const kept = {
+        id: item.id,
+        kind: item.kind,
+        x: item.x,
+        y: item.y,
+        size: item.size,
+        rotation: item.rotation,
+        colour: item.colour,
+      };
+      if (item.kind === 'TEXT') {
+        if (item.fontId !== undefined && !fonts.has(item.fontId))
+          throw new BadRequestException('Choose one of the fonts offered');
+        items.push({
+          ...kept,
+          text: (item.text ?? '').trim(),
+          ...(item.fontId && item.fontId !== design.fontId
+            ? { fontId: item.fontId }
+            : {}),
+        });
+      } else if (item.kind === 'MOTIF') {
+        items.push({ ...kept, ...(item.motif ? { motif: item.motif } : {}) });
+      } else {
+        const id = item.logoId;
+        const logo = id
+          ? (itemLogos.get(id) ??
+            offeredLogos.find((l) => l.id === id) ??
+            (p.textOwnLogo ? await this.customerLogo(id) : undefined))
+          : undefined;
+        if (!logo)
+          throw new BadRequestException('Choose one of the logos offered');
+        itemLogos.set(logo.id, logo);
+        items.push({ ...kept, logoId: logo.id });
+      }
+    }
     // A keychain's shape and logo: only ones the product offers.
     const keychain = settings.style === 'KEYCHAIN';
     const shape =
@@ -199,7 +248,7 @@ export class TextStudio {
         : undefined;
     if (shape && !p.textShapes.includes(shape))
       throw new BadRequestException('Choose one of the shapes offered');
-    const logos = keychain ? await this.keychainLogos(p) : [];
+    const logos = keychain ? offeredLogos : [];
     // One the product offers, or the customer's own where the product lets them bring one.
     const logo =
       keychain && design.logoId
@@ -251,12 +300,18 @@ export class TextStudio {
       ...(shape ? { shape } : {}),
       ...(logo ? { logoId: logo.id } : {}),
       ...(logoColours ? { logoColours } : {}),
+      ...(board ? { items } : {}),
     };
     const used = new Set([
       clean.fontId,
       ...(clean.accentFontId ? [clean.accentFontId] : []),
       ...letters.flatMap((l) => l.fontId ?? []),
+      ...items.flatMap((i) => i.fontId ?? []),
     ]);
+    const shapes: [string, StoredLogo][] = [
+      ...(logo ? [[logo.id, logo] as [string, StoredLogo]] : []),
+      ...[...itemLogos.values()].map((l) => [l.id, l] as [string, StoredLogo]),
+    ];
     const measured = given
       ? plausible(given, clean, settings, perLetter ? letters : [])
       : await this.shaper.measure(
@@ -266,7 +321,7 @@ export class TextStudio {
           })),
           clean,
           settings,
-          logo ? [[logo.id, logo]] : [],
+          shapes,
         );
     if (measured.problem !== null)
       throw new BadRequestException(measured.problem);
@@ -325,6 +380,18 @@ export class TextStudio {
         shape: shape ? KEYCHAIN_SHAPE_LABELS[shape] : null,
         logo: logo?.name ?? null,
         logoColours: logoColours?.map((c) => colours.get(c)!) ?? null,
+        items: board
+          ? items.map((i) => ({
+              kind: i.kind,
+              label:
+                i.kind === 'TEXT'
+                  ? `${i.text} (${font(i.fontId)})`
+                  : i.kind === 'MOTIF'
+                    ? BOARD_MOTIF_LABELS[i.motif!]
+                    : itemLogos.get(i.logoId!)!.name,
+              colour: colours.get(i.colour)!,
+            }))
+          : null,
         sizeMm: {
           x: round1(measured.size.x),
           y: round1(measured.size.y),
@@ -344,10 +411,14 @@ export class TextStudio {
   }
 
   /** The logos a keychain product offers (switched-off ones dropped), with their outlines. */
-  private async keychainLogos(
+  /** The studio logos a keychain or a board piece offers, with their outlines. */
+  private async offeredLogos(
     p: ConfigurableProduct,
   ): Promise<(StoredLogo & { id: string; name: string })[]> {
-    if (p.textStyle !== 'KEYCHAIN' || p.textLogoIds.length === 0) return [];
+    const offers =
+      p.textStyle === 'KEYCHAIN' ||
+      (p.textStyle !== null && BOARD_STYLES.includes(p.textStyle));
+    if (!offers || p.textLogoIds.length === 0) return [];
     const named = await this.logos.named(p.textLogoIds);
     const outlines = new Map(await this.logos.outlines(p.textLogoIds));
     return p.textLogoIds.flatMap((id) => {
@@ -396,7 +467,12 @@ export class TextStudio {
       design.fontId,
       ...(design.accentFontId ? [design.accentFontId] : []),
       ...(design.letters ?? []).flatMap((l) => l.fontId ?? []),
+      ...(design.items ?? []).flatMap((i) => i.fontId ?? []),
     ]);
+    const logoIds = [
+      ...(design.logoId ? [design.logoId] : []),
+      ...(design.items ?? []).flatMap((i) => i.logoId ?? []),
+    ];
     const files = await this.shaper.stl(
       [...used].flatMap((id) => {
         const f = fonts.get(id);
@@ -404,7 +480,7 @@ export class TextStudio {
       }),
       design,
       settings,
-      design.logoId ? await this.logos.outlines([design.logoId]) : [],
+      logoIds.length ? await this.logos.outlines([...new Set(logoIds)]) : [],
     );
     if ('problem' in files) throw new BadRequestException(files.problem);
     return files;
@@ -438,6 +514,27 @@ export class TextStudio {
         textColour: letters.id,
         ...(base ? { baseColour: base.id } : {}),
         ...(accent ? { accentColour: accent.id } : {}),
+        // A board piece shows the shop's name on its face, in the second colour.
+        ...(BOARD_STYLES.includes(settings.style)
+          ? {
+              items: [
+                {
+                  id: 'sample',
+                  kind: 'TEXT' as const,
+                  text: 'Forgea',
+                  x: 0,
+                  y: 0,
+                  size: Math.round(settings.letterHeightMm * 0.16),
+                  rotation: 0,
+                  colour: (
+                    base ??
+                    values.find((v) => v.id !== letters.id) ??
+                    letters
+                  ).id,
+                },
+              ],
+            }
+          : {}),
       },
       settings,
     );
@@ -447,7 +544,8 @@ export class TextStudio {
         bytes: f.bytes,
         hex: pick(f.colour)?.swatchHex ?? '#b87333',
       })),
-      !STANDING_STYLES.includes(settings.style),
+      !STANDING_STYLES.includes(settings.style) &&
+        !BOARD_STYLES.includes(settings.style),
     );
     const sha256 = createHash('sha256').update(data).digest('hex');
     const known = await this.uploads.findCleanBySha256(
@@ -506,6 +604,7 @@ function plausible(
     ...(design.decorColour ? [design.decorColour] : []),
     ...letters.flatMap((l) => l.colour ?? []),
     ...(design.logoColours ?? []),
+    ...(design.items ?? []).map((i) => i.colour),
   ]);
   const { x, y, z } = given.size;
   // Generous: decorations, a keyring loop and a backing plate stand out past the letters.
@@ -541,4 +640,6 @@ const SAMPLE_TEXT: Record<TextSettings['style'], string> = {
   LETTERS: 'FORGEA',
   INITIAL_NAME: 'Forgea',
   COUPLE: 'Forge & Lab',
+  STANDING_INITIAL: 'F',
+  TROPHY: '',
 };

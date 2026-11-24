@@ -52,6 +52,10 @@ export async function action({ request, context }: Route.ActionArgs) {
       options: jsonField(form, 'options') ?? [],
       // Its text and logos as the customer made them theirs.
       slots: jsonField(form, 'slots') ?? [],
+      // Claiming the free offer running for it (the API checks it).
+      ...(form.get('freeOfferId')
+        ? { freeOfferId: form.get('freeOfferId') }
+        : {}),
       // A personalised piece's design (text, fonts, colours), also as JSON.
       ...(jsonField(form, 'design')
         ? {

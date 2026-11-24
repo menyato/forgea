@@ -56,6 +56,11 @@ export const PERMISSION_GROUPS = [
         label: 'Write, send, confirm and cancel quotations',
         sensitive: true,
       },
+      {
+        key: 'offers.manage',
+        label: 'Run free offers (a free piece for a limited time)',
+        sensitive: true,
+      },
     ],
   },
   {
@@ -205,6 +210,7 @@ export const PERMISSION_INCLUDES: Partial<
   'leads.manage': ['leads.view'],
   'pipeline.manage': ['leads.view'],
   'quotations.manage': ['quotations.view'],
+  'offers.manage': ['catalog.view'],
   'invoices.create': ['invoices.view'],
   'payments.record': ['invoices.view'],
   'books.manage': ['books.view'],

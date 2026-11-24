@@ -542,6 +542,121 @@ describe('Text studio (e2e)', () => {
     });
   });
 
+  it('designed freely: a standing initial with text, decorations and logos placed on it', async () => {
+    const boardSlug = `standing-${tag}`;
+    await as(admin.cookie)
+      .post('/products', {
+        slug: boardSlug,
+        name: `Standing initial ${tag}`,
+        description: 'A baby initial, designed freely.',
+        materialId,
+        grams: '100',
+        printHours: '5',
+        isCustom: false,
+        active: true,
+        imageKeys: [],
+        options: [],
+        sizes: [],
+        text: {
+          style: 'STANDING_INITIAL',
+          maxChars: 1,
+          letterHeightMm: '150',
+          letterDepthMm: '2',
+          baseDepthMm: '20',
+          maxWidthMm: '200',
+          colourGroupId: groupId,
+          extraColourPrice: '2.00',
+          sizesMm: [],
+          defaultColourId: colours.white,
+        },
+      })
+      .expect(201);
+    const detail = (await http().get(`/products/${boardSlug}`).expect(200))
+      .body as ProductDetail;
+    expect(detail.text).toMatchObject({ style: 'STANDING_INITIAL' });
+    expect(detail.modelKey).toMatch(/^clean\/.+\.glb$/);
+    const boardPrice = (design: object) =>
+      http()
+        .post(`/products/${boardSlug}/price`)
+        .set(CSRF)
+        .send({ options: [], design });
+    const item = (over: object) => ({
+      id: randomUUID().slice(0, 8),
+      kind: 'TEXT',
+      text: 'Ayla',
+      x: 0,
+      y: 0,
+      size: 25,
+      rotation: 0,
+      colour: colours.red,
+      ...over,
+    });
+    const design = (items: object[]) => ({
+      text: 'A',
+      fontId: cairo.id,
+      textColour: colours.white,
+      items,
+    });
+    const plain = Number(
+      (await boardPrice(design([])).expect(200)).body.unitPrice,
+    );
+    const dressed = Number(
+      (
+        await boardPrice(
+          design([
+            item({ fontId: pacifico.id }),
+            item({ text: '22.08.2025', y: -30, size: 10 }),
+            item({
+              kind: 'MOTIF',
+              motif: 'HEART',
+              text: undefined,
+              x: 40,
+              y: 50,
+              size: 12,
+            }),
+          ]),
+        ).expect(200)
+      ).body.unitPrice,
+    );
+    // A second colour and more filament: it costs more.
+    expect(dressed).toBeGreaterThan(plain);
+
+    const reason = async (items: object[]) =>
+      (await boardPrice(design(items)).expect(400)).body.message as string;
+    expect(await reason([item({ colour: randomUUID() })])).toMatch(
+      /colours offered/,
+    );
+    expect(await reason([item({ fontId: randomUUID() })])).toMatch(
+      /fonts offered/,
+    );
+    expect(
+      await reason([
+        item({ kind: 'LOGO', text: undefined, logoId: randomUUID() }),
+      ]),
+    ).toMatch(/logos offered/);
+    expect(
+      await reason([item({ kind: 'MOTIF', motif: 'DRAGON', text: undefined })]),
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/decoration/)]));
+    expect(
+      (
+        await http()
+          .post(`/products/${boardSlug}/price`)
+          .set(CSRF)
+          .send({ options: [], design: { ...design([]), text: 'AB' } })
+          .expect(400)
+      ).body.message,
+    ).toMatch(/one letter/);
+    // Checkout builds it on the server: an item far off the piece is refused there.
+    const cart = await signedInCustomer(app);
+    const added = await as(cart.cookie).post('/cart/items', {
+      productId: detail.id,
+      quantity: 1,
+      design: design([item({ x: 900, y: 900 })]),
+    });
+    expect(added.status).toBe(400);
+    expect(added.body.message).toMatch(/on the piece/);
+  });
+
   it('the cart keeps each design as its own line; the order keeps it; the studio downloads its print files', async () => {
     const customer = await signedInCustomer(app);
     const add = (text: string) =>

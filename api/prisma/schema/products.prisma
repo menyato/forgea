@@ -81,15 +81,15 @@ model Product {
   partColourGroup   OptionGroup? @relation("PartColours", fields: [partColourGroupId], references: [id], onDelete: Restrict)
 
   /// Made to order for the customer: requires the 50% deposit at checkout.
-  isCustom  Boolean  @default(false)
+  isCustom   Boolean  @default(false)
   /// "Designed by …" on the product page: a studio or guest designer, by name.
-  designer  String?
-  active    Boolean  @default(true)
+  designer   String?
+  active     Boolean  @default(true)
   /// Never sold: studio prints and cost tracking only (private pieces, tests). Never shown in
   /// the shop (CHECK), never quoted or ordered.
-  studioOnly Boolean @default(false)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  studioOnly Boolean  @default(false)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
   cartItems      CartItem[]
   orderItems     OrderItem[]
@@ -104,6 +104,9 @@ model Product {
   pieces         Piece[]
   /// What else one piece costs besides filament and machine (a key ring, a lamp's wiring).
   extraCosts     ProductExtraCost[]
+
+  /// Giveaways of this product (free offers).
+  freeOffers FreeOffer[]
 
   @@index([active, id])
   @@index([categoryId])

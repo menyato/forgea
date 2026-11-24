@@ -1,5 +1,7 @@
+import { boardLayout } from './board.js';
 import { difference, grown, union } from './clip.js';
 import {
+  BOARD_STYLES,
   coupleNames,
   isArabic,
   lettersOf,
@@ -57,6 +59,9 @@ export function layoutDesign(
   settings: TextSettings,
   logos: ReadonlyMap<string, LogoShape> = new Map(),
 ): Layout {
+  // Designed freely: the customer placed every item in mm; nothing is shrunk to fit.
+  if (BOARD_STYLES.includes(settings.style))
+    return boardLayout(fonts, design, settings, logos);
   // Too wide for the piece: laid out again with smaller letters (thicknesses stay).
   let h = settings.letterHeightMm;
   let layout = layoutAt(fonts, design, settings, logos);
@@ -104,6 +109,10 @@ function layoutAt(
     case 'COUPLE':
       placed = [couple(fonts, design, h)];
       break;
+    // Designed freely: a base with items placed on it (board.ts).
+    case 'STANDING_INITIAL':
+    case 'TROPHY':
+      return boardLayout(fonts, design, settings, logos);
   }
 
   const raw = boundsOf(placed.flat().flatMap((p) => p.regions));

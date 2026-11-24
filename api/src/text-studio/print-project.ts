@@ -2,7 +2,8 @@ import { zipTextFiles } from '../common/zip-writer.js';
 import { PER_FILAMENT, X2D_ONE_FILAMENT } from './bambu-x2d.js';
 
 /** Where the piece is set down: the middle of a 256 mm Bambu bed (X1, P1, X2D, H2D's left). */
-const BED_CENTRE = 128;
+const BED_SIZE = 256;
+const BED_CENTRE = BED_SIZE / 2;
 /** The Bambu project version these files follow (as Bambu Studio 2.x writes them). */
 const BAMBU = 'BambuStudio-02.09.01.70';
 
@@ -42,10 +43,13 @@ export function printProject(
       max: [-Infinity, -Infinity, -Infinity],
     },
   );
-  // Centred on the bed, standing on it.
+  // Centred on the bed, standing on it; a piece in several colours keeps clear of the prime
+  // tower (back right), moved left or forward as little as it takes.
+  const [w, d] = [box.max[0]! - box.min[0]!, box.max[1]! - box.min[1]!];
+  const at = placed(w, d, filaments.length > 1);
   const shift = [
-    BED_CENTRE - (box.min[0]! + box.max[0]!) / 2,
-    BED_CENTRE - (box.min[1]! + box.max[1]!) / 2,
+    at.x - (box.min[0]! + box.max[0]!) / 2,
+    at.y - (box.min[1]! + box.max[1]!) / 2,
     -box.min[2]!,
   ].map((v) => (Number.isFinite(v) ? num(v) : '0'));
 
@@ -95,7 +99,10 @@ export function printProject(
     '  </object>\n</config>\n';
 
   const project = JSON.stringify(
-    bambuSettings(filaments.map((f) => f.colour)),
+    bambuSettings(
+      filaments.map((f) => f.colour),
+      at.tower,
+    ),
     null,
     4,
   );
@@ -191,8 +198,39 @@ function mesh(stl: Uint8Array): {
  * filament block repeated, each filament its own number and colour, and a purge table between
  * them (more when going from a dark colour to a lighter one, as Bambu Studio itself suggests).
  */
+/** The prime tower's footprint (mm), its brim included, and its corner: back right. */
+const TOWER = { size: 35 + 10, x: BED_SIZE - 35 - 12, y: BED_SIZE - 35 - 12 };
+/** Kept between the piece and the tower, and from the bed's edges (mm). */
+const CLEAR = 8;
+
+/**
+ * Where the piece's centre goes on the bed: the middle, unless (in several colours) it would
+ * reach the prime tower's corner; then as far left, or as far forward, as it must to clear it.
+ */
+function placed(
+  w: number,
+  d: number,
+  tower: boolean,
+): { x: number; y: number; tower: { x: number; y: number } } {
+  const t = { x: TOWER.x, y: TOWER.y };
+  const centre = { x: BED_CENTRE, y: BED_CENTRE, tower: t };
+  if (!tower) return centre;
+  const clearsX = BED_CENTRE + w / 2 <= t.x - CLEAR;
+  const clearsY = BED_CENTRE + d / 2 <= t.y - CLEAR;
+  if (clearsX || clearsY) return centre;
+  // Left of the tower, if it fits there…
+  const x = t.x - CLEAR - w / 2;
+  if (x - w / 2 >= CLEAR) return { ...centre, x };
+  // …or in front of it.
+  const y = t.y - CLEAR - d / 2;
+  if (y - d / 2 >= CLEAR) return { ...centre, y };
+  // Too big for both: the tower goes to the front-left corner instead.
+  return { ...centre, tower: { x: CLEAR, y: CLEAR } };
+}
+
 function bambuSettings(
   colours: readonly string[],
+  tower: { x: number; y: number },
 ): Record<string, string | string[]> {
   const n = colours.length;
   const settings: Record<string, string | string[]> = {};
@@ -222,6 +260,8 @@ function bambuSettings(
     ),
   );
   settings.flush_volumes_matrix = [...purge, ...purge];
+  settings.wipe_tower_x = [num(tower.x)];
+  settings.wipe_tower_y = [num(tower.y)];
   // [process, filament 1…n, printer]: nothing changed from Bambu's own presets.
   settings.different_settings_to_system = Array<string>(n + 2).fill('');
   settings.inherits_group = Array<string>(n + 2).fill('');

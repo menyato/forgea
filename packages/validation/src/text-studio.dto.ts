@@ -20,6 +20,11 @@ import {
 } from 'class-validator';
 import { MONEY_PATTERN, STORAGE_KEY_PATTERN } from './constants.js';
 import {
+  BOARD_ITEM_KINDS,
+  BOARD_LIMITS,
+  BOARD_MOTIFS,
+  type BoardItemKind,
+  type BoardMotif,
   KEYCHAIN_SHAPES,
   type KeychainShape,
   MAX_LOGO_INKS,
@@ -45,6 +50,57 @@ export class DesignLetterDto {
   @IsOptional()
   @IsUUID()
   colour?: string;
+}
+
+/** One thing on a standing initial's or a trophy's face, where the customer put it. */
+export class BoardItemDto {
+  @IsString()
+  @MaxLength(40)
+  id!: string;
+
+  @IsIn(BOARD_ITEM_KINDS)
+  kind!: BoardItemKind;
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(BOARD_LIMITS.maxTextChars * 2)
+  text?: string;
+
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose one of the fonts offered' })
+  fontId?: string;
+
+  @IsOptional()
+  @IsIn(BOARD_MOTIFS, { message: 'Choose a decoration' })
+  motif?: BoardMotif;
+
+  @IsOptional()
+  @IsUUID('all', { message: 'Choose one of the logos offered' })
+  logoId?: string;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-1000)
+  @Max(1000)
+  x!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-1000)
+  @Max(1000)
+  y!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(BOARD_LIMITS.minSizeMm)
+  @Max(BOARD_LIMITS.maxSizeMm)
+  size!: number;
+
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(-360)
+  @Max(360)
+  rotation!: number;
+
+  @IsUUID('all', { message: 'Choose one of the colours offered' })
+  colour!: string;
 }
 
 /**
@@ -123,6 +179,13 @@ export class TextDesignDto {
   @ArrayMaxSize(MAX_LOGO_INKS)
   @IsUUID('all', { each: true, message: 'Choose one of the colours offered' })
   logoColours?: string[];
+  /** Standing initials and trophies: what is on its face, where the customer put it. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(BOARD_LIMITS.maxItems)
+  @ValidateNested({ each: true })
+  @Type(() => BoardItemDto)
+  items?: BoardItemDto[];
 }
 
 /** One colour's solid, as the browser measured it. */

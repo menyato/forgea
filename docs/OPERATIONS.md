@@ -100,6 +100,18 @@ a picture into an outline (a plain background works best), shown raised in 3D be
 name, or alone when they leave the name empty. Only the outline is kept, never their file;
 orders show it as "Your logo" and print from it like any other.
 
+**Pieces designed freely** (a standing baby initial like Ayla's, a trophy): in **Personalised
+text** choose **What it is: Standing initial, designed freely** or **Trophy, designed freely**.
+The size is the letter's (or plaque's) height; **Backing** is its thickness (20 mm stands well).
+Tick the **logos customers may place on it** (professions, signs) and, if you like, **Customers
+may bring their own logo**. On the product page the piece opens dressed in a ready-made look
+(baby girl, baby boy, little prince(ss); best teacher, champion, thank-you), in your closest
+filaments; customers change the letter and its font, then drag each thing on it where they
+want (names, dates, weights, decorations, logos), size, turn, colour, duplicate or remove it,
+and switch to **See it in 3D**. Anything placed off the letter is joined to it by the backing,
+so the piece always prints as one. Orders list what is on it; the 3MF prints lying flat, the
+raised things on top in their colours.
+
 **Design yours** (the shop's menu, `/design`) lists the pieces customers make from their own
 logo (keychains with the tick above), then every piece they make theirs: personalised text
 pieces and products with a name or logo place they may change.
@@ -129,6 +141,16 @@ the reel of that colour), and customers see a range around that price (your spre
 requests & emails). A sliced file uses the slicer's own grams and time and, if you allow it, is
 quoted at once at the price itself; customers never see your costs. Otherwise send your quote
 from the request.
+
+**A free piece for a limited time** (a giveaway, e.g. a free mini keychain this week): Sales →
+**Free offers** → New offer. Pick the piece, write what the banner says (and a line under it),
+when it starts and ends (studio time) and, if you like, how many to give. While it runs every
+shop page shows a banner counting down ("Claim yours"), and the piece's page a **Claim it free**
+box: customers design it as usual (name, number, sign, colours), then claim it; it goes in the
+cart at $0, one piece. Ordering needs an account, and each customer gets one: the order checks
+again that it still runs, isn't used up and isn't theirs already. The offer's page shows how
+many were claimed; untick **Running** to stop it at once (orders placed keep theirs). Delivery,
+if they choose it, is paid as usual.
 
 ## 5. Printing for the studio (tests, gifts, display pieces)
 

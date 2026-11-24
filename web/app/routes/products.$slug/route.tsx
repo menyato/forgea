@@ -23,7 +23,10 @@ import { apiContext } from '~/lib/request.server';
 import type { loader as rootLoader } from '~/root';
 import type { Route } from './+types/route';
 import { type Choices, OptionPicker } from './option-picker';
+import { BOARD_STYLES } from '@forgea/text3d/design';
+import { BoardDesigner } from './board-designer';
 import { TextDesigner } from './text-designer';
+import { FreeOfferBox } from './free-offer-box';
 import type { SlotChoice } from '@forgea/text3d/design';
 import {
   SlotInputs,
@@ -118,6 +121,16 @@ const toSelections = (product: ProductDetail, choices: Choices) =>
 
 export default function ProductPage({ loaderData }: Route.ComponentProps) {
   // Personalised: the customer designs their piece and sees it in 3D.
+  if (
+    loaderData.product.text &&
+    BOARD_STYLES.includes(loaderData.product.text.style)
+  )
+    return (
+      <BoardDesigner
+        product={loaderData.product}
+        offer={loaderData.product.text}
+      />
+    );
   if (loaderData.product.text)
     return (
       <TextDesigner
@@ -133,7 +146,12 @@ function CatalogProduct({
   lbp,
   depositPercent,
 }: Route.ComponentProps['loaderData']) {
-  const store = useRouteLoaderData<typeof rootLoader>('root')?.store ?? null;
+  const root = useRouteLoaderData<typeof rootLoader>('root');
+  const store = root?.store ?? null;
+  // The free offer running now, when it is this piece (claimed with the choices on this
+  // page; a text-studio piece sends its design from its own form, not offered free yet).
+  const freeOffer =
+    root?.offer?.product.id === product.id && !product.text ? root.offer : null;
   const [choices, setChoices] = useState<Choices>(() =>
     initialChoices(product),
   );
@@ -328,6 +346,16 @@ function CatalogProduct({
           )}
           {priceError && <p className="text-sm text-danger">{priceError}</p>}
         </div>
+
+        {freeOffer && (
+          <FreeOfferBox
+            offer={freeOffer}
+            productId={product.id}
+            optionsJson={optionsJson}
+            slotsJson={slotsJson}
+            disabled={missing.length > 0}
+          />
+        )}
 
         <cart.Form
           method="post"

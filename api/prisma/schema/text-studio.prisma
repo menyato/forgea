@@ -26,6 +26,8 @@ enum TextStyle {
   LETTERS
   INITIAL_NAME
   COUPLE
+  STANDING_INITIAL
+  TROPHY
 }
 
 /// The decorations around a big initial (@forgea/text3d TextDecor).

@@ -20,7 +20,7 @@ type Body = { json: unknown } | { form: FormData } | undefined;
  * A change this server sends to one forgets it at once (the owner sees their save on the next
  * page); another server process would see it within the TTL.
  */
-export type SharedPath = '/store-settings' | '/site-theme';
+export type SharedPath = '/store-settings' | '/site-theme' | '/offers/current';
 const SHARED_TTL_MS = 10_000;
 const shared = new Map<
   SharedPath,
@@ -29,7 +29,13 @@ const shared = new Map<
 
 function forgetShared(path: string): void {
   for (const key of shared.keys()) {
-    if (path === key || path.startsWith(`${key}/`)) shared.delete(key);
+    // A change to anything under the same first part (/offers/<id> and /offers/current).
+    if (
+      path === key ||
+      path.startsWith(`${key}/`) ||
+      path.split('/')[1] === key.split('/')[1]
+    )
+      shared.delete(key);
   }
 }
 

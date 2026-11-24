@@ -15,6 +15,7 @@ export {
   ResendEmailCodeDto,
 } from './auth.dto.js';
 export { CreateLeadDto } from './leads.dto.js';
+export { SaveFreeOfferDto } from './offers.dto.js';
 export { AddCurrencyDto, SetExchangeRateDto } from './currency.dto.js';
 export {
   AuditLogListQuery,

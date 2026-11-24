@@ -98,6 +98,8 @@ export interface OrderLineSource {
   printFile?: object | null;
   /** Its text and logo slots as made (DesignSlots' OrderedSlot[]). */
   slots?: object[] | null;
+  /** Claimed free under this offer (its price is 0; counts toward the offer). */
+  freeOfferId?: string | null;
 }
 
 export interface NewOrder {
@@ -113,6 +115,11 @@ export interface NewOrder {
   quote: OrderQuote;
   /** What the quote was made from (matched by line id): product and options. */
   lines: readonly OrderLineSource[];
+  /**
+   * Checks run inside the order's transaction before it is written (a free offer's claim,
+   * under its lock); one that throws rolls the order back.
+   */
+  claims?: (tx: Prisma.TransactionClient) => Promise<void>;
   currency: { code: string; rate: string; total: string; deposit: string };
   /**
    * Where the order comes from, closed in the same transaction: a custom request's quote
@@ -157,6 +164,7 @@ export class OrdersRepository {
         return await this.prisma.$transaction(async (tx) => {
           // The first history row is written by the database trigger; tell it who acted.
           await setStatusActor(tx, o.actorId ?? o.userId, null);
+          if (o.claims) await o.claims(tx);
           const order = await tx.order.create({
             data: {
               orderNumber: await nextOrderNumber(tx),
@@ -197,6 +205,9 @@ export class OrdersRepository {
                       : {}),
                     ...(source.slots?.length
                       ? { slots: source.slots as Prisma.InputJsonValue }
+                      : {}),
+                    ...(source.freeOfferId
+                      ? { freeOfferId: source.freeOfferId }
                       : {}),
                     name: l.name,
                     quantity: l.quantity,
