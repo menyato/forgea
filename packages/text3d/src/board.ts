@@ -13,6 +13,7 @@ import {
   type Contour,
   mapRegions,
   type Point,
+  pointInPolygon,
   type Region,
   signedArea,
 } from './outline.js';
@@ -89,11 +90,18 @@ export function boardLayout(
   frame = joined(frame, bb, Math.max(3, h * 0.035));
   // Nothing below the base's own bottom: it stands flat on it.
   frame = difference(frame, [rect(-1e4, bb.minY - 1e4, 2e4, 1e4)]);
-  // What is left of a letter's hole once things cover most of it is a stray dot: filled.
+  // What is left of a letter's hole once things cover most of it is a stray dot: filled. A hole
+  // keeps only while it is at least half the letter's own hole it lies in (and not tiny).
   const smallest = (h * 0.07) ** 2;
+  const letterHoles = shapes.base.flatMap((r) => r.holes);
   frame = frame.map((r) => ({
     ...r,
-    holes: r.holes.filter((hole) => Math.abs(signedArea(hole)) >= smallest),
+    holes: r.holes.filter((hole) => {
+      const area = Math.abs(signedArea(hole));
+      if (area < smallest) return false;
+      const own = letterHoles.find((l) => pointInPolygon(hole[0]!, l));
+      return !own || area >= Math.abs(signedArea(own)) * 0.5;
+    }),
   }));
 
   const parts: BoardPart[] = [];
