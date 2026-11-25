@@ -306,7 +306,7 @@ function MoveTo({
 }) {
   const id = `move-${piece.id}`;
   return (
-    <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-xs">
+    <label htmlFor={id} className="grid min-w-0 grid-cols-1 gap-1 text-xs">
       <span className="text-text-muted">Move to</span>
       <select
         id={id}
@@ -318,7 +318,7 @@ function MoveTo({
           const to = e.currentTarget.value;
           if (to) onMove(to);
         }}
-        className="w-full min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm"
+        className="w-full min-w-0 rounded-md border border-border bg-bg px-2 py-1 text-sm"
       >
         <option value="">Choose…</option>
         {stages

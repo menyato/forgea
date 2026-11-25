@@ -85,7 +85,7 @@ export function KanbanView<T extends { id: string }>({
           onDragStart={
             move ? (e) => e.dataTransfer.setData(CARD, item.id) : undefined
           }
-          className={`grid min-w-0 grid-cols-1 gap-1 p-3 text-sm ${
+          className={`grid min-w-0 grid-cols-1 gap-1 p-3 text-sm [overflow-wrap:anywhere] ${
             move ? 'cursor-grab active:cursor-grabbing' : ''
           }`}
         >
@@ -102,7 +102,7 @@ export function KanbanView<T extends { id: string }>({
         >
           {link}
           {actions && (
-            <div className="border-t border-border px-3 py-2">
+            <div className="border-t border-border px-2 py-2">
               {actions(item, column, moveTo(item, column))}
             </div>
           )}
@@ -120,7 +120,7 @@ export function KanbanView<T extends { id: string }>({
           {shown.flatMap((c) => cards(c.items, c.key))}
         </div>
       ) : (
-        <div className="grid gap-3 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(11rem,1fr)]">
+        <div className="grid gap-3 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(9rem,1fr)]">
           {shown.map((c) => (
             <section
               key={c.key}
