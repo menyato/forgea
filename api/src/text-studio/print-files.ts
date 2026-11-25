@@ -22,9 +22,11 @@ export class PrintFiles {
   ) {}
 
   /**
-   * An order line's model with its text and logos as ordered, as one 3MF project: the model's
-   * own parts and colours, then each slot as a part placed where it was designed, tinted after
-   * its filament. Made in the 3D worker; the slots are made again from what was ordered.
+   * An order line's print project with its text and logos as ordered: the product's print file
+   * (or its model, when that is the slicer project) with each slot added to the part it lies on,
+   * in the filament closest to its colour, so it opens ready to slice and print (print-ready.ts).
+   * When the slots can't be placed that way, the model with the slots as one 3MF project, as
+   * before. Made in the 3D worker; the slots are made again from what was ordered.
    */
   async slotsProject(
     orderId: string,
@@ -35,7 +37,16 @@ export class PrintFiles {
       select: {
         slots: true,
         order: { select: { orderNumber: true } },
-        product: { select: { slug: true, modelFileKey: true } },
+        product: {
+          select: {
+            slug: true,
+            modelFileKey: true,
+            printFiles: {
+              orderBy: { sortOrder: 'asc' },
+              select: { fileKey: true },
+            },
+          },
+        },
       },
     });
     const ordered = (item?.slots as OrderedSlot[] | null | undefined) ?? [];
@@ -63,23 +74,38 @@ export class PrintFiles {
     const hex = new Map(values.map((v) => [v.id, v.swatchHex]));
     const named = new Map(values.map((v) => [v.id, v.label]));
     const number = item.order.orderNumber;
+    const slug = item.product?.slug ?? 'print';
+    const extras = files.map((f) => {
+      const s = ordered.find((o) => o.slot.id === f.slotId)!;
+      return {
+        label: `${s.summary.label}: ${s.summary.text ?? s.summary.logo ?? ''} (${named.get(f.colour) ?? s.summary.colour})`,
+        hex: hex.get(f.colour) ?? null,
+        stl: f.bytes,
+      };
+    });
+    // Ready to print: the print file with the text on its parts (the model's frames place it),
+    // or the model itself when it is the slicer project.
+    if (key.endsWith('.3mf')) {
+      const prints = item.product?.printFiles ?? [];
+      const projects = prints.length
+        ? prints.map((p) => p.fileKey).filter((k) => k.endsWith('.3mf'))
+        : [key];
+      for (const project of projects) {
+        const ready = await this.optimizer.printReady(
+          () => this.uploads.read(project),
+          prints.length ? () => this.uploads.read(key) : null,
+          extras,
+        );
+        if (ready) return { name: `${number}-${slug}.3mf`, bytes: ready };
+      }
+    }
     const bytes = await this.optimizer.project(
       () => this.uploads.read(key),
       key.slice(key.lastIndexOf('.') + 1),
       number,
-      files.map((f) => {
-        const s = ordered.find((o) => o.slot.id === f.slotId)!;
-        return {
-          label: `${s.summary.label}: ${s.summary.text ?? s.summary.logo ?? ''} (${named.get(f.colour) ?? s.summary.colour})`,
-          hex: hex.get(f.colour) ?? null,
-          stl: f.bytes,
-        };
-      }),
+      extras,
     );
-    return {
-      name: `${number}-${item.product?.slug ?? 'print'}-with-text.3mf`,
-      bytes,
-    };
+    return { name: `${number}-${slug}-with-text.3mf`, bytes };
   }
 
   async stl(

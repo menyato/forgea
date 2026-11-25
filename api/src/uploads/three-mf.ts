@@ -890,3 +890,105 @@ class Growing<A extends NumberArray> {
     return this.data.slice(0, this.length) as A;
   }
 }
+
+/** One printable object of a slicer project, as the print-ready merge (print-ready.ts) needs it. */
+export interface ProjectObject {
+  /** Its id in the root model (and in Metadata/model_settings.config). */
+  id: string;
+  /** Its name in the slicer ("base", "board"…), when the project names it. */
+  name: string | null;
+  /** Its build item's transform (object → plate), 3MF order. */
+  item: readonly number[];
+  /** The model file its parts' meshes are in: a new part goes there. */
+  partFile: string;
+  /** Its parts' box in the object's own frame (component transforms applied), mm. */
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+/**
+ * A slicer project's objects, their names, frames and boxes, and its filament colours: what
+ * adding parts to its objects needs. Null for a 3MF that isn't a slicer project of objects
+ * made of parts (each object's parts in a model file of their own, as Bambu Studio writes).
+ */
+export function projectStructure(
+  entries: Map<string, ZipEntry>,
+): { rootPath: string; objects: ProjectObject[]; colours: string[] } | null {
+  const rootPath = rootModelPath(entries);
+  const files = new Map<string, ModelFile>();
+  const file = (path: string): ModelFile | null => {
+    let f = files.get(path);
+    if (!f) {
+      const entry = entries.get(path);
+      if (!entry) return null;
+      f = parseModelFile(entry.read().toString('latin1'));
+      files.set(path, f);
+    }
+    return f;
+  };
+  const root = file(rootPath);
+  if (!root) return null;
+  const names = new Map<string, string>();
+  const settings = entries.get('Metadata/model_settings.config');
+  if (!settings || settings.size > MAX_SETTINGS_BYTES) return null;
+  const xml = settings.read(MAX_SETTINGS_BYTES).toString('utf8');
+  for (const m of xml.matchAll(/<object\b([^>]*)>([\s\S]*?)<\/object>/g)) {
+    const id = attributes(`<o ${m[1]}>`)['id'];
+    const own = m[2]!.replace(/<part\b[\s\S]*?<\/part>/g, '');
+    const name = metadata(own, 'name');
+    if (id && name) names.set(id, decodeEntities(name));
+  }
+  const objects: ProjectObject[] = [];
+  for (const item of root.build) {
+    const object = root.objects.get(item.objectId);
+    if (object?.kind !== 'components' || object.components.length === 0)
+      return null;
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    let partFile: string | null = null;
+    for (const c of object.components) {
+      const path = c.path ? normalisePath(c.path) : rootPath;
+      const from = file(path);
+      const mesh = from?.objects.get(c.objectId);
+      if (!from || mesh?.kind !== 'mesh') return null;
+      partFile ??= path;
+      const t = c.transform;
+      for (let v = 0; v < mesh.vertices.length; v += 3) {
+        const x = mesh.vertices[v]! * from.unitMm;
+        const y = mesh.vertices[v + 1]! * from.unitMm;
+        const z = mesh.vertices[v + 2]! * from.unitMm;
+        const p = [
+          x * t[0]! + y * t[3]! + z * t[6]! + t[9]!,
+          x * t[1]! + y * t[4]! + z * t[7]! + t[10]!,
+          x * t[2]! + y * t[5]! + z * t[8]! + t[11]!,
+        ];
+        for (let a = 0; a < 3; a++) {
+          if (p[a]! < min[a]!) min[a] = p[a]!;
+          if (p[a]! > max[a]!) max[a] = p[a]!;
+        }
+      }
+    }
+    if (!partFile || partFile === rootPath) return null;
+    objects.push({
+      id: item.objectId,
+      name: names.get(item.objectId) ?? null,
+      item: item.transform,
+      partFile,
+      min,
+      max,
+    });
+  }
+  return {
+    rootPath,
+    objects,
+    colours: projectSettings(entries).colours.map(normaliseHex),
+  };
+}
+
+/** A 3MF's files by their path in the archive (no leading slash), within the reading limits. */
+export function threeMfEntries(data: Uint8Array): Map<string, ZipEntry> {
+  const entries = new Map<string, ZipEntry>();
+  for (const e of zipEntries(data, LIMITS))
+    entries.set(normalisePath(e.name), e);
+  return entries;
+}

@@ -86,8 +86,13 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    change it** to let them type their own name, pick a font and a colour, turn the logo off
    or put **their own logo** there; a logo place with **Logo: None** stays empty until the
    customer adds theirs. Without the tick it always prints as you set it. The 3D view shows it as it prints,
-   and the price counts its filament. On an order, **Download with their text (3MF)** gives
-   the model with the customer's name already in place, a part per colour.
+   and the price counts its filament. On an order, **Download ready to print (3MF)** gives
+   the product's print project (its plates, filaments and settings) with the customer's text
+   and logos already on the part they belong to, in the filament closest to their colour:
+   open it in Bambu Studio, **Slice all**, print. For a piece shown assembled and printed in
+   several parts (the trophies), the shop model must carry its print frames
+   (`make_trophy_3mf.py` writes them); without them, or for a model that isn't a slicer
+   project, the download is the model with the text in place, a part per colour, as before.
 
 **Logos** (Catalog → Configuration → **Logos**): add a logo as an SVG file (export it from
 Illustrator, Inkscape, Canva or Figma). Everything drawn prints solid; shapes inside shapes are

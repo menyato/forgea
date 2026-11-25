@@ -9,6 +9,7 @@ import {
   projectWith,
   threeMfInfo,
 } from './model-processing.js';
+import { printFrames, printReady } from './print-ready.js';
 
 const job = workerData as
   | { task: 'variants'; data: Uint8Array; extension: string }
@@ -19,6 +20,12 @@ const job = workerData as
       data: Uint8Array;
       extension: string;
       title: string;
+      extras: { label: string; hex: string | null; stl: Uint8Array }[];
+    }
+  | {
+      task: 'print-ready';
+      data: Uint8Array;
+      model: Uint8Array | null;
       extras: { label: string; hex: string | null; stl: Uint8Array }[];
     };
 
@@ -32,6 +39,18 @@ const run = async () => {
     parentPort!.postMessage({ ok: true, project }, [
       project.buffer as ArrayBuffer,
     ]);
+    return;
+  }
+  if (job.task === 'print-ready') {
+    // Parts placed on the shop model go onto the print parts through the model's frames; with
+    // no model given, the project is the shop model itself.
+    const frames = job.model ? printFrames(job.model) : null;
+    const project =
+      job.model && !frames ? null : printReady(job.data, frames, job.extras);
+    parentPort!.postMessage(
+      { ok: true, project: project ?? undefined },
+      project ? [project.buffer as ArrayBuffer] : [],
+    );
     return;
   }
   if (job.task === 'volume') {

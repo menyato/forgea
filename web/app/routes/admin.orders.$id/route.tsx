@@ -342,13 +342,13 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                         <a
                           href={`/admin/orders/${o.id}/slots/${i.id}`}
                           download
-                          title="The model with this order's text and logos in place: one object, a part per colour"
+                          title="This order's text and logos on the product's print project, its parts on their plates: open it in Bambu Studio, slice, print"
                           className={buttonClass(
                             'primary',
                             'justify-self-start px-3 py-1 text-sm',
                           )}
                         >
-                          Download with their text (3MF)
+                          Download ready to print (3MF)
                         </a>
                       </span>
                     )}
@@ -367,7 +367,9 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
                         </a>
                       </span>
                     )}
-                    {i.printFiles.length > 0 && (
+                    {/* With text or logos, the ready-to-print download above carries them; the
+                        sliced files without them would only print the piece blank. */}
+                    {i.printFiles.length > 0 && i.slots.length === 0 && (
                       <span className="mt-1 flex flex-wrap gap-2">
                         {i.printFiles.map((f) => (
                           <a

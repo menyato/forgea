@@ -78,6 +78,27 @@ export class ModelOptimizer {
     return result.project!;
   }
 
+  /**
+   * A slicer project with more parts added to its objects (print-ready.ts): the print file with
+   * an order's text in place, ready to slice and print. `loadModel` is the shop model whose
+   * frames place the parts, or null when the project is the shop model itself. Null when the
+   * parts can't be placed (no frames, or a part on no object): the caller falls back.
+   */
+  async printReady(
+    load: Load,
+    loadModel: Load | null,
+    extras: { label: string; hex: string | null; stl: Uint8Array }[],
+  ): Promise<Uint8Array | null> {
+    const model = loadModel ? await loadModel() : null;
+    const result = await this.run(load, (data) => ({
+      task: 'print-ready',
+      data,
+      model,
+      extras,
+    }));
+    return result.project ?? null;
+  }
+
   /** What a 3MF says about printing it: colours, volumes, the slicer's time and grams. */
   async threeMfInfo(load: Load): Promise<ThreeMfInfo> {
     const result = await this.run(load, (data) => ({ task: 'info', data }));
