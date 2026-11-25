@@ -17,6 +17,7 @@ export function KanbanView<T extends { id: string }>({
   href,
   move = false,
   layout = 'columns',
+  actions,
 }: {
   columns: readonly { key: string; title: string; items: readonly T[] }[];
   title: (item: T) => string;
@@ -25,6 +26,15 @@ export function KanbanView<T extends { id: string }>({
   move?: boolean;
   /** "grid": one column's cards side by side (a list with no stages). */
   layout?: 'columns' | 'grid';
+  /**
+   * Controls under a card (outside its link), e.g. a "Move to…" menu: `moveTo` makes the same
+   * move a drag does, so a card moves without dragging (phones, or a column off screen).
+   */
+  actions?: (
+    item: T,
+    column: string,
+    moveTo: (to: string) => void,
+  ) => ReactNode;
 }) {
   const fetcher = useFetcher<SaveResult>();
   const [over, setOver] = useState<string | null>(null);
@@ -59,23 +69,46 @@ export function KanbanView<T extends { id: string }>({
     );
   };
 
-  const cards = (items: readonly T[]) =>
-    items.map((item) => (
-      <Link
-        key={item.id}
-        to={href(item)}
-        draggable={move}
-        onDragStart={
-          move ? (e) => e.dataTransfer.setData(CARD, item.id) : undefined
-        }
-        className={`grid gap-1 rounded-md border border-border bg-surface p-3 text-sm shadow-sm hover:border-accent ${
-          moving?.id === item.id ? 'opacity-60' : ''
-        } ${move ? 'cursor-grab active:cursor-grabbing' : ''}`}
-      >
-        <span className="font-semibold">{title(item)}</span>
-        {card(item)}
-      </Link>
-    ));
+  const moveTo = (item: T, from: string) => (to: string) => {
+    if (to === from) return;
+    void fetcher.submit(
+      { intent: 'move', id: item.id, from, to },
+      { method: 'post' },
+    );
+  };
+  const cards = (items: readonly T[], column: string) =>
+    items.map((item) => {
+      const link = (
+        <Link
+          to={href(item)}
+          draggable={move}
+          onDragStart={
+            move ? (e) => e.dataTransfer.setData(CARD, item.id) : undefined
+          }
+          className={`grid min-w-0 grid-cols-1 gap-1 p-3 text-sm ${
+            move ? 'cursor-grab active:cursor-grabbing' : ''
+          }`}
+        >
+          <span className="font-semibold break-words">{title(item)}</span>
+          {card(item)}
+        </Link>
+      );
+      return (
+        <div
+          key={item.id}
+          className={`grid min-w-0 grid-cols-1 rounded-md border border-border bg-surface shadow-sm hover:border-accent ${
+            moving?.id === item.id ? 'opacity-60' : ''
+          }`}
+        >
+          {link}
+          {actions && (
+            <div className="border-t border-border px-3 py-2">
+              {actions(item, column, moveTo(item, column))}
+            </div>
+          )}
+        </div>
+      );
+    });
 
   return (
     <div className="grid gap-3">
@@ -84,10 +117,10 @@ export function KanbanView<T extends { id: string }>({
       </p>
       {layout === 'grid' ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {shown.flatMap((c) => cards(c.items))}
+          {shown.flatMap((c) => cards(c.items, c.key))}
         </div>
       ) : (
-        <div className="grid gap-4 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(15rem,1fr)]">
+        <div className="grid gap-3 overflow-x-auto pb-2 lg:grid-flow-col lg:auto-cols-[minmax(11rem,1fr)]">
           {shown.map((c) => (
             <section
               key={c.key}
@@ -103,13 +136,13 @@ export function KanbanView<T extends { id: string }>({
               }
               onDragLeave={move ? () => setOver(null) : undefined}
               onDrop={move ? drop(c.key) : undefined}
-              className={`grid content-start gap-3 rounded-lg p-3 ${
+              className={`grid min-w-0 grid-cols-1 content-start gap-3 rounded-lg p-2 ${
                 over === c.key
                   ? 'bg-accent/15 outline-2 outline-dashed outline-accent'
                   : 'bg-surface/60'
               }`}
             >
-              <h2 className="flex items-center justify-between font-display text-base font-bold">
+              <h2 className="flex items-center justify-between gap-2 px-1 font-display text-base font-bold">
                 {c.title}
                 <span className="text-sm font-normal text-text-muted">
                   {c.items.length}
@@ -118,7 +151,7 @@ export function KanbanView<T extends { id: string }>({
               {c.items.length === 0 ? (
                 <p className="text-sm text-text-muted">Nothing here.</p>
               ) : (
-                cards(c.items)
+                cards(c.items, c.key)
               )}
             </section>
           ))}

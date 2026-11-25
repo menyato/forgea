@@ -96,6 +96,7 @@ export function printReady(
   project: Uint8Array,
   frames: readonly PrintFrame[] | null,
   extras: readonly ExtraPart[],
+  recolours: readonly Recolour[] = [],
 ): Uint8Array | null {
   const entries = threeMfEntries(project);
   const structure = projectStructure(entries);
@@ -109,6 +110,12 @@ export function printReady(
     }
     return t;
   };
+  // The parts the customer recoloured: their filaments take the chosen colours, so the slicer
+  // shows (and asks for) what was ordered; the order's text then goes to the closest of those.
+  const colours = structure.colours.map((c) => {
+    const to = recolours.find((r) => sameHex(r.from, c));
+    return to ? to.to : c;
+  });
   const root = read(structure.rootPath);
   if (!/xmlns:p="/.test(root)) return null;
   let settings = read('Metadata/model_settings.config');
@@ -144,7 +151,7 @@ export function printReady(
       ...(components.get(object.id) ?? []),
       `<component p:path="/${object.partFile}" objectid="${id}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>`,
     ]);
-    const extruder = closest(structure.colours, extra.hex);
+    const extruder = closest(colours, extra.hex);
     parts.set(object.id, [
       ...(parts.get(object.id) ?? []),
       `    <part id="${id}" subtype="normal_part">\n` +
@@ -188,6 +195,8 @@ export function printReady(
     let t: string;
     if (path === structure.rootPath) t = rootOut;
     else if (path === 'Metadata/model_settings.config') t = settings;
+    else if (path === 'Metadata/project_settings.config' && recolours.length)
+      t = withColours(read(path), colours);
     else t = read(path);
     const more = added.get(path);
     if (more) {
@@ -198,6 +207,30 @@ export function printReady(
     files.push({ name: path, text: t });
   }
   return zipTextFiles(files);
+}
+
+/** A part recoloured on the order: its file colour, and the colour chosen for it (hex). */
+export interface Recolour {
+  from: string;
+  to: string;
+}
+
+const sameHex = (a: string, b: string) =>
+  a.replace('#', '').slice(0, 6).toLowerCase() ===
+  b.replace('#', '').slice(0, 6).toLowerCase();
+
+/** The project settings with these filament colours (the slicer reads `filament_colour`). */
+function withColours(json: string, colours: readonly string[]): string {
+  try {
+    const settings = JSON.parse(json) as Record<string, unknown>;
+    if (!Array.isArray(settings['filament_colour'])) return json;
+    settings['filament_colour'] = colours.map((c) =>
+      /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : c,
+    );
+    return JSON.stringify(settings, null, 4);
+  } catch {
+    return json;
+  }
 }
 
 type ToLocal = (

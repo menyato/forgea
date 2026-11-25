@@ -184,7 +184,7 @@ export default function Pieces({ loaderData }: Route.ComponentProps) {
     <>
       <AdminHeader
         title="Where it is"
-        intro="Everything printed: studio prints, failed prints and orders' pieces, when each was printed and where it is now (in the lab, in the shop, with someone, given or sold). Drag a card to move it; every move is kept with who made it."
+        intro="Everything printed: studio prints, failed prints and orders' pieces, when each was printed and where it is now (in the lab, in the shop, with someone, given or sold). Move a piece with Move to under its card, or drag the card; every move is kept with who made it."
         trail={[{ label: 'Production', to: '/admin/production' }]}
         action={
           mayMove && (
@@ -220,6 +220,18 @@ export default function Pieces({ loaderData }: Route.ComponentProps) {
         <KanbanView
           move={mayMove}
           href={href}
+          actions={
+            mayMove
+              ? (p, column, moveTo) => (
+                  <MoveTo
+                    piece={p}
+                    stages={columns}
+                    onMove={moveTo}
+                    disabled={column !== p.stage}
+                  />
+                )
+              : undefined
+          }
           columns={columns.map((s) => ({
             key: s,
             title: PIECE_STAGE_LABELS[s],
@@ -229,7 +241,7 @@ export default function Pieces({ loaderData }: Route.ComponentProps) {
           card={(p) => (
             <>
               {p.modelKey && (
-                <span className="block aspect-[4/3] w-full overflow-hidden rounded-md bg-surface">
+                <span className="block aspect-[16/9] w-full overflow-hidden rounded-md bg-surface">
                   <ModelThumbnail
                     modelKey={p.modelKey}
                     color="#9a9ea3"
@@ -274,6 +286,50 @@ export default function Pieces({ loaderData }: Route.ComponentProps) {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Where a piece goes next, without dragging: the same move as a drag (with someone, given or
+ * sold then asks who on the piece's page; a print still printing is finished there).
+ */
+function MoveTo({
+  piece,
+  stages,
+  onMove,
+  disabled,
+}: {
+  piece: PieceView;
+  stages: readonly PieceStage[];
+  onMove: (to: string) => void;
+  disabled: boolean;
+}) {
+  const id = `move-${piece.id}`;
+  return (
+    <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-xs">
+      <span className="text-text-muted">Move to</span>
+      <select
+        id={id}
+        name={id}
+        autoComplete="off"
+        value=""
+        disabled={disabled}
+        onChange={(e) => {
+          const to = e.currentTarget.value;
+          if (to) onMove(to);
+        }}
+        className="w-full min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm"
+      >
+        <option value="">Choose…</option>
+        {stages
+          .filter((s) => s !== piece.stage)
+          .map((s) => (
+            <option key={s} value={s}>
+              {PIECE_STAGE_LABELS[s]}
+            </option>
+          ))}
+      </select>
+    </label>
   );
 }
 

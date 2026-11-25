@@ -27,6 +27,7 @@ const job = workerData as
       data: Uint8Array;
       model: Uint8Array | null;
       extras: { label: string; hex: string | null; stl: Uint8Array }[];
+      recolours: { from: string; to: string }[];
     };
 
 const run = async () => {
@@ -49,7 +50,7 @@ const run = async () => {
     const project =
       (job.model && !frames) || (!job.model && printFrames(job.data))
         ? null
-        : printReady(job.data, frames, job.extras);
+        : printReady(job.data, frames, job.extras, job.recolours);
     parentPort!.postMessage(
       { ok: true, project: project ?? undefined },
       project ? [project.buffer as ArrayBuffer] : [],

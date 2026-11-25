@@ -147,6 +147,30 @@ describe("printReady: an order's text added to the print project", () => {
     expect(span(0)[0]).toBeCloseTo(2, 4);
   });
 
+  it("takes the customer's colours: a recoloured part's filament becomes the chosen colour", () => {
+    const out = printReady(
+      project,
+      null,
+      [
+        {
+          label: 'Name',
+          hex: '#d4a24c',
+          stl: boxStl([102, 55, 5.2], [108, 65, 6]),
+        },
+      ],
+      [{ from: '#000000', to: '#f2f2ee' }],
+    );
+    const f = files(out!);
+    const settings = JSON.parse(f.get('Metadata/project_settings.config')!) as {
+      filament_colour: string[];
+    };
+    expect(settings.filament_colour).toEqual(['#F2F2EE', '#D4A24C']);
+    // The gold text still goes to the gold filament.
+    expect(f.get('Metadata/model_settings.config')).toMatch(
+      /<part id="3"[\s\S]*key="extruder" value="2"/,
+    );
+  });
+
   it('gives up (the caller falls back) when a part lies on no object, and reads only well-formed frames', () => {
     expect(
       printReady(project, null, [

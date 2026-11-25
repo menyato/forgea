@@ -33,6 +33,15 @@ test('a print still printing waits on the board, is finished there, and is given
     page.getByRole('heading', { name: 'Where it is' }).last(),
   ).toBeVisible();
 
+  // On the kanban, moved without dragging: Move to under its card.
+  await page.goto(`/admin/pieces?view=kanban&q=${encodeURIComponent(note)}`);
+  const lab = page.getByRole('region', { name: 'In the lab' });
+  await lab.getByRole('combobox', { name: 'Move to' }).selectOption('IN_SHOP');
+  const shop = page.getByRole('region', { name: 'In the shop' });
+  await expect(shop.getByText(note)).toBeVisible();
+  await expect(lab.getByText(note)).toHaveCount(0);
+  await shop.getByRole('link').filter({ hasText: note }).first().click();
+
   // Given to someone, by name: the history keeps each move.
   await page
     .getByRole('combobox', { name: 'Where it is' })
@@ -42,6 +51,7 @@ test('a print still printing waits on the board, is finished there, and is given
   await expect(page.getByText('Saved')).toBeVisible();
   const history = page.getByRole('region', { name: 'History' });
   await expect(history.getByText('Given · Mira')).toBeVisible();
+  await expect(history.getByText('In the shop')).toBeVisible();
   await expect(history.getByText('In the lab')).toBeVisible();
   await expect(history.getByText('Printing')).toBeVisible();
 });

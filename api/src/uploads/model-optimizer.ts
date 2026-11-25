@@ -88,6 +88,7 @@ export class ModelOptimizer {
     load: Load,
     loadModel: Load | null,
     extras: { label: string; hex: string | null; stl: Uint8Array }[],
+    recolours: { from: string; to: string }[] = [],
   ): Promise<Uint8Array | null> {
     const model = loadModel ? await loadModel() : null;
     const result = await this.run(load, (data) => ({
@@ -95,6 +96,7 @@ export class ModelOptimizer {
       data,
       model,
       extras,
+      recolours,
     }));
     return result.project ?? null;
   }

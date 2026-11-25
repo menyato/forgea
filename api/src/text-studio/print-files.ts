@@ -36,6 +36,7 @@ export class PrintFiles {
       where: { id: itemId, orderId },
       select: {
         slots: true,
+        options: true,
         order: { select: { orderNumber: true } },
         product: {
           select: {
@@ -44,6 +45,11 @@ export class PrintFiles {
             printFiles: {
               orderBy: { sortOrder: 'asc' },
               select: { fileKey: true },
+            },
+            // Parts customers recolour: a colour row named for its part, choices from this group
+            colours: { select: { hex: true, part: true } },
+            partColourGroup: {
+              select: { values: { select: { label: true, swatchHex: true } } },
             },
           },
         },
@@ -83,6 +89,17 @@ export class PrintFiles {
         stl: f.bytes,
       };
     });
+    // The parts recoloured on the order ("Base: White"): their file colour -> the chosen swatch.
+    const chosen =
+      (item.options as { group?: string; value?: string }[] | null) ?? [];
+    const recolours = (item.product?.colours ?? []).flatMap((c) => {
+      if (!c.part) return [];
+      const label = chosen.find((o) => o.group === c.part)?.value;
+      const to = item.product?.partColourGroup?.values.find(
+        (v) => v.label === label,
+      )?.swatchHex;
+      return to ? [{ from: c.hex, to }] : [];
+    });
     // Ready to print: the print file with the text on its parts (the model's frames place it),
     // or the model itself when it is the slicer project.
     if (key.endsWith('.3mf')) {
@@ -95,6 +112,7 @@ export class PrintFiles {
           () => this.uploads.read(project),
           prints.length ? () => this.uploads.read(key) : null,
           extras,
+          recolours,
         );
         if (ready) return { name: `${number}-${slug}.3mf`, bytes: ready };
       }
