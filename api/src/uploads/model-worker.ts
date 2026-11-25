@@ -44,9 +44,12 @@ const run = async () => {
   if (job.task === 'print-ready') {
     // Parts placed on the shop model go onto the print parts through the model's frames; with
     // no model given, the project is the shop model itself.
+    // A model with print frames is the assembled look, never a print project of its own.
     const frames = job.model ? printFrames(job.model) : null;
     const project =
-      job.model && !frames ? null : printReady(job.data, frames, job.extras);
+      (job.model && !frames) || (!job.model && printFrames(job.data))
+        ? null
+        : printReady(job.data, frames, job.extras);
     parentPort!.postMessage(
       { ok: true, project: project ?? undefined },
       project ? [project.buffer as ArrayBuffer] : [],
