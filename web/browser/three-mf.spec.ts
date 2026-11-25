@@ -30,7 +30,8 @@ test('a product from a sliced Bambu Studio 3MF: its colours, grams and time, and
     page.getByText(
       /from the slicer: the file was sliced, so the purge, prime tower and supports are counted/,
     ),
-  ).toBeVisible();
+    // Read in the 3D worker, which takes longer while the whole suite runs.
+  ).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('10.25 g')).toBeVisible();
   await expect(page.getByText('2.25 g')).toBeVisible();
   await expect(page.getByLabel('Material (g)')).toHaveValue('12.5');

@@ -168,7 +168,7 @@ export function Loading() {
   return (
     <div className="grid h-full place-content-center justify-items-center gap-3 text-sm text-text-muted">
       <PrintingLogo mode="loop" className="w-14" />
-      Loading the 3D studio…
+      Loading the 3D designer…
     </div>
   );
 }

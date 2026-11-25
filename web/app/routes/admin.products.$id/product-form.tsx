@@ -407,7 +407,7 @@ export function ProductForm({
             name="designer"
             defaultValue={product?.designer ?? undefined}
             error={errors['designer']}
-            hint="Shown on the product page, e.g. Forgea Studio or a guest designer"
+            hint="Shown on the product page, e.g. Forgea Lab or a guest designer"
           />
           <SelectField
             label="Category"

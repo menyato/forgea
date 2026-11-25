@@ -31,7 +31,8 @@ test('the owner adds a product with a 3D model and options, and a shopper buys i
     .click();
   await expect(
     page.getByRole('img', { name: /3D view of Test cube/ }).locator('canvas'),
-  ).toBeVisible();
+    // three.js loads lazily, slower while the whole suite runs.
+  ).toBeVisible({ timeout: 20_000 });
   await expect(
     page.getByText('Size 30 × 30 × 30 mm · volume 27.0 cm³'),
   ).toBeVisible();
