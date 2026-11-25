@@ -8,7 +8,7 @@ test('the owner runs a free offer; a visitor sees the banner, claims the piece a
   context,
   browser,
   baseURL,
-}) => {
+}, testInfo) => {
   await signInAsAdmin(context, baseURL!);
   const title = `Free stand ${Date.now().toString(36)}`;
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -32,8 +32,11 @@ test('the owner runs a free offer; a visitor sees the banner, claims the piece a
   await piece.selectOption({ label: product!.trim() });
   await page.getByLabel('What the banner says').fill(title);
   await page.getByLabel(/Starts/).fill(beirut(-3_600_000));
-  // Ending soonest, so it is the one the shop shows.
-  await page.getByLabel(/Ends/).fill(beirut(30 * 60_000));
+  // Ending soonest, so it is the one the shop shows (a retry's sooner than the try before it,
+  // which may still be running).
+  await page
+    .getByLabel(/Ends/)
+    .fill(beirut((30 - 5 * testInfo.retry) * 60_000));
   await page.getByLabel(/How many to give/).fill('5');
   await page.getByRole('button', { name: 'Add offer' }).click();
   await expect(page).toHaveURL(/\/admin\/offers\/[0-9a-f-]{36}$/);
@@ -41,7 +44,8 @@ test('the owner runs a free offer; a visitor sees the banner, claims the piece a
   const visitor = await (await newVisitor(browser)).newPage();
   await visitor.goto('/shop');
   const banner = visitor.getByRole('complementary', { name: 'Free offer' });
-  await expect(banner).toContainText(title);
+  // The shop keeps its shared reads 10 s (api.shared()): the new offer shows within that.
+  await expect(banner).toContainText(title, { timeout: 15_000 });
   await expect(banner).toContainText('5 to give');
   await banner.getByRole('link', { name: 'Claim yours' }).click();
   await expect(visitor).toHaveURL(/\/products\//);
