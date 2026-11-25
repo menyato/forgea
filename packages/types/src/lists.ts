@@ -21,7 +21,7 @@ export interface ProductListItem {
   price: Money;
   /** Options to choose on the product page before adding to the cart. */
   hasOptions: boolean;
-  /** Personalised: designed on its page (text, fonts, colours) before it can go in the cart. */
+  /** Personalised: designed on its page (text studio, or text and logo places to fill) before it goes in the cart. */
   personalised: boolean;
   /** The 3D model shown on the card and the product page (an object key), if any. */
   modelKey: string | null;

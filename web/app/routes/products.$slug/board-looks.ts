@@ -544,7 +544,7 @@ export function lookFor(
   const colour = (hex: string) =>
     nearestColour(hex, offer.colours)?.id ?? offer.colours[0]?.id ?? '';
   const accent = colour(look.accent);
-  // The owner's example name, when set, replaces the look's: in its name line and as the initial.
+  // The owner's example name ("Your name"), when set, replaces the look's name line.
   const sample = offer.sample?.trim();
   // Its name line: the look's script line, else its first line of text.
   const nameLine = Math.max(
@@ -579,7 +579,7 @@ export function lookFor(
     ];
   });
   return {
-    initial: (sample && [...sample][0]?.toUpperCase()) || look.initial,
+    initial: look.initial,
     baseColour: base,
     ...(look.logo ? { logoColour: colour(look.logo) } : {}),
     items,

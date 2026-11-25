@@ -214,6 +214,13 @@ describe('Text and logo slots (e2e)', () => {
     expect(page.slots?.logos[0]?.outline.length).toBeGreaterThan(0);
     expect(page.slots?.fonts.map((f) => f.id)).toContain(font.id);
     expect(page.slots?.colours.map((c) => c.label)).toEqual(['White', 'Black']);
+    // Its card sends customers to design it first, never straight to the cart.
+    const card = (
+      await http()
+        .get(`/products?q=${encodeURIComponent(product.name)}`)
+        .expect(200)
+    ).body.items.find((p: { id: string }) => p.id === product.id);
+    expect(card).toMatchObject({ personalised: true, hasOptions: true });
   });
 
   it('the shop prices what is printed: a shorter name costs less, so does no logo', async () => {

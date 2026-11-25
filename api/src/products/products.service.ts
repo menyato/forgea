@@ -783,6 +783,9 @@ export class ProductsService {
   }
 
   private summary(p: ConfigurableProduct) {
+    // Designed on its page: a text studio piece, or one with a text or logo place customers fill.
+    const personalised =
+      p.textStyle !== null || this.slots.of(p).some((s) => s.editable);
     return {
       id: p.id,
       slug: p.slug,
@@ -790,9 +793,8 @@ export class ProductsService {
       description: p.description,
       material: { code: p.material.code, name: p.material.name },
       category: p.category,
-      hasOptions:
-        this.configurator.offered(p).length > 0 || p.textStyle !== null,
-      personalised: p.textStyle !== null,
+      hasOptions: this.configurator.offered(p).length > 0 || personalised,
+      personalised,
       modelKey: p.modelFileKey,
       // A personalised piece shows in the colour its letters start in.
       previewColor: p.textStyle

@@ -567,7 +567,7 @@ export class TextStudio {
                 {
                   id: 'sample',
                   kind: 'TEXT' as const,
-                  text: p.textSample ?? 'Forgea',
+                  text: p.textSample ?? 'Your name',
                   x: 0,
                   y:
                     settings.style === 'STANDING_LOGO'
@@ -646,8 +646,6 @@ function sampleText(
       ? SAMPLE_TEXT.COUPLE
       : SAMPLE_TEXT[style].slice(0, maxChars);
   if (style === 'TROPHY') return '';
-  if (style === 'STANDING_INITIAL')
-    return lettersOf(sample)[0] ?? SAMPLE_TEXT.STANDING_INITIAL;
   if (style === 'COUPLE')
     return sample.includes('&') ? sample : SAMPLE_TEXT.COUPLE;
   return [...sample].slice(0, maxChars).join('');
@@ -702,12 +700,12 @@ export const SAMPLE_MODEL_NAMES = [
 
 /** The text a product's sample shows in the shop, by style. */
 const SAMPLE_TEXT: Record<TextSettings['style'], string> = {
-  KEYCHAIN: 'Forgea',
-  NAME: 'Forgea',
+  KEYCHAIN: 'Your name',
+  NAME: 'Your name',
   MONOGRAM: 'FRG',
   LETTERS: 'FORGEA',
-  INITIAL_NAME: 'Forgea',
-  COUPLE: 'Forge & Lab',
+  INITIAL_NAME: 'Your name',
+  COUPLE: 'Your name & Their name',
   STANDING_INITIAL: 'F',
   TROPHY: '',
   STANDING_LOGO: '',

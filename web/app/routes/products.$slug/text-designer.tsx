@@ -54,12 +54,12 @@ const TextPreview = lazy(
 
 /** What the empty preview shows, by style. */
 const SAMPLE: Record<ProductTextOffer['style'], string> = {
-  KEYCHAIN: 'Sara',
-  NAME: 'Sara',
+  KEYCHAIN: 'Your name',
+  NAME: 'Your name',
   MONOGRAM: 'SAM',
   LETTERS: 'ABC',
-  INITIAL_NAME: 'Lina',
-  COUPLE: `Sara${COUPLE_JOIN}Ali`,
+  INITIAL_NAME: 'Your name',
+  COUPLE: `Your name${COUPLE_JOIN}Their name`,
   // Designed freely on their own page (BoardDesigner).
   STANDING_INITIAL: 'A',
   TROPHY: '',
@@ -90,6 +90,10 @@ export function TextDesigner({
   const [text, setText] = useState('');
   // A couple's two names, sent as one text joined by "&".
   const [names, setNames] = useState(['', '']);
+  // Its example names: the owner's ("Your name & Their name"), split at the "&".
+  const coupleSample = (offer.sample || SAMPLE.COUPLE)
+    .split('&')
+    .map((n) => n.trim());
   const typed = couple
     ? names.some((n) => n.trim())
       ? names.map((n) => n.trim()).join(COUPLE_JOIN)
@@ -290,7 +294,7 @@ export function TextDesigner({
                       const v = e.currentTarget.value.replaceAll('&', '');
                       setNames((all) => all.map((n, j) => (j === i ? v : n)));
                     }}
-                    placeholder={i === 0 ? 'Sara' : 'Ali'}
+                    placeholder={coupleSample[i]}
                     aria-invalid={problem && typed ? true : undefined}
                     aria-describedby="design-problem"
                     className={TEXT_INPUT}
