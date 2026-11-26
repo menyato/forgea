@@ -38,3 +38,20 @@ export function isRequestExpired(
     new Date(quoteExpiresAt).getTime() <= now.getTime()
   );
 }
+
+/**
+ * The lines of a price by the shop's rules, in order, as the dashboard names them. A product may
+ * leave some out for good (`Product.priceLinesOff`), and the owner may switch any off before
+ * quoting a custom request (`POST /custom-requests/:id/price`).
+ */
+export const PRICE_LINES = [
+  { key: 'material', label: 'Filament' },
+  { key: 'machine', label: 'Printer time' },
+  { key: 'waste', label: 'Purge waste' },
+  { key: 'failure', label: 'Failed prints allowance' },
+  { key: 'labor', label: 'Labour' },
+  { key: 'packaging', label: 'Packaging' },
+  { key: 'profit', label: 'Profit' },
+] as const;
+
+export type PriceLine = (typeof PRICE_LINES)[number]['key'];

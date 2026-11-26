@@ -176,11 +176,24 @@ export class QuotationsService {
   /** Staff confirm it (e.g. the customer said yes on the phone). */
   async confirm(id: string, actorId: string): Promise<CheckoutResult> {
     const q = await this.require(id);
-    return this.place(await this.withAccount(q), actorId, [
+    const result = await this.place(await this.withAccount(q), actorId, [
       QuotationStatus.DRAFT,
       QuotationStatus.SENT,
       QuotationStatus.DECLINED,
     ]);
+    // The studio said yes for them: the order is confirmed at once, ready to print. One that
+    // waits for its deposit keeps waiting (confirming it would record the deposit as paid).
+    if (result.status !== OrderStatus.PENDING) return result;
+    const placed = await this.require(id);
+    if (!placed.orderId) return result;
+    await this.orderStatus.change(
+      placed.orderId,
+      OrderStatus.CONFIRMED,
+      actorId,
+      `Confirmed by the studio with quotation ${q.number}`,
+      { expected: OrderStatus.PENDING },
+    );
+    return { ...result, status: OrderStatus.CONFIRMED };
   }
 
   /**
@@ -640,6 +653,11 @@ function toDetail(q: QuotationRow, team = false): QuotationDetail {
       isCustom: l.isCustom,
       size: sizeOf(l),
       printFile: team ? (l.printFile as PrintFile | null) : null,
+      // The line's own file, else its product's model: customers see its compressed copy.
+      model:
+        (l.printFile as PrintFile | null)?.fileKey ??
+        l.product?.modelFileKey ??
+        null,
     })),
     history: q.statusHistory.map((h) => ({
       status: h.status,

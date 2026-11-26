@@ -5,7 +5,7 @@ import {
   PricingError,
   type UnitCostCalculator,
 } from '@forgea/pricing';
-import { type ChosenOption, formatSizeCm } from '@forgea/types';
+import { type ChosenOption, formatSizeCm, type PriceLine } from '@forgea/types';
 
 /** What the catalog says about a product, today. */
 interface CatalogProduct {
@@ -19,6 +19,8 @@ interface CatalogProduct {
   slicedFile: boolean;
   /** Its extra parts (a key ring, a lamp's wiring), USD per piece. */
   extraCost: string;
+  /** The shop's price lines it leaves out (no packaging…): not part of its cost either. */
+  priceLinesOff: PriceLine[];
   /**
    * Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. A named
    * part prints in the colour the order chose for it ("Body: Copper"), else in `colour`.
@@ -188,6 +190,7 @@ export function estimateItem(
         pricePerGram,
         wasteIncluded: product.slicedFile,
         extraCost: product.extraCost,
+        off: product.priceLinesOff,
       },
       effects,
     );

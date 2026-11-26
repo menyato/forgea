@@ -12,12 +12,14 @@ import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
 import { WhatsAppLink } from '~/features/contact/whatsapp-link';
 import { OrderConfirmation } from '~/features/orders/order-confirmation';
+import { ModelViewer } from '~/features/model-viewer/model-viewer';
 import type { loader as rootLoader } from '~/root';
 
 /**
  * A quotation as the customer reads it — on their account page or from the emailed link:
- * every line with its printed size, delivery, the amount to pay, and the accept button (or
- * declining it, with a reason if they like).
+ * each piece in 3D (its file, or the shop product's model), every line with its printed size,
+ * delivery, the amount to pay, and the accept button (or declining it, with a reason if they
+ * like).
  */
 export function QuotationDocument({
   quotation: q,
@@ -48,6 +50,9 @@ export function QuotationDocument({
   }
   const open = q.status === QuotationStatus.SENT && !q.expired;
   const toPay = (Number(q.total) + Number(deliveryFee ?? 0)).toFixed(2);
+  const shown = q.lines.filter(
+    (l): l is typeof l & { model: string } => l.model !== null,
+  );
   return (
     <main className={`${PAGE_WIDTH} grid max-w-4xl gap-8 py-10`}>
       <header className="grid gap-2">
@@ -69,6 +74,33 @@ export function QuotationDocument({
                   : `Valid until ${new Date(q.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}.`}
         </p>
       </header>
+      {shown.length > 0 && (
+        <section aria-label="What you will receive" className="grid gap-4">
+          <h2 className="text-lg font-semibold">What you will receive</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {shown.map((l) => (
+              <figure
+                key={l.id}
+                className="grid min-w-0 gap-2 rounded-lg bg-surface p-3"
+              >
+                <ModelViewer
+                  modelKey={l.model}
+                  label={l.description}
+                  className="aspect-square max-h-[24rem] rounded-md"
+                />
+                <figcaption className="text-sm">
+                  {l.description}
+                  {l.size && (
+                    <span className="block text-text-muted">
+                      {formatSizeCm(l.size)}
+                    </span>
+                  )}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="overflow-x-auto rounded-lg bg-surface p-5">
         <table className="w-full text-sm">
           <thead className="text-left text-text-muted">

@@ -14,6 +14,8 @@ import {
   type OptionSelection,
   PRODUCT_SIZE_GROUP_ID,
   type ProductOption,
+  PRICE_LINES,
+  type PriceLine,
   startingChoice,
 } from '@forgea/types';
 import { Prisma } from '../generated/prisma/client.js';
@@ -280,6 +282,7 @@ export class ProductConfigurator {
         pricePerGram: filamentPricePerGram(product),
         wasteIncluded: product.slicedFile,
         extraCost: extraCostOf(product),
+        off: priceLinesOffOf(product),
       },
       configuration.effects,
       profitOf(product),
@@ -453,6 +456,7 @@ export function withPriceOverride(
     | 'slicedFile'
     | 'colours'
     | 'extraCosts'
+    | 'priceLinesOff'
   >,
   calculated: string,
 ): string {
@@ -465,6 +469,7 @@ export function withPriceOverride(
       pricePerGram: filamentPricePerGram(product),
       wasteIncluded: product.slicedFile,
       extraCost: extraCostOf(product),
+      off: priceLinesOffOf(product),
     },
     [],
     profitOf(product),
@@ -502,6 +507,16 @@ export function profitOf(product: {
   return product.profitKind && product.profitValue !== null
     ? { kind: product.profitKind, value: product.profitValue.toString() }
     : null;
+}
+
+/** The shop's price lines the product leaves out (only known ones count). */
+export function priceLinesOffOf(product: {
+  priceLinesOff?: readonly string[];
+}): PriceLine[] {
+  const known = new Set<string>(PRICE_LINES.map((l) => l.key));
+  return (product.priceLinesOff ?? []).filter((k): k is PriceLine =>
+    known.has(k),
+  );
 }
 
 /** What one piece's extra parts cost (a key ring, a lamp's wiring), USD. */

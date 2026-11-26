@@ -129,6 +129,7 @@ describe('MailTemplates', () => {
           isCustom: true,
           size: { x: '30', y: '12.5', z: '18' },
           printFile: null,
+          model: null,
         },
       ],
       note: 'Matte "black"',

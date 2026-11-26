@@ -169,7 +169,12 @@ export class CustomRequestsRepository {
   }
 
   /** Sets the design preview; false when the request is no longer open. */
-  async setDesignPreview(id: string, key: string): Promise<boolean> {
+  /** `printFile`: the design's figures when it is a 3MF (null clears the last design's). */
+  async setDesignPreview(
+    id: string,
+    key: string,
+    printFile: object | null,
+  ): Promise<boolean> {
     const { count } = await this.prisma.customRequest.updateMany({
       where: {
         id,
@@ -177,7 +182,12 @@ export class CustomRequestsRepository {
           in: [CustomRequestStatus.SUBMITTED, CustomRequestStatus.QUOTED],
         },
       },
-      data: { designPreviewKey: key },
+      data: {
+        designPreviewKey: key,
+        designPrintFile: printFile
+          ? (printFile as Prisma.InputJsonValue)
+          : Prisma.DbNull,
+      },
     });
     return count === 1;
   }

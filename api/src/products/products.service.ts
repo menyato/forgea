@@ -48,6 +48,7 @@ import { UploadsService } from '../uploads/uploads.service.js';
 import {
   type ConfigurableProduct,
   extraCostOf,
+  priceLinesOffOf,
   ProductConfigurator,
   profitOf,
   type Configuration,
@@ -238,7 +239,8 @@ export class ProductsService {
       !mayPrice &&
       (dto.profitKind !== undefined ||
         dto.priceOverride !== undefined ||
-        dto.extraCosts.length > 0)
+        dto.extraCosts.length > 0 ||
+        dto.priceLinesOff.length > 0)
     )
       throw profitNotYours();
     dto = await this.checkSetup(dto);
@@ -268,7 +270,8 @@ export class ProductsService {
       if (
         dto.profitKind === undefined &&
         dto.priceOverride === undefined &&
-        dto.extraCosts.length === 0
+        dto.extraCosts.length === 0 &&
+        dto.priceLinesOff.length === 0
       ) {
         dto = {
           ...dto,
@@ -280,6 +283,7 @@ export class ProductsService {
             label: e.label,
             amount: e.amount.toFixed(2),
           })),
+          priceLinesOff: priceLinesOffOf(current),
         };
       }
       const asked =
@@ -309,6 +313,10 @@ export class ProductsService {
           )
           .join('|');
       if (same(current.extraCosts) !== same(dto.extraCosts))
+        throw profitNotYours();
+      // And the lines it leaves out.
+      const lines = (k: readonly string[]) => [...k].sort().join('|');
+      if (lines(priceLinesOffOf(current)) !== lines(dto.priceLinesOff))
         throw profitNotYours();
     }
     dto = await this.checkSetup(dto);
@@ -463,6 +471,7 @@ export class ProductsService {
           pricePerGram,
           wasteIncluded,
           extraCost: extraCostOf({ extraCosts: dto.extraCosts ?? [] }),
+          off: dto.priceLinesOff ?? [],
         },
         profit,
       );
@@ -738,6 +747,7 @@ export class ProductsService {
             amount: e.amount.toFixed(2),
           }))
         : [],
+      priceLinesOff: mayPrice ? priceLinesOffOf(p) : [],
       colours: p.colours.map((c) => ({
         colour: c.colour,
         hex: c.hex,

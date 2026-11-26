@@ -18,6 +18,7 @@ import type {
   CustomRequestView,
   Page,
   RequestEstimate,
+  RequestPrice,
   StaffCustomRequest,
   UploadedFile as UploadedFileView,
 } from '@forgea/types';
@@ -30,6 +31,7 @@ import {
   EstimateRequestDto,
   QuoteCustomRequestDto,
   REQUEST_NUMBER_PATTERN,
+  RequestPriceDto,
 } from '@forgea/validation';
 import { Audit } from '../audit-log/audit.interceptor.js';
 import type { AuthenticatedUser } from '../authorization/authenticated-user.js';
@@ -204,7 +206,22 @@ export class CustomRequestsController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<StaffCustomRequest> {
     const uploaded = await this.files.receiveFromStudio(file, user.id);
-    return this.requests.attachDesign(id, uploaded.key);
+    return this.requests.attachDesign(id, uploaded);
+  }
+
+  /**
+   * The request priced by the shop's rules from its file's figures (the studio's 3MF design,
+   * else the customer's 3MF), with lines switched off and costs added. Shows the studio's cost
+   * structure, so `pricing.manage` only. Changes nothing.
+   */
+  @RequirePermission('pricing.manage')
+  @HttpCode(200)
+  @Post(':id/price')
+  price(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestPriceDto,
+  ): Promise<RequestPrice> {
+    return this.requests.price(id, dto);
   }
 
   /** Sends the price; the customer sees it at once. Audit-logged. */

@@ -12,6 +12,11 @@ export {
   type ProfitRule,
   type UnitCostInput,
   type UnitPriceBreakdown,
+  quoteWith,
+  type AddedCost,
+  type PriceLineKey,
+  type QuoteAdjustments,
+  type QuoteBreakdown,
 } from './unit-cost-calculator.js';
 export {
   pricePerGramFromReel,

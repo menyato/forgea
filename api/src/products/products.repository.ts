@@ -378,6 +378,7 @@ const fields = (dto: SaveProductDto) => ({
   profitKind: dto.profitKind ?? null,
   profitValue: dto.profitKind ? (dto.profitValue ?? null) : null,
   priceOverride: dto.priceOverride ?? null,
+  priceLinesOff: dto.priceLinesOff,
   // Kept only while a part is recoloured by customers, or text and logos print in its colours.
   partColourGroupId:
     dto.colours.some((c) => c.part) || dto.slots.length > 0

@@ -1,12 +1,16 @@
 import {
   CUSTOM_REQUEST_STATUS_LABELS,
   CustomRequestStatus,
+  PRICE_LINES,
+  type RequestPrice,
   type StaffCustomRequest,
 } from '@forgea/types';
 import {
   CloseCustomRequestDto,
   QuoteCustomRequestDto,
+  RequestPriceDto,
 } from '@forgea/validation';
+import { useState } from 'react';
 import { data, Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
 import { Button } from '~/components/ui/button';
@@ -24,8 +28,12 @@ import { RequestFileView } from '~/features/custom-requests/request-file-view';
 import { RequestTimeline } from '~/features/custom-requests/request-timeline';
 import { StatusBar } from '~/features/admin/views';
 import { relatedOf } from '~/features/admin/related.server';
+import { validateForm } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
+import { type PriceResult, PricePanel, PrintFigures } from './price-panel';
+
+export { unlessAsking as shouldRevalidate } from '~/lib/revalidate';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -43,10 +51,12 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     related,
     canQuote: can(staff, 'requests.quote'),
     canDesign: can(staff, 'requests.design'),
+    // The price's lines show the studio's costs.
+    canPrice: can(staff, 'pricing.manage'),
   };
 }
 
-/** design (upload) | quote | cancel */
+/** design (upload) | preview (the price, nothing saved) | quote | cancel */
 export async function action({ request, params, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const base = `/custom-requests/${encodeURIComponent(params.id)}`;
@@ -64,6 +74,34 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       ? data<SaveResult>({ ok: true })
       : data<SaveResult>({ error: r.message }, { status: r.status });
   }
+  if (intent === 'preview') {
+    const on = new Set(form.getAll('on').map(String));
+    const labels = form.getAll('costLabel').map(String);
+    const amounts = form.getAll('costAmount').map(String);
+    const added = labels
+      .map((label, i) => ({
+        label: label.trim(),
+        amount: (amounts[i] ?? '').trim(),
+      }))
+      .filter((a) => a.label !== '' || a.amount !== '');
+    const parsed = validateForm(RequestPriceDto, {
+      off: PRICE_LINES.filter((l) => !on.has(l.key)).map((l) => l.key),
+      added,
+    });
+    if (!parsed.ok) {
+      return data<PriceResult>(
+        {
+          error: Object.values(parsed.errors)[0] ?? 'Check the costs',
+          errors: parsed.errors,
+        },
+        { status: 400 },
+      );
+    }
+    const r = await api.post<RequestPrice>(`${base}/price`, parsed.value);
+    return r.ok
+      ? data<PriceResult>({ price: r.data })
+      : data<PriceResult>({ error: r.message }, { status: r.status });
+  }
   if (intent === 'cancel') {
     return save(CloseCustomRequestDto, { note: text(form, 'note') }, (dto) =>
       api.post(`${base}/cancel`, dto),
@@ -77,7 +115,9 @@ export async function action({ request, params, context }: Route.ActionArgs) {
 }
 
 export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
-  const { request: r, canQuote, canDesign } = loaderData;
+  const { request: r, canQuote, canDesign, canPrice } = loaderData;
+  // A price worked out in the price panel, put in the quote form.
+  const [suggested, setSuggested] = useState<string | null>(null);
   const open =
     r.status === CustomRequestStatus.SUBMITTED ||
     r.status === CustomRequestStatus.QUOTED;
@@ -146,6 +186,11 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
             )}
             {open && canDesign && <DesignUpload />}
           </Panel>
+          {r.printFigures && (
+            <Panel title="What it takes">
+              <PrintFigures figures={r.printFigures} />
+            </Panel>
+          )}
         </div>
 
         <div className="grid content-start gap-6">
@@ -186,7 +231,19 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
               </p>
             </Panel>
           )}
-          {open && canQuote && <QuoteForm quoted={r.quote !== null} />}
+          {open && canPrice && r.printFigures && (
+            <PricePanel
+              key={JSON.stringify(r.printFigures)}
+              onUse={setSuggested}
+            />
+          )}
+          {open && canQuote && (
+            <QuoteForm
+              key={suggested ?? ''}
+              quoted={r.quote !== null}
+              price={suggested}
+            />
+          )}
           {open && canQuote && <CancelForm />}
           <Panel title="History">
             <RequestTimeline history={r.history} />
@@ -207,11 +264,14 @@ function DesignUpload() {
     >
       <input type="hidden" name="intent" value="design" />
       <label className="grid gap-1 text-sm">
-        <span className="font-medium">Design file (STL, GLB or an image)</span>
+        <span className="font-medium">
+          Design file (our 3MF, sliced for our printer, prices the quote; or
+          STL, GLB, an image)
+        </span>
         <input
           type="file"
           name="file"
-          accept=".stl,.glb,.png,.jpg,.jpeg,.webp"
+          accept=".3mf,.stl,.glb,.png,.jpg,.jpeg,.webp"
           required
         />
       </label>
@@ -227,7 +287,13 @@ function DesignUpload() {
   );
 }
 
-function QuoteForm({ quoted }: { quoted: boolean }) {
+function QuoteForm({
+  quoted,
+  price,
+}: {
+  quoted: boolean;
+  price: string | null;
+}) {
   const fetcher = useFetcher<SaveResult>();
   const errors = fetcher.data?.errors ?? {};
   return (
@@ -239,6 +305,7 @@ function QuoteForm({ quoted }: { quoted: boolean }) {
           name="price"
           inputMode="decimal"
           required
+          defaultValue={price ?? undefined}
           error={errors['price']}
         />
         <TextAreaField

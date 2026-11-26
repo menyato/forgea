@@ -13,6 +13,7 @@ import {
   type Page,
   type PrintFile,
   type RequestEstimate,
+  type RequestPrice,
   type StaffCustomRequest,
 } from '@forgea/types';
 import type {
@@ -22,6 +23,7 @@ import type {
   CustomRequestListQuery,
   EstimateRequestDto,
   QuoteCustomRequestDto,
+  RequestPriceDto,
 } from '@forgea/validation';
 import { toPage } from '../common/pagination/keyset.js';
 import {
@@ -223,10 +225,12 @@ export class CustomRequestsService {
       requestNumber: r.requestNumber,
       title: r.title,
       quotedPrice: r.quotedPrice.toFixed(2),
-      // The order is one line for the whole request: its file's grams for every piece.
-      printFile: r.printFile
-        ? timesPieces(r.printFile as unknown as PrintFile, r.quantity)
-        : null,
+      // The order is one line for the whole request: its file's grams for every piece, from
+      // the studio's design when it is a 3MF (it prints from that), else the customer's.
+      printFile: (() => {
+        const figures = printFigures(r);
+        return figures ? timesPieces(figures.file, r.quantity) : null;
+      })(),
     });
   }
 
@@ -292,12 +296,53 @@ export class CustomRequestsService {
     return r;
   }
 
-  /** The designer's preview, while the request is open (waiting for a quote or quoted). */
-  async attachDesign(id: string, key: string): Promise<StaffCustomRequest> {
-    if (!(await this.requests.setDesignPreview(id, key))) {
+  /**
+   * The studio's design, while the request is open (waiting for a quote or quoted). A 3MF is
+   * the studio's own print file (e.g. sliced for its printer): its figures price the quote and
+   * the order prints from it.
+   */
+  async attachDesign(
+    id: string,
+    file: { key: string; mimeType: string },
+  ): Promise<StaffCustomRequest> {
+    const r = await this.requests.findById(id);
+    if (!r) throw new NotFoundException('Request not found');
+    const printFile =
+      file.mimeType === 'model/3mf'
+        ? await this.estimator.designPrintFile(file.key, r.materialId)
+        : null;
+    if (!(await this.requests.setDesignPreview(id, file.key, printFile))) {
       await this.explainRefusal(id, 'given a design');
     }
     return this.detail(id);
+  }
+
+  /** The request priced by the shop's rules from its print figures, as the owner adjusts it. */
+  async price(id: string, dto: RequestPriceDto): Promise<RequestPrice> {
+    const r = await this.requests.findById(id);
+    if (!r) throw new NotFoundException('Request not found');
+    const figures = printFigures(r);
+    if (!figures) {
+      throw new ConflictException(
+        'This request has no 3MF to price from: add your design as a 3MF, or quote by hand',
+      );
+    }
+    const q = await this.estimator.price(figures.file, r.quantity, {
+      off: new Set(dto.off),
+      added: dto.added,
+    });
+    return {
+      source: figures.source,
+      sliced: figures.file.sliced,
+      pieces: q.pieces,
+      lines: q.lines,
+      added: q.added,
+      subtotal: q.subtotal,
+      profit: q.profit,
+      profitRule: q.profitRule,
+      unitPrice: q.unitPrice,
+      price: q.price,
+    };
   }
 
   /** The studio closes a request it can't make (the note tells the customer why). */
@@ -474,5 +519,31 @@ function toView(r: RequestRow): CustomRequestView {
 }
 
 function toStaffView(r: RequestRow): StaffCustomRequest {
-  return { ...toView(r), id: r.id, customer: r.user };
+  const figures = printFigures(r);
+  return {
+    ...toView(r),
+    id: r.id,
+    customer: r.user,
+    printFigures: figures && {
+      source: figures.source,
+      sliced: figures.file.sliced,
+      grams: figures.file.grams,
+      printHours: figures.file.printHours,
+      colours: figures.file.colours,
+    },
+  };
+}
+
+/** The 3MF that prices a request and that its order prints: the studio's design, else the customer's. */
+function printFigures(
+  r: Pick<RequestRow, 'designPrintFile' | 'printFile'>,
+): { source: 'design' | 'customer'; file: PrintFile } | null {
+  if (r.designPrintFile)
+    return {
+      source: 'design',
+      file: r.designPrintFile as unknown as PrintFile,
+    };
+  if (r.printFile)
+    return { source: 'customer', file: r.printFile as unknown as PrintFile };
+  return null;
 }

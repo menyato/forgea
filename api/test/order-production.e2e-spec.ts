@@ -83,7 +83,8 @@ describe('Order summary measured by its print runs (e2e)', () => {
     const { orderId } = (
       await as(admin.cookie).get(`/quotations/${quotation.id}`).expect(200)
     ).body as QuotationDetail & { orderId: string };
-    await moveOrder(app, admin.cookie, orderId, ['CONFIRMED', 'IN_PRODUCTION']);
+    // The studio's confirm makes the order Confirmed at once.
+    await moveOrder(app, admin.cookie, orderId, ['IN_PRODUCTION']);
 
     const summary = async () =>
       (await as(admin.cookie).get(`/orders/${orderId}/production`).expect(200))

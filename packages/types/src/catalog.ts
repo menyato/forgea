@@ -1,4 +1,5 @@
 import type { OptionKind, ProfitKind } from './generated/prisma/enums.js';
+import type { PriceLine } from './custom-requests.js';
 import type { ShownColour } from './parts.js';
 import type { Money, ProductListItem } from './lists.js';
 import type { DesignSlot } from '@forgea/text3d/design';
@@ -161,6 +162,8 @@ export interface AdminProduct {
   priceOverride: Money | null;
   /** What else one piece costs (a key ring, a lamp's wiring), added to its cost. */
   extraCosts: { label: string; amount: Money }[];
+  /** The shop's price lines it leaves out (no packaging…); empty for those who don't price. */
+  priceLinesOff: PriceLine[];
   /** Multi-colour (from its 3MF): grams per colour at its own size; empty = one colour. */
   colours: ProductColourView[];
   /** The colours customers recolour its named parts in (an option group); null = none. */

@@ -1,7 +1,13 @@
-import { OptionKind, ProfitKind } from '@forgea/types';
+import {
+  OptionKind,
+  PRICE_LINES,
+  type PriceLine,
+  ProfitKind,
+} from '@forgea/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -443,6 +449,13 @@ export class SaveProductDto {
   @Type(() => ProductExtraCostDto)
   extraCosts: ProductExtraCostDto[] = [];
 
+  /** The shop's price lines it leaves out (no packaging…): pricing.manage only. */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(PRICE_LINES.map((l) => l.key), { each: true })
+  priceLinesOff: PriceLine[] = [];
+
   /** Its sliced print files (their total is its grams, time and colours); none: its model. */
   @IsArray()
   @ArrayMaxSize(PRODUCT_PRINT_FILES_MAX)
@@ -535,6 +548,13 @@ export class PricePreviewDto {
   @ValidateNested({ each: true })
   @Type(() => ProductExtraCostDto)
   extraCosts?: ProductExtraCostDto[];
+
+  /** The shop's price lines it leaves out (no packaging…): as the product would be saved. */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(PRICE_LINES.map((l) => l.key), { each: true })
+  priceLinesOff?: PriceLine[];
 
   @ValidateIf((o: PricePreviewDto) => o.profitKind !== undefined)
   @Matches(MONEY_PATTERN, {

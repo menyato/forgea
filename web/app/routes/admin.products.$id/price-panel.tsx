@@ -1,4 +1,9 @@
-import type { PricePreview, ProfitKind } from '@forgea/types';
+import {
+  PRICE_LINES,
+  type PriceLine,
+  type PricePreview,
+  type ProfitKind,
+} from '@forgea/types';
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -29,6 +34,8 @@ export function PricePanel({
   onPriceOverride,
   extraCosts,
   onExtraCosts,
+  priceLinesOff,
+  onPriceLinesOff,
   shopProfit,
   errors,
   onPricing,
@@ -38,6 +45,9 @@ export function PricePanel({
   /** What else one piece costs (a key ring, a lamp's wiring): pricing.manage only. */
   extraCosts: readonly { label: string; amount: string }[];
   onExtraCosts: (next: { label: string; amount: string }[]) => void;
+  /** The shop's lines this product leaves out (no packaging…): pricing.manage only. */
+  priceLinesOff: readonly PriceLine[];
+  onPriceLinesOff: (next: PriceLine[]) => void;
   materialId: string;
   grams: string;
   printHours: string;
@@ -89,6 +99,9 @@ export function PricePanel({
             extraCosts.filter((e) => e.label.trim() && e.amount),
           ),
         }
+      : {}),
+    ...(priceLinesOff.length > 0
+      ? { priceLinesOff: JSON.stringify(priceLinesOff) }
       : {}),
   });
   // What the latest request asked: until it is this form's, a price is on its way.
@@ -142,6 +155,11 @@ export function PricePanel({
         onChange={onPriceOverride}
         mayPrice={shopProfit !== null}
         error={errors['priceOverride']}
+      />
+      <ShopLines
+        value={priceLinesOff}
+        onChange={onPriceLinesOff}
+        mayPrice={shopProfit !== null}
       />
       <ExtraCosts
         value={extraCosts}
@@ -226,6 +244,66 @@ export function PricePanel({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * The shop's price lines, each ticked while this product counts it: untick packaging for a
+ * piece sold without a box, profit for one sold at cost. Unticked lines count 0 in its price
+ * and in its cost. Only whoever manages pricing may change them.
+ */
+function ShopLines({
+  value,
+  onChange,
+  mayPrice,
+}: {
+  value: readonly PriceLine[];
+  onChange: (next: PriceLine[]) => void;
+  mayPrice: boolean;
+}) {
+  const field = (
+    <input type="hidden" name="priceLinesOff" value={JSON.stringify(value)} />
+  );
+  if (!mayPrice)
+    return value.length > 0 ? (
+      <p className="text-sm text-text-muted">
+        Left out of its price:{' '}
+        {PRICE_LINES.filter((l) => value.includes(l.key))
+          .map((l) => l.label.toLowerCase())
+          .join(', ')}{' '}
+        (set by whoever manages pricing).
+        {field}
+      </p>
+    ) : null;
+  return (
+    <fieldset className="grid min-w-0 gap-2">
+      <legend className="mb-1 text-sm font-medium">
+        The shop&apos;s rules this product counts
+      </legend>
+      {field}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2">
+        {PRICE_LINES.map((l) => (
+          <CheckboxField
+            key={l.key}
+            label={l.label}
+            name={`price-line-${l.key}`}
+            checked={!value.includes(l.key)}
+            onChange={(e) => {
+              const on = e.currentTarget.checked;
+              onChange(
+                PRICE_LINES.map((x) => x.key).filter((k) =>
+                  k === l.key ? !on : value.includes(k),
+                ),
+              );
+            }}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-text-muted">
+        Untick what this product doesn&apos;t take (no packaging, sold at
+        cost…): it counts 0 in its price and its cost.
+      </p>
+    </fieldset>
   );
 }
 

@@ -46,6 +46,7 @@ export {
   CustomRequestListQuery,
   EstimateRequestDto,
   QuoteCustomRequestDto,
+  RequestPriceDto,
   ApplyThemeDto,
   SaveNamedThemeDto,
   SaveRolePermissionsDto,

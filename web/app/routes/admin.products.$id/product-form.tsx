@@ -9,6 +9,7 @@ import {
   type ProductSizeView,
   type ProductTextSettings,
   type ProductRealCost,
+  type PriceLine,
   type ProfitKind,
   type SizeCm,
   shownColours,
@@ -114,6 +115,9 @@ export function ProductForm({
   const [extraCosts, setExtraCosts] = useState<
     { label: string; amount: string }[]
   >(product?.extraCosts ?? []);
+  const [priceLinesOff, setPriceLinesOff] = useState<PriceLine[]>(
+    product?.priceLinesOff ?? [],
+  );
   const [colours, setColoursOnly] = useState<ProductColourView[]>(
     product?.colours ?? [],
   );
@@ -513,6 +517,8 @@ export function ProductForm({
             onPriceOverride={setPriceOverride}
             extraCosts={extraCosts}
             onExtraCosts={setExtraCosts}
+            priceLinesOff={priceLinesOff}
+            onPriceLinesOff={setPriceLinesOff}
             shopProfit={shopProfit}
             errors={errors}
             onPricing={setPricing}

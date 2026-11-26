@@ -7,6 +7,7 @@ import type {
   Role,
 } from './generated/prisma/enums.js';
 import type { Money } from './lists.js';
+import type { PriceLine } from './custom-requests.js';
 import type { DesignSummary } from './text-studio.js';
 
 /** GET /orders/:id — everything staff need to prepare, deliver and get paid for an order. */
@@ -127,6 +128,37 @@ export interface CustomRequestView {
 export interface StaffCustomRequest extends CustomRequestView {
   id: string;
   customer: { name: string | null; email: string; phone: string | null };
+  /**
+   * What one piece takes, from the file that prices the quote and that the order prints: the
+   * studio's design when it is a 3MF, else the customer's 3MF; null for other files.
+   */
+  printFigures: {
+    source: 'design' | 'customer';
+    /** The slicer's own grams and time; false: estimated from the model's volume. */
+    sliced: boolean;
+    grams: string;
+    printHours: string;
+    colours: { colour: string; hex: string; grams: string }[];
+  } | null;
+}
+
+/**
+ * POST /custom-requests/:id/price (`pricing.manage`): the request priced by the shop's rules from
+ * `printFigures`, for all its pieces, with the owner's lines switched off and costs added.
+ */
+export interface RequestPrice {
+  source: 'design' | 'customer';
+  sliced: boolean;
+  pieces: number;
+  /** In `PRICE_LINES` order; `on` false: left out. */
+  lines: { key: PriceLine; amount: Money; on: boolean }[];
+  added: { label: string; amount: Money }[];
+  subtotal: Money;
+  profit: Money;
+  profitRule: { kind: 'PERCENT' | 'FIXED'; value: string };
+  /** One piece at the shop's price step, and all of them: the price to quote. */
+  unitPrice: Money;
+  price: Money;
 }
 
 export interface CustomRequestListItem {

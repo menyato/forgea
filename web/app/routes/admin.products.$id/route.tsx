@@ -148,6 +148,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       modelFileKey: text(form, 'modelFileKey'),
       printFileKeys: jsonField(form, 'printFileKeys') ?? undefined,
       extraCosts: jsonField(form, 'extraCosts') ?? undefined,
+      priceLinesOff: jsonField(form, 'priceLinesOff') ?? undefined,
     });
     if (!parsed.ok) return data({ preview: null }, { status: 400 });
     const r = await api.post<PricePreview>(
@@ -252,6 +253,7 @@ export async function action({ request, params, context }: Route.ActionArgs) {
       profitValue: text(form, 'profitValue'),
       priceOverride: text(form, 'priceOverride'),
       extraCosts: jsonField(form, 'extraCosts') ?? [],
+      priceLinesOff: jsonField(form, 'priceLinesOff') ?? [],
     },
     (dto) =>
       isNew
@@ -322,6 +324,7 @@ async function duplicate(api: ApiClient, id: string) {
         : {}),
       ...(p.priceOverride ? { priceOverride: p.priceOverride } : {}),
       extraCosts: p.extraCosts,
+      priceLinesOff: p.priceLinesOff,
     });
     if (created.ok) throw redirect(`/admin/products/${created.data.id}`);
     // The address is taken: try the next one.

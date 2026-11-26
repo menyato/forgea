@@ -43,6 +43,8 @@ export type {
 export {
   CUSTOM_REQUEST_STATUS_LABELS,
   isRequestExpired,
+  PRICE_LINES,
+  type PriceLine,
 } from './custom-requests.js';
 export {
   fillQuotationText,

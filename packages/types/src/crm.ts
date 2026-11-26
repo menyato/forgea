@@ -106,6 +106,11 @@ export interface QuotationLineView {
   size: { x: string; y: string; z: string } | null;
   /** Made from a 3MF (team views only; customers never get it). */
   printFile: PrintFile | null;
+  /**
+   * The line's 3D model: its uploaded file, else its product's model (null: neither). Browsers
+   * load only its compressed copy (`ModelViewer`), never the file itself.
+   */
+  model: string | null;
 }
 
 /** POST /quotations/print-file: a 3MF read for a quotation line. */

@@ -4,6 +4,8 @@ import {
   PERMISSIONS,
   PrintJobStatus,
   ProfitKind,
+  PRICE_LINES,
+  type PriceLine,
   Role,
 } from '@forgea/types';
 import { Type } from 'class-transformer';
@@ -308,6 +310,34 @@ export class QuoteCustomRequestDto {
   @IsString()
   @MaxLength(1000)
   note?: string;
+}
+
+/** A cost the owner adds to a request's price (USD, for the whole request). */
+export class AddedCostDto {
+  @Trim()
+  @IsString()
+  @MinLength(1, { message: 'Say what the cost is for' })
+  @MaxLength(80)
+  label!: string;
+
+  @Matches(MONEY_PATTERN, money)
+  amount!: string;
+}
+
+/** POST /custom-requests/:id/price: the shop's price with lines switched off and costs added. */
+export class RequestPriceDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(PRICE_LINES.map((l) => l.key), { each: true })
+  off: PriceLine[] = [];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => AddedCostDto)
+  added: AddedCostDto[] = [];
 }
 
 /** Declining (customer), cancelling (either side): a note the other side sees. */

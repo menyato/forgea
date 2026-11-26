@@ -351,4 +351,72 @@ describe('Easy pricing (e2e)', () => {
     const customer = await signedInAs(app, Role.CUSTOMER);
     await as(customer.cookie).post('/products/price-preview', ask).expect(403);
   });
+
+  it("a product may leave the shop's lines out (no packaging, at cost); only whoever manages pricing says so", async () => {
+    const designer = await signedInAs(app, Role.DESIGNER);
+    const ask = {
+      materialId: studio.material.id,
+      grams: '100',
+      printHours: '5',
+      priceLinesOff: ['packaging', 'profit'],
+    };
+    // 13.00 by the shop's rules, less packaging 0.50, and no profit.
+    const preview = (
+      await as(admin.cookie).post('/products/price-preview', ask).expect(200)
+    ).body as PricePreview;
+    expect(preview.unitPrice).toBe('12.50');
+    expect(preview.breakdown).toMatchObject({
+      packaging: '0.00',
+      labour: '0.50',
+      cost: '12.50',
+      profit: '0.00',
+    });
+
+    const product = (
+      await as(admin.cookie)
+        .get(`/products/manage/${studio.product.id}`)
+        .expect(200)
+    ).body as AdminProduct;
+    const saved = (
+      await as(admin.cookie)
+        .put(
+          `/products/${product.id}`,
+          asDto(product, { priceLinesOff: ['packaging'] }),
+        )
+        .expect(200)
+    ).body as AdminProduct;
+    expect(saved.priceLinesOff).toEqual(['packaging']);
+    // Unknown lines are refused.
+    await as(admin.cookie)
+      .put(
+        `/products/${product.id}`,
+        asDto(product, { priceLinesOff: ['tax'] }),
+      )
+      .expect(400);
+
+    // A designer isn't shown them, keeps them with their save, and may not change them.
+    const theirs = (
+      await as(designer.cookie)
+        .get(`/products/manage/${product.id}`)
+        .expect(200)
+    ).body as AdminProduct;
+    expect(theirs.priceLinesOff).toEqual([]);
+    await as(designer.cookie)
+      .put(`/products/${product.id}`, asDto(theirs))
+      .expect(200);
+    await as(designer.cookie)
+      .put(
+        `/products/${product.id}`,
+        asDto(theirs, { priceLinesOff: ['profit'] }),
+      )
+      .expect(403);
+    const after = (
+      await as(admin.cookie).get(`/products/manage/${product.id}`).expect(200)
+    ).body as AdminProduct;
+    expect(after.priceLinesOff).toEqual(['packaging']);
+    // Back as it was, for the other tests.
+    await as(admin.cookie)
+      .put(`/products/${product.id}`, asDto(after, { priceLinesOff: [] }))
+      .expect(200);
+  });
 });

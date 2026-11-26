@@ -30,7 +30,11 @@ export interface OptionEffect {
 
 export interface ConfiguredUnit {
   /** The print inputs after every option is applied, for the cost calculator. */
-  input: { grams: string; printHours: string; pricePerGram: string };
+  input: UnitCostInput & {
+    grams: string;
+    printHours: string;
+    pricePerGram: string;
+  };
   /** Sum of the options' fixed add-ons. */
   extraPrice: string;
 }
@@ -83,6 +87,8 @@ export function configureUnit(
       ...(base.wasteIncluded ? { wasteIncluded: true } : {}),
       // The product's extra parts: one set per piece, whatever the size or options.
       ...(base.extraCost !== undefined ? { extraCost: base.extraCost } : {}),
+      // The shop's lines the product leaves out (no packaging…).
+      ...(base.off?.length ? { off: base.off } : {}),
     },
     extraPrice: money(extra),
   };

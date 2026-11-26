@@ -1,6 +1,8 @@
 import type {
   CustomRequestView,
   PrintFile,
+  RequestPrice,
+  StaffCustomRequest,
   QuotationDetail,
   QuotationPrintFileView,
   StaffOrder,
@@ -9,6 +11,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { PrismaService } from '../src/database/prisma.service.js';
+import { modelVariantKey } from '@forgea/validation';
 import { Role } from '../src/generated/prisma/enums.js';
 import {
   CSRF,
@@ -167,6 +170,10 @@ describe('3MF quotations and custom requests (e2e)', () => {
     const line = created.lines[0]!.printFile as PrintFile;
     expect(line).toEqual(read.printFile);
 
+    // A draft's piece is the team's alone; once sent, anyone with its link sees it in 3D (its
+    // compressed copy), never the file.
+    const look = modelVariantKey(key, 'view');
+    await http().get(`/media/${look}`).expect(404);
     // The customer's view never carries the file.
     await s.post(`/quotations/${created.id}/send`).expect(200);
     const mine = (
@@ -175,6 +182,12 @@ describe('3MF quotations and custom requests (e2e)', () => {
         .expect(200)
     ).body as QuotationDetail;
     expect(mine.lines[0]!.printFile).toBeNull();
+    expect(mine.lines[0]!.model).toBe(key);
+    await http()
+      .get(`/media/${look}`)
+      .expect(200)
+      .expect('Content-Type', 'model/gltf-binary');
+    await http().get(`/media/${key}`).expect(404);
 
     // Confirmed: the order line keeps the file, production takes each colour × 3.
     await s.post(`/quotations/${created.id}/confirm`).expect(200);
@@ -341,6 +354,105 @@ describe('3MF quotations and custom requests (e2e)', () => {
       'IN_PRODUCTION',
     ]);
     expect(Object.values(await taken(item.id)).sort()).toEqual([-21, -5]);
+  });
+
+  it('the studio’s own 3MF prices the quote by the shop’s rules (lines off, costs added) and the order prints it', async () => {
+    const customer = await signedInCustomer(app);
+    const me = as(customer.cookie);
+    // The customer's project, never sliced (another printer's): it waits for the studio.
+    const theirs = (
+      await me
+        .upload(
+          '/custom-requests/files',
+          bambuThreeMf({ sliced: false }),
+          'mine.3mf',
+        )
+        .expect(201)
+    ).body.key as string;
+    const created = (
+      await me
+        .post('/custom-requests', {
+          title: 'Name tag',
+          description: 'White base, pink letters, two of them.',
+          quantity: 2,
+          fileKey: theirs,
+        })
+        .expect(201)
+    ).body as CustomRequestView;
+    expect(created.status).toBe('SUBMITTED');
+    const row = await prisma.customRequest.findUniqueOrThrow({
+      where: { requestNumber: created.requestNumber },
+    });
+
+    // The owner attaches the file they will print, sliced for their printer.
+    const admin = await signedInAs(app, Role.ADMIN);
+    const owner = as(admin.cookie);
+    const design = (
+      await owner
+        .upload(
+          `/custom-requests/${row.id}/design`,
+          bambuThreeMf({ sliced: true }),
+          'ours.gcode.3mf',
+        )
+        .expect(201)
+    ).body as StaffCustomRequest;
+    expect(design.printFigures).toMatchObject({
+      source: 'design',
+      sliced: true,
+      grams: '12.50',
+    });
+    const designKey = design.design!.key;
+
+    // By the shop's rules: the same price as the customer's own sliced file would get.
+    const shop = (
+      await owner.post(`/custom-requests/${row.id}/price`, {}).expect(200)
+    ).body as RequestPrice;
+    expect(shop.pieces).toBe(2);
+    expect(shop.lines.every((l) => l.on)).toBe(true);
+    expect(shop.price).toBe((Number(shop.unitPrice) * 2).toFixed(2));
+
+    // Packaging off and a key ring added: the cost is the lines left on plus the key ring.
+    const adjusted = (
+      await owner
+        .post(`/custom-requests/${row.id}/price`, {
+          off: ['packaging'],
+          added: [{ label: 'Key rings', amount: '1.00' }],
+        })
+        .expect(200)
+    ).body as RequestPrice;
+    const on = adjusted.lines
+      .filter((l) => l.on && l.key !== 'profit')
+      .reduce((n, l) => n + Number(l.amount), 0);
+    expect(Number(adjusted.subtotal)).toBeCloseTo(on + 1, 2);
+    expect(adjusted.lines.find((l) => l.key === 'packaging')!.on).toBe(false);
+    expect(adjusted.added).toEqual([{ label: 'Key rings', amount: '1.00' }]);
+    await owner
+      .post(`/custom-requests/${row.id}/price`, { off: ['tax'] })
+      .expect(400);
+    // The cost structure is for whoever manages pricing.
+    const staff = await signedInAs(app, Role.STAFF);
+    await as(staff.cookie)
+      .post(`/custom-requests/${row.id}/price`, {})
+      .expect(403);
+
+    await owner
+      .post(`/custom-requests/${row.id}/quote`, { price: adjusted.price })
+      .expect(200);
+    await me
+      .post(`/custom-requests/mine/${created.requestNumber}/accept`, {
+        ...checkoutForm(),
+        quotedPrice: adjusted.price,
+      })
+      .expect(201);
+    const order = await prisma.order.findFirstOrThrow({
+      where: { customRequest: { id: row.id } },
+      include: { items: true },
+    });
+    // The order prints the studio's file, both pieces.
+    expect(order.items[0]!.printFile).toMatchObject({
+      fileKey: designKey,
+      grams: '25.00',
+    });
   });
 
   it('a file never sliced gets a range and waits for the studio; so does a sliced one when the owner says so', async () => {

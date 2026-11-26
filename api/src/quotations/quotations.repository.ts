@@ -15,7 +15,11 @@ import { studioYear } from '../common/studio-day.js';
 const withDetail = {
   customer: { select: { id: true, email: true, name: true } },
   order: { select: { orderNumber: true } },
-  lines: { orderBy: { sortOrder: 'asc' } },
+  lines: {
+    orderBy: { sortOrder: 'asc' },
+    // Its look, shown to the customer when the line has no file of its own.
+    include: { product: { select: { modelFileKey: true } } },
+  },
   statusHistory: {
     orderBy: { changedAt: 'asc' },
     select: { status: true, changedAt: true, note: true },

@@ -28,6 +28,9 @@ model Product {
   /// Its own profit rule; both null = the shop's (Pricing page). Both or neither (CHECK).
   profitKind    ProfitKind?
   profitValue   Decimal?    @db.Decimal(10, 2)
+  /// The shop's price lines this product leaves out (PRICE_LINES keys in @forgea/types: no
+  /// packaging, no profit…); each counts 0 in its cost and price. Only known keys (CHECK).
+  priceLinesOff String[]    @default([])
   /// Its grams and printHours are its sliced 3MF's own (set by the API when they match the
   /// file): they already hold the purge, prime tower and supports, so no purge waste is added.
   slicedFile    Boolean     @default(false)

@@ -67,6 +67,9 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    packaging), profit and the price. **Use my own price** to set yours: options still add to it.
    **Add an extra cost** for parts besides the print (a key ring, a lamp's cable and bulb
    holder): it counts in what one piece costs you, so your profit applies to it too.
+   **The shop's rules this product counts**: all ticked by default; untick a line the product
+   doesn't take (Packaging for a piece sold without a box, Profit to sell at cost…). It counts
+   0 in its price and in its cost to make.
 6. Leave **Visible in the shop** off until it is ready; a product not in the shop can still be
    sold on a quotation. Tick **Studio only (never sold)** for private pieces and tests (the car
    logos): they are printed and costed, but never shown, quoted or ordered.
@@ -141,7 +144,9 @@ reel (buy it, or link the shop colour to a reel you have) or with too little lef
 order**: it opens as the order. To send a price first instead: Sales → **Quotations** →
 New. Pick the product (hidden ones say "not in the shop") or write a free line; **Unit price**
 is yours to change, higher or lower than the shop's: profit follows what you charge. Then
-**Send** it (the customer accepts online) or **Confirm: create the order** yourself.
+**Send** it (the customer accepts online) or **Confirm: create the order** yourself. The
+customer's quotation shows each piece in 3D: the file you uploaded for the line, else the
+product's model (also for products not in the shop); never the file itself.
 
 **Getting paid:** the order's **Invoices** panel: post the invoice, then **Record the payment**
 (cash or transfer). The Business page and the books follow.
@@ -151,7 +156,13 @@ priced as the shop prices a product (the same costs, profit and reels: each of i
 the reel of that colour), and customers see a range around that price (your spread, Payment,
 requests & emails). A sliced file uses the slicer's own grams and time and, if you allow it, is
 quoted at once at the price itself; customers never see your costs. Otherwise send your quote
-from the request.
+from the request. When their file isn't printable as it is (another printer's project, wrong
+colours), fix it, slice it in Bambu Studio for the X2D and add the sliced `.gcode.3mf` as **Our
+design**: the customer sees it with the quote, **What it takes** shows its grams and time, and
+the order prints from it. **Price by the shop's rules** (pricing.manage) prices it line by line:
+untick what this request doesn't take, **Add a cost** for anything extra (key rings, paint,
+delivery: before profit), **Work out the price**, then **Use this price in the quote** and send
+it, or change it first.
 
 **A free piece for a limited time** (a giveaway, e.g. a free mini keychain this week): Sales →
 **Free offers** → New offer. Pick the piece, write what the banner says (and a line under it),

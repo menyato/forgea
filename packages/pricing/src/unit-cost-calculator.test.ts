@@ -4,6 +4,7 @@ import {
   type CostSettings,
   type ProfitRule,
   UnitCostCalculator,
+  quoteWith,
 } from './unit-cost-calculator.js';
 
 const settings: CostSettings = {
@@ -240,5 +241,99 @@ describe('UnitCostCalculator', () => {
         () => new UnitCostCalculator({ ...settings, priceStep: '0' }),
       ).toThrow(/priceStep must be at least 0.01/);
     });
+  });
+});
+
+describe('quoteWith', () => {
+  const input = { grams: '120', printHours: '4.5', pricePerGram: '0.12' };
+
+  it('is the shop price per piece when nothing is adjusted', () => {
+    const calc = new UnitCostCalculator({ ...settings, priceStep: '1' });
+    const q = quoteWith(calc, input, 3);
+    const shop = calc.shopPrice(calc.price(input).unitPrice);
+    expect(q.unitPrice).toBe(shop);
+    expect(q.price).toBe((Number(shop) * 3).toFixed(2));
+    expect(q.lines.map((l) => l.key)).toEqual([
+      'material',
+      'machine',
+      'waste',
+      'failure',
+      'labor',
+      'packaging',
+      'profit',
+    ]);
+    expect(q.lines.every((l) => l.on)).toBe(true);
+    expect(q.lines[0]).toEqual({ key: 'material', amount: '43.20', on: true });
+  });
+
+  it('leaves switched-off lines out and adds costs before profit', () => {
+    const calc = new UnitCostCalculator(settings);
+    // one piece: material 14.40 + machine 45.00 + waste 2.97 + failure 5.94 (labour and
+    // packaging off) + added 10.00 = 78.31; profit 60 % = 46.986 → 125.296 → 125.30
+    const q = quoteWith(calc, input, 1, {
+      off: new Set(['labor', 'packaging']),
+      added: [{ label: 'Key ring', amount: '10' }],
+    });
+    expect(q.subtotal).toBe('78.31');
+    expect(q.profit).toBe('46.99');
+    expect(q.price).toBe('125.30');
+    expect(q.lines.find((l) => l.key === 'labor')).toMatchObject({
+      on: false,
+      amount: '5.00',
+    });
+    expect(q.added).toEqual([{ label: 'Key ring', amount: '10.00' }]);
+  });
+
+  it('charges cost only with profit off; a fixed profit is per piece', () => {
+    const calc = new UnitCostCalculator({
+      ...settings,
+      profit: { kind: 'FIXED', value: '4' },
+    });
+    const free = quoteWith(calc, input, 2, { off: new Set(['profit']) });
+    expect(free.profit).toBe('0.00');
+    expect(free.price).toBe('152.62'); // 76.31 × 2
+    const fixed = quoteWith(calc, input, 2, {
+      added: [{ label: 'Box', amount: '1' }],
+    });
+    expect(fixed.profit).toBe('8.00');
+    expect(fixed.price).toBe('161.62'); // (152.62 + 1 + 8) / 2 = 80.81 a piece
+  });
+
+  it('refuses a negative added cost and no pieces', () => {
+    const calc = new UnitCostCalculator(settings);
+    expect(() =>
+      quoteWith(calc, input, 1, { added: [{ label: 'x', amount: '-1' }] }),
+    ).toThrow(PricingError);
+    expect(() => quoteWith(calc, input, 0)).toThrow(PricingError);
+  });
+});
+
+describe('lines a piece leaves out (UnitCostInput.off)', () => {
+  const input = { grams: '120', printHours: '4.5', pricePerGram: '0.12' };
+
+  it('counts them 0 in its cost and price', () => {
+    const calc = new UnitCostCalculator(settings);
+    // 76.31 − labour 5 − packaging 3 = 68.31; × 1.6 = 109.296
+    const r = calc.price({ ...input, off: ['labor', 'packaging'] });
+    expect(r.laborCost).toBe('0.00');
+    expect(r.packagingCost).toBe('0.00');
+    expect(r.subtotal).toBe('68.31');
+    expect(r.unitPrice).toBe('109.30');
+    expect(calc.price({ ...input, off: ['profit'] }).unitPrice).toBe('76.31');
+  });
+
+  it('a quote shows them off and prices like the product', () => {
+    const calc = new UnitCostCalculator({ ...settings, priceStep: '1' });
+    const piece = { ...input, off: ['packaging'] as const };
+    const q = quoteWith(calc, { ...piece, off: [...piece.off] }, 2);
+    expect(q.lines.find((l) => l.key === 'packaging')).toEqual({
+      key: 'packaging',
+      amount: '6.00',
+      on: false,
+    });
+    const shop = calc.shopPrice(
+      calc.price({ ...input, off: ['packaging'] }).unitPrice,
+    );
+    expect(q.unitPrice).toBe(shop);
   });
 });

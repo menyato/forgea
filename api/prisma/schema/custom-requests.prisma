@@ -41,6 +41,10 @@ model CustomRequest {
   /// An attached 3MF: what one piece takes, per colour (PrintFile in @forgea/types), read by
   /// the API from the file. The order made from the request gets it, for the stock.
   printFile    Json?
+  /// The studio's design as a 3MF (its own file, e.g. sliced for the studio's printer): what one
+  /// piece takes, read by the API from that file. It prices the quote and, once accepted, the
+  /// order prints from it instead of the customer's file.
+  designPrintFile Json?
 
   /// The studio's quote (USD, for the whole request), and until when it can be accepted.
   quotedPrice    Decimal?  @db.Decimal(12, 2)

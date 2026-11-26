@@ -112,12 +112,8 @@ describe('Stage emails to the customer and the studio (e2e)', () => {
       .post(`/quotations/${accepted.id}/confirm`)
       .expect(200);
     const orderNumber = placed.body.orderNumber as string;
-    const order = await prisma.order.findUniqueOrThrow({
-      where: { orderNumber },
-    });
-    await as(staff.cookie)
-      .patch(`/orders/${order.id}/status`, { status: 'CONFIRMED' })
-      .expect(200);
+    // The studio's confirm makes the order Confirmed at once (the customer hears of it).
+    expect(placed.body.status).toBe('CONFIRMED');
 
     const mine = await subjects(email);
     expect(mine).toEqual(
@@ -168,9 +164,7 @@ describe('Stage emails to the customer and the studio (e2e)', () => {
     const order = await prisma.order.findUniqueOrThrow({
       where: { orderNumber: placed.body.orderNumber as string },
     });
-    await as(staff.cookie)
-      .patch(`/orders/${order.id}/status`, { status: 'CONFIRMED' })
-      .expect(200);
+    expect(order.status).toBe('CONFIRMED');
 
     const messages = await whatsappTo(app, number);
     expect(messages[0]).toMatchObject({

@@ -9,7 +9,11 @@ import type { Permission } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Upload } from '../generated/prisma/client.js';
 import { modelVariantKey, parseModelVariantKey } from '@forgea/validation';
-import { UploadStatus, type UploadPurpose } from '../generated/prisma/enums.js';
+import {
+  QuotationStatus,
+  UploadStatus,
+  type UploadPurpose,
+} from '../generated/prisma/enums.js';
 import { FileInspector } from './file-inspector.js';
 import { FileStorage } from './file-storage.js';
 import { isModelKey, ModelVariants } from './model-variants.js';
@@ -252,6 +256,18 @@ export class UploadsService {
             where: {
               active: true,
               OR: [{ modelFileKey: key }, { imageKeys: { has: key } }],
+            },
+          })) > 0) ||
+        // The look of a line on a quotation sent to a customer (its file or its product's
+        // model, shown or hidden in the shop): only its compressed copy, as the shop's.
+        (copy !== null &&
+          (await this.prisma.quotationLine.count({
+            where: {
+              quotation: { status: { not: QuotationStatus.DRAFT } },
+              OR: [
+                { printFile: { path: ['fileKey'], equals: key } },
+                { product: { modelFileKey: key } },
+              ],
             },
           })) > 0) ||
         // A font customers write in: the live preview loads it.

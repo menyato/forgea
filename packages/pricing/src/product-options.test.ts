@@ -100,6 +100,16 @@ describe('configuredUnitPrice', () => {
     // 100 g × 1.8 × $0.05 = $9 → ×2 markup = $18, + $2.50 silk = $20.50
     expect(configuredUnitPrice(calculator, base, [large, silk])).toBe('20.50');
   });
+
+  it('keeps the lines the product leaves out through its options', () => {
+    // profit off: $9 at cost, + $2.50 silk = $11.50
+    expect(
+      configuredUnitPrice(calculator, { ...base, off: ['profit'] }, [
+        large,
+        silk,
+      ]),
+    ).toBe('11.50');
+  });
 });
 
 describe('configuredUnitCost', () => {

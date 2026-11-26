@@ -6,6 +6,9 @@ import {
   OrderPricer,
   type OrderSettings,
   type PrinterCosts,
+  type QuoteAdjustments,
+  type QuoteBreakdown,
+  quoteWith,
   PricingError,
   printerHourlyRate,
   splitPrinterCost,
@@ -97,6 +100,15 @@ export class PricingService {
   ): Promise<string> {
     const calculator = await this.costCalculator();
     return calculator.shopPrice(calculator.price(input, profit).unitPrice);
+  }
+
+  /** A quote for `pieces` pieces by the shop's rules, with the owner's adjustments (`quoteWith`). */
+  async quote(
+    input: UnitCostInput,
+    pieces: number,
+    adjustments: QuoteAdjustments,
+  ): Promise<QuoteBreakdown> {
+    return quoteWith(await this.costCalculator(), input, pieces, adjustments);
   }
 
   /**

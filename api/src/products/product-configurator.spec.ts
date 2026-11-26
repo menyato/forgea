@@ -89,6 +89,7 @@ function product(): ConfigurableProduct {
     slicedFile: false,
     printFiles: [],
     extraCosts: [],
+    priceLinesOff: [],
     profitKind: null,
     profitValue: null,
     priceOverride: null,

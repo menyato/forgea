@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { ChosenOption, PrintFile } from '@forgea/types';
 import { PrismaService } from '../database/prisma.service.js';
-import { extraCostOf } from '../products/product-configurator.js';
+import {
+  extraCostOf,
+  priceLinesOffOf,
+} from '../products/product-configurator.js';
 import { OptionKind } from '../generated/prisma/enums.js';
 import type { UnitCostCalculator } from '@forgea/pricing';
 import { PricingService } from '../pricing/pricing.service.js';
@@ -131,6 +134,7 @@ export class ProductionEstimator {
             materialId: p.materialId,
             slicedFile: p.slicedFile,
             extraCost: extraCostOf(p),
+            priceLinesOff: priceLinesOffOf(p),
             colours: p.colours.map((c) => ({
               colour: c.colour,
               grams: c.grams.toString(),

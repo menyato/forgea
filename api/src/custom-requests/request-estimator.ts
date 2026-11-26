@@ -3,6 +3,9 @@ import {
   averagePricePerGram,
   estimatePrint,
   priceRange,
+  type QuoteAdjustments,
+  type QuoteBreakdown,
+  type UnitCostInput,
 } from '@forgea/pricing';
 import {
   type PrintFile,
@@ -122,30 +125,9 @@ export class RequestEstimator {
       }
       throw error;
     }
-    // Each colour at its filament's own price, as a product printed from those reels.
-    const reels = (await this.requests.filaments(material.id)).map((r) => ({
-      label: r.colour,
-      swatchHex: r.hex,
-      pricePerGram: r.pricePerGram?.toString() ?? null,
-    }));
-    const pricePerGram = averagePricePerGram(
-      material.pricePerGram.toString(),
-      printFile.colours.map((c) => ({
-        grams: c.grams,
-        pricePerGram:
-          (reels.length
-            ? startingChoice(reels, { colour: c.colour, hex: c.hex })
-                ?.pricePerGram
-            : null) ?? null,
-      })),
+    const unitPrice = await this.pricing.shopPrice(
+      await this.costInput(printFile, material),
     );
-    const unitPrice = await this.pricing.shopPrice({
-      grams: printFile.grams,
-      printHours: printFile.printHours,
-      pricePerGram,
-      // A sliced file's grams hold its purge, prime tower and supports already.
-      wasteIncluded: printFile.sliced,
-    });
     const cents = Math.round(Number(unitPrice) * 100) * quantity;
     const total = (cents / 100).toFixed(2);
     // A customer's file says what it likes about itself: its numbers price it at once only
@@ -163,6 +145,80 @@ export class RequestEstimator {
         material: { code: material.code, name: material.name },
       },
       printFile,
+    };
+  }
+
+  /**
+   * The studio's own 3MF for a request (its design, e.g. sliced for the studio's printer): what
+   * one piece takes, in the request's material. Null when it can't be read (it stays a preview).
+   */
+  async designPrintFile(
+    key: string,
+    materialId: string | null,
+  ): Promise<PrintFile | null> {
+    const material = await this.requests.materialFor(materialId);
+    if (!material) return null;
+    const { requests: rules } = await this.settings.get();
+    try {
+      return await this.files.printFile(
+        key,
+        material.id,
+        rules.estimateSolidityPercent,
+      );
+    } catch (error) {
+      if (error instanceof BadRequestException) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * The request priced by the shop's rules from a file's figures, for all its pieces, with the
+   * owner's lines switched off and costs added (`quoteWith`).
+   */
+  async price(
+    printFile: PrintFile,
+    pieces: number,
+    adjustments: QuoteAdjustments,
+  ): Promise<QuoteBreakdown> {
+    const material = await this.requests.materialFor(printFile.materialId);
+    if (!material) {
+      throw new BadRequestException('That material is not available');
+    }
+    return this.pricing.quote(
+      await this.costInput(printFile, material),
+      pieces,
+      adjustments,
+    );
+  }
+
+  /** One piece of a 3MF to price: its grams and time, each colour at its reel's own price. */
+  private async costInput(
+    printFile: PrintFile,
+    material: { id: string; pricePerGram: { toString(): string } },
+  ): Promise<UnitCostInput> {
+    // Each colour at its filament's own price, as a product printed from those reels.
+    const reels = (await this.requests.filaments(material.id)).map((r) => ({
+      label: r.colour,
+      swatchHex: r.hex,
+      pricePerGram: r.pricePerGram?.toString() ?? null,
+    }));
+    const pricePerGram = averagePricePerGram(
+      material.pricePerGram.toString(),
+      printFile.colours.map((c) => ({
+        grams: c.grams,
+        pricePerGram:
+          (reels.length
+            ? startingChoice(reels, { colour: c.colour, hex: c.hex })
+                ?.pricePerGram
+            : null) ?? null,
+      })),
+    );
+    return {
+      grams: printFile.grams,
+      printHours: printFile.printHours,
+      pricePerGram,
+      // A sliced file's grams hold its purge, prime tower and supports already.
+      wasteIncluded: printFile.sliced,
     };
   }
 
