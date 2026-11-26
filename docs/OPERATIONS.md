@@ -77,7 +77,13 @@ files, Photos, Personalised text, Size, each saying what it holds): click a titl
    (it settles where you let go). **Move** arrows shift it 1 mm (0.2 mm with **Fine**),
    **Centre** puts it in the middle of its face (across, up and down, or both), **Turn**
    turns it 15° or 90°. A place set on the model remembers the flat face under it: a longer
-   name is made smaller (and slides to where it fits best) so nothing hangs off the edge.
+   name is made smaller (and slides to where it fits best) so nothing hangs off the edge,
+   and what stands in front of it (a trophy's sculpture before its board). Then:
+   **From the edge (mm)** keeps it that far inside (e.g. 6 inside a trophy board's gold line);
+   **Gap (mm)** keeps it that far from the parts in front and from the text and logos above
+   it in the list (a name under a title); **Centred across where it sits** puts it in the
+   middle of the free space on its row. New places start centred with a 3 mm gap; after
+   changing a model, place them again so they see its new parts.
    **On the surface**: *Raised* stands out by the height you give; *Flush* is set into the
    print, level with it, in its own colour (an inlay: the slicer prints that part in its
    filament). A logo place can offer customers a choice: tick the logos under **Customers

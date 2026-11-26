@@ -472,6 +472,12 @@ export interface SlotPlacement {
    * Recorded when the owner clicks the place on the model; older slots have none.
    */
   face?: number[][];
+  /**
+   * What stands in front of that face (`inFrontAround`: other parts of the model, as a lawyer
+   * trophy's scales before its board), outlines in the same frame: text and logos keep the
+   * slot's `gapMm` from them. Recorded with the face; older slots have none.
+   */
+  blocked?: number[][];
 }
 
 export interface DesignSlot {
@@ -495,6 +501,22 @@ export interface DesignSlot {
    * overlap in the slot's filament).
    */
   relief?: SlotRelief;
+  /**
+   * On a recorded face: how far inside its edge the text or logo keeps, mm (inside a border
+   * line, say). Not set: `SLOT_LIMITS.defaultEdgeMm`.
+   */
+  edgeMm?: number;
+  /**
+   * On a recorded face: centred across the free part of its row (the face less what stands in
+   * front of it and the slots before it), wherever it was clicked along the row.
+   */
+  centred?: boolean;
+  /**
+   * On a recorded face: the gap it keeps from the slots listed before it on the same face, and
+   * from what stands in front of it (`placement.blocked`), mm. Not set: no gap from other
+   * slots (as before), and none beyond touching from what stands in front.
+   */
+  gapMm?: number;
   /** The colour it prints in: an option value id of the product's colour choices. */
   colour: string;
   /** Text: what it says until a customer changes it (may be empty: nothing shown). */
@@ -534,6 +556,10 @@ export const SLOT_LIMITS = {
   maxDepthMm: 10,
   maxWidthMm: 400,
   maxChars: 40,
+  defaultEdgeMm: 0.6,
+  maxEdgeMm: 30,
+  /** What the dashboard suggests for a new slot's gap, mm. */
+  suggestedGapMm: 3,
 } as const;
 
 /** What a slot shows for a choice: its text, font, whether it shows, its colour, its logo. */

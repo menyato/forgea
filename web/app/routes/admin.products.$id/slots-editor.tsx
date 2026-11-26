@@ -1,4 +1,8 @@
-import type { DesignSlot, SlotPlacement } from '@forgea/text3d/design';
+import {
+  type DesignSlot,
+  SLOT_LIMITS,
+  type SlotPlacement,
+} from '@forgea/text3d/design';
 import type {
   FontView,
   LogoDetail,
@@ -17,7 +21,10 @@ import {
 } from '~/features/model-viewer/model-viewer';
 
 type Box = ModelMeasurement['box'];
-type FaceAround = typeof import('@forgea/text3d').faceAround;
+type FaceTools = Pick<
+  typeof import('@forgea/text3d'),
+  'faceAround' | 'inFrontAround'
+>;
 type Vec = [number, number, number];
 
 /** Where text goes on each side of the model's box (the front faces the viewer: -Y). */
@@ -208,11 +215,15 @@ export function SlotsEditor({
     );
   }, []);
   // The flat face under a click is read with @forgea/text3d, loaded in the browser only.
-  const [faceAround, setFaceAround] = useState<FaceAround | null>(null);
+  const [faceTools, setFaceTools] = useState<FaceTools | null>(null);
   useEffect(() => {
     let live = true;
     void import('@forgea/text3d').then((m) => {
-      if (live) setFaceAround(() => m.faceAround);
+      if (live)
+        setFaceTools({
+          faceAround: m.faceAround,
+          inFrontAround: m.inFrontAround,
+        });
     });
     return () => {
       live = false;
@@ -233,18 +244,31 @@ export function SlotsEditor({
         normal,
         up: sameFace ? slot.placement.up : upFor(normal),
       };
-      // Its text and logo stay inside that face: nothing hangs off the edge of the print.
-      const face = done ? faceAround?.(pick.triangles(), placement) : undefined;
+      // Its text and logo stay inside that face (nothing hangs off the edge of the print), and
+      // clear of what stands in front of it (a trophy's sculpture before its board).
+      const triangles = done && faceTools ? pick.triangles() : undefined;
+      const face = triangles
+        ? faceTools!.faceAround(triangles, placement)
+        : undefined;
+      const blocked =
+        triangles && face
+          ? faceTools!.inFrontAround(triangles, placement, face)
+          : undefined;
       onChange(
         value.map((x) =>
           x.id === placing
-            ? { ...x, placement: face ? { ...placement, face } : placement }
+            ? {
+                ...x,
+                placement: face
+                  ? { ...placement, face, ...(blocked ? { blocked } : {}) }
+                  : placement,
+              }
             : x,
         ),
       );
       if (done) setPlacing(null);
     },
-    [placing, value, onChange, faceAround],
+    [placing, value, onChange, faceTools],
   );
 
   if (!modelKey)
@@ -267,6 +291,9 @@ export function SlotsEditor({
       heightMm: Math.max(5, Math.min(20, Math.round(smallest * 0.25))),
       maxWidthMm: Math.max(10, Math.round((b.max[0]! - b.min[0]!) * 0.8)),
       depthMm: 1,
+      // New places centre themselves and keep clear of other text and parts of the model.
+      centred: true,
+      gapMm: SLOT_LIMITS.suggestedGapMm,
       colour: colours[0]?.id ?? '',
       ...(kind === 'TEXT'
         ? { defaultText: '', maxChars: 12, defaultFontId: fonts[0]?.id ?? '' }
@@ -494,6 +521,38 @@ export function SlotsEditor({
               }
               hint="Longer text gets smaller to fit"
             />
+            {s.placement.face && (
+              <Field
+                label="From the edge (mm)"
+                name={`slot-edge-${s.id}`}
+                type="number"
+                min={0}
+                max={30}
+                step={0.5}
+                autoComplete="off"
+                value={s.edgeMm ?? SLOT_LIMITS.defaultEdgeMm}
+                onChange={(e) =>
+                  set(s.id, { edgeMm: Number(e.currentTarget.value) })
+                }
+                hint="It gets smaller to keep this far inside where it sits, e.g. inside a border"
+              />
+            )}
+            {s.placement.face && (
+              <Field
+                label="Gap (mm)"
+                name={`slot-gap-${s.id}`}
+                type="number"
+                min={0}
+                max={30}
+                step={0.5}
+                autoComplete="off"
+                value={s.gapMm ?? 0}
+                onChange={(e) =>
+                  set(s.id, { gapMm: Number(e.currentTarget.value) })
+                }
+                hint="From the text and logos above it in this list, and from parts of the model in front of it"
+              />
+            )}
             <SelectField
               label="On the surface"
               name={`slot-relief-${s.id}`}
@@ -525,6 +584,15 @@ export function SlotsEditor({
               }
             />
           </div>
+          {s.placement.face && (
+            <CheckboxField
+              label="Centred across where it sits"
+              name={`slot-centred-${s.id}`}
+              checked={s.centred ?? false}
+              onChange={(e) => set(s.id, { centred: e.currentTarget.checked })}
+              hint="In the middle of the free space on its row, wherever you placed it"
+            />
+          )}
           <CheckboxField
             label="Customers may change it"
             name={`slot-editable-${s.id}`}

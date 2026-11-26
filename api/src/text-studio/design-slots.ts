@@ -155,11 +155,17 @@ export class DesignSlots {
           ...(s.placement.face
             ? { face: checkedFace(s.label, s.placement.face) }
             : {}),
+          ...(s.placement.face && s.placement.blocked
+            ? { blocked: checkedFace(s.label, s.placement.blocked) }
+            : {}),
         },
         heightMm: s.heightMm,
         maxWidthMm: s.maxWidthMm,
         depthMm: s.depthMm,
         ...(s.relief === 'FLUSH' ? { relief: 'FLUSH' as const } : {}),
+        ...(s.edgeMm !== undefined ? { edgeMm: s.edgeMm } : {}),
+        ...(s.centred ? { centred: true } : {}),
+        ...(s.gapMm !== undefined ? { gapMm: s.gapMm } : {}),
         colour: s.colour,
         ...(s.kind === 'TEXT'
           ? {

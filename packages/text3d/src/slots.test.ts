@@ -6,6 +6,7 @@ import {
   buildSlots,
   designProblem,
   faceAround,
+  inFrontAround,
   KEYCHAIN_SHAPES,
   type DesignSlot,
   FontSet,
@@ -143,6 +144,155 @@ describe('a slot kept on its face', () => {
     expect(box.max.x).toBeLessThanOrEqual(15.5);
     expect(box.min.y).toBeGreaterThanOrEqual(0.5);
     expect(box.max.y).toBeLessThanOrEqual(5.5);
+  });
+
+  it('keeps the owner’s distance from the edge (inside a border round the face)', () => {
+    // A trophy's board, 60 x 40 mm, with a gold line 5 mm in: the name stays inside the line.
+    const board = {
+      origin: [30, 0, 30] as [number, number, number],
+      normal: [0, -1, 0] as [number, number, number],
+      up: [0, 0, 1] as [number, number, number],
+    };
+    const face = faceAround(boxTriangles([0, 0, 0], [60, 4, 40]), board)!;
+    const slot: DesignSlot = {
+      ...name,
+      placement: { ...board, face },
+      heightMm: 14,
+      maxWidthMm: 120,
+      edgeMm: 6,
+    };
+    const choice = { name: { text: 'Alexandra Montgomery' } };
+    const [kept] = buildSlots(fonts, [slot], choice, new Map());
+    const box = new Box3().setFromBufferAttribute(
+      kept!.geometry.getAttribute('position') as never,
+    );
+    expect(box.min.x).toBeGreaterThanOrEqual(5.8);
+    expect(box.max.x).toBeLessThanOrEqual(54.2);
+    expect(box.max.z).toBeLessThanOrEqual(34.2);
+    // Not set: the usual hair inside the edge, so the same name is larger.
+    const [plain] = buildSlots(
+      fonts,
+      [{ ...slot, edgeMm: undefined }],
+      choice,
+      new Map(),
+    );
+    const wide = new Box3().setFromBufferAttribute(
+      plain!.geometry.getAttribute('position') as never,
+    );
+    expect(wide.max.x - wide.min.x).toBeGreaterThan(box.max.x - box.min.x + 5);
+  });
+
+  describe('centred, and a gap from other text and from what stands in front', () => {
+    // A board 120 x 60 mm standing up, facing -Y (front at y = 0); a post 20 mm wide stands
+    // 10 mm in front of it, from the bottom to z = 40, at x 50-70.
+    const board = boxTriangles([0, 0, 0], [120, 6, 60]);
+    const post = boxTriangles([50, -16, 0], [70, -10, 40]);
+    const at = (x: number, z: number) => ({
+      origin: [x, 0, z] as [number, number, number],
+      normal: [0, -1, 0] as [number, number, number],
+      up: [0, 0, 1] as [number, number, number],
+    });
+    const boxOf = (b: { geometry: { getAttribute: (n: string) => unknown } }) =>
+      new Box3().setFromBufferAttribute(
+        b.geometry.getAttribute('position') as never,
+      );
+
+    it('centres across the face wherever it was clicked along the row', () => {
+      const place = at(95, 50);
+      const face = faceAround(board, place)!;
+      const slot: DesignSlot = {
+        ...name,
+        placement: { ...place, face },
+        heightMm: 8,
+        maxWidthMm: 200,
+        centred: true,
+      };
+      const [b] = buildSlots(
+        fonts,
+        [slot],
+        { name: { text: 'Sara' } },
+        new Map(),
+      );
+      const box = boxOf(b!);
+      expect((box.min.x + box.max.x) / 2).toBeCloseTo(60, 0);
+      // Not centred: where it was clicked, as before.
+      const [plain] = buildSlots(
+        fonts,
+        [{ ...slot, centred: undefined }],
+        { name: { text: 'Sara' } },
+        new Map(),
+      );
+      expect((boxOf(plain!).min.x + boxOf(plain!).max.x) / 2).toBeCloseTo(
+        95,
+        0,
+      );
+    });
+
+    it('records what stands in front of the face, and keeps the gap from it', () => {
+      const place = at(60, 36);
+      const all = [...board, ...post];
+      const face = faceAround(all, place)!;
+      const blocked = inFrontAround(all, place, face)!;
+      expect(blocked).toHaveLength(1);
+      const slot: DesignSlot = {
+        ...name,
+        placement: { ...place, face, blocked },
+        heightMm: 10,
+        maxWidthMm: 200,
+        centred: true,
+        gapMm: 3,
+      };
+      const [b] = buildSlots(
+        fonts,
+        [slot],
+        { name: { text: 'Alexandra' } },
+        new Map(),
+      );
+      const box = boxOf(b!);
+      // Above the post (z 40) by its gap, or beside it: never over it.
+      const overPost =
+        box.min.z < 43 - 0.2 && box.max.x > 47 + 0.2 && box.min.x < 73 - 0.2;
+      expect(overPost).toBe(false);
+    });
+
+    it('a later slot keeps its gap from the one before it on the same face', () => {
+      const face = faceAround(board, at(60, 30))!;
+      const first: DesignSlot = {
+        ...name,
+        id: 'first',
+        placement: { ...at(60, 34), face },
+        heightMm: 12,
+        maxWidthMm: 200,
+        centred: true,
+      };
+      const second: DesignSlot = {
+        ...name,
+        id: 'second',
+        placement: { ...at(60, 22), face },
+        heightMm: 12,
+        maxWidthMm: 200,
+        centred: true,
+        gapMm: 3,
+      };
+      const choices = {
+        first: { text: 'BEST TEACHER' },
+        second: { text: 'Jane Doe' },
+      };
+      const built = buildSlots(fonts, [first, second], choices, new Map());
+      const a = boxOf(built.find((x) => x.slotId === 'first')!);
+      const c = boxOf(built.find((x) => x.slotId === 'second')!);
+      expect(c.max.z).toBeLessThanOrEqual(a.min.z - 2.8);
+      // Without a gap set, they may touch as before.
+      const loose = buildSlots(
+        fonts,
+        [first, { ...second, gapMm: undefined }],
+        choices,
+        new Map(),
+      );
+      expect(
+        boxOf(loose.find((x) => x.slotId === 'second')!).max.z,
+      ).toBeGreaterThan(c.max.z);
+    });
   });
 
   it('a name clicked near the edge of a narrow face moves to where it fits largest', () => {

@@ -26,7 +26,7 @@ export {
   type BuiltSlot,
 } from './slots.js';
 export { boardLayout, boardShapes, type BoardShapes } from './board.js';
-export { faceAround } from './face.js';
+export { faceAround, inFrontAround } from './face.js';
 export { logoFromSvg, logoRegionsFromSvg, MAX_LOGO_POINTS } from './svg.js';
 export type { Region } from './outline.js';
 export { FontSet, fontScripts, type FontSource } from './shaper.js';

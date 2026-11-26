@@ -1,6 +1,7 @@
 import {
   differenceD,
   EndType,
+  intersectD,
   FillRule,
   inflatePathsD,
   JoinType,
@@ -41,6 +42,11 @@ export const difference = (
   cut: readonly Region[],
 ): Region[] =>
   fromPaths(differenceD(toPaths(from), toPaths(cut), FillRule.NonZero));
+
+export const intersection = (
+  a: readonly Region[],
+  b: readonly Region[],
+): Region[] => fromPaths(intersectD(toPaths(a), toPaths(b), FillRule.NonZero));
 
 /** The regions grown by `by` mm all round (rounded corners). */
 export const grown = (regions: readonly Region[], by: number): Region[] =>

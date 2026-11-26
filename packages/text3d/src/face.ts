@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { MAX_FACE_POINTS, type SlotPlacement } from './design.js';
+import { MAX_FACE_POINTS, SLOT_LIMITS, type SlotPlacement } from './design.js';
 import { difference, grown, union } from './clip.js';
 import {
   type Contour,
@@ -19,9 +19,8 @@ const FACE_ANGLE_COS = Math.cos((25 * Math.PI) / 180);
 const FACE_DEPTH_MM = 0.3;
 /** Nor anything further away than this along the surface, mm (big flat models stay quick). */
 const FACE_REACH_MM = 250;
-/** Text and logos keep this far inside the face's edge, mm. */
-const FACE_MARGIN_MM = 0.6;
-
+/** Parts of the model at most this far in front of a face hide part of it (a trophy's sculpture before its board), mm. */
+const FRONT_REACH_MM = 150;
 /** The slot's own frame: x along the text, y up the letters, z out of the surface. */
 export function slotFrame(p: SlotPlacement) {
   const n = new Vector3(...p.normal).normalize();
@@ -93,31 +92,129 @@ export function faceAround(
 }
 
 /**
- * The slot's face laid flat in its own frame (its outer edge), less the margin: what its text
- * or logo must stay inside. Null when the slot has none recorded.
+ * What stands in front of a face (`faceAround`'s): every part of the model between a hair and
+ * `FRONT_REACH_MM` in front of it, seen straight on and joined, where it covers the face; the
+ * outlines in the model file's frame, as the face's. Undefined when nothing does.
+ */
+export function inFrontAround(
+  positions: ArrayLike<number>,
+  placement: SlotPlacement,
+  face: readonly (readonly number[])[],
+): number[][] | undefined {
+  const { origin, r, u, n } = slotFrame(placement);
+  const flatFace = flatten(placement, face);
+  const fb = boundsOfContours(flatFace);
+  if (!fb) return undefined;
+  const a = new Vector3();
+  const triangles: Region[] = [];
+  for (let i = 0; i + 8 < positions.length; i += 9) {
+    const flat: Point[] = [];
+    let near = Infinity;
+    let behind = false;
+    for (let k = 0; k < 9; k += 3) {
+      a.set(
+        positions[i + k]!,
+        positions[i + k + 1]!,
+        positions[i + k + 2]!,
+      ).sub(origin);
+      const d = a.dot(n);
+      if (d <= FACE_DEPTH_MM) behind = true;
+      near = Math.min(near, d);
+      flat.push([a.dot(r), a.dot(u)]);
+    }
+    if (behind || near > FRONT_REACH_MM) continue;
+    const xs = flat.map((p) => p[0]);
+    const ys = flat.map((p) => p[1]);
+    if (Math.max(...xs) < fb.minX || Math.min(...xs) > fb.maxX) continue;
+    if (Math.max(...ys) < fb.minY || Math.min(...ys) > fb.maxY) continue;
+    if (Math.abs(signedArea(flat)) < 1e-4) continue;
+    triangles.push({ outer: flat, holes: [] });
+  }
+  if (triangles.length === 0) return undefined;
+  // Solid as seen from the face (a pan's open ring still hides the board behind it).
+  const shapes = grown(grown(union(triangles), 0.05), -0.05).map(
+    (g) => g.outer,
+  );
+  const contours = shapes
+    .map((k) => thinned(k, 0.4))
+    .filter((k) => k.length >= 3);
+  const total = contours.reduce((s, k) => s + k.length, 0);
+  const step = Math.ceil(total / MAX_FACE_POINTS);
+  const lift = ([x, y]: Point) => {
+    const p = origin.clone().addScaledVector(r, x).addScaledVector(u, y);
+    return [round(p.x), round(p.y), round(p.z)];
+  };
+  const out = contours
+    .map((k) => (step > 1 ? k.filter((_, i) => i % step === 0) : k))
+    .filter((k) => k.length >= 3)
+    // The largest first: the stored count is capped (see the API's check).
+    .sort((p, q) => Math.abs(signedArea(q)) - Math.abs(signedArea(p)))
+    .slice(0, MAX_FACE_CONTOURS)
+    .map((k) => k.flatMap(lift));
+  return out.length ? out : undefined;
+}
+
+/** Most outlines a face or what stands in front of it keeps. */
+const MAX_FACE_CONTOURS = 16;
+
+/** Contours stored in the model's frame (x, y, z, …), laid flat in the slot's frame. */
+function flatten(
+  placement: SlotPlacement,
+  contours: readonly (readonly number[])[],
+): Contour[] {
+  const { origin, r, u } = slotFrame(placement);
+  const p = new Vector3();
+  return contours
+    .map((k) => {
+      const out: Point[] = [];
+      for (let i = 0; i + 2 < k.length; i += 3) {
+        p.set(k[i]!, k[i + 1]!, k[i + 2]!).sub(origin);
+        out.push([p.dot(r), p.dot(u)]);
+      }
+      return out;
+    })
+    .filter((k) => k.length >= 3);
+}
+
+function boundsOfContours(contours: readonly Contour[]) {
+  const pts = contours.flat();
+  if (pts.length === 0) return null;
+  const xs = pts.map((q) => q[0]);
+  const ys = pts.map((q) => q[1]);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+/**
+ * The slot's face laid flat in its own frame (its outer edge), less `edgeMm` all round and
+ * less what stands in front of it (`blocked`) grown by `gapMm`: what its text or logo must
+ * stay inside. Null when the slot has none recorded.
  */
 export function faceRegions(
   placement: SlotPlacement,
   face: readonly (readonly number[])[] | undefined,
+  edgeMm: number = SLOT_LIMITS.defaultEdgeMm,
+  gapMm = 0,
 ): Region[] | null {
   if (!face || face.length === 0) return null;
-  const { origin, r, u } = slotFrame(placement);
-  const p = new Vector3();
-  const contours: Contour[] = face.map((k) => {
-    const out: Point[] = [];
-    for (let i = 0; i + 2 < k.length; i += 3) {
-      p.set(k[i]!, k[i + 1]!, k[i + 2]!).sub(origin);
-      out.push([p.dot(r), p.dot(u)]);
-    }
-    return out;
-  });
   // Its outer edge only: a groove, a bolt or a hole inside it is shallow detail the raised
   // letters can cross; only the edge would leave them hanging in the air.
-  const outer = regionsOf(contours.filter((k) => k.length >= 3)).map((g) => ({
+  const outer = regionsOf(flatten(placement, face)).map((g) => ({
     outer: g.outer,
     holes: [],
   }));
-  const inside = grown(outer, -FACE_MARGIN_MM);
+  let inside = grown(outer, -edgeMm);
+  if (placement.blocked?.length && inside.length) {
+    const blocked = flatten(placement, placement.blocked).map((k) => ({
+      outer: k,
+      holes: [],
+    }));
+    inside = difference(inside, gapMm > 0 ? grown(blocked, gapMm) : blocked);
+  }
   return inside.length ? inside : null;
 }
 

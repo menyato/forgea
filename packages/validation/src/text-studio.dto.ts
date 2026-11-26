@@ -380,6 +380,13 @@ export class SlotPlacementDto {
   @ArrayMaxSize(16)
   @IsArray({ each: true })
   face?: number[][];
+
+  /** What stands in front of that area (@forgea/text3d `inFrontAround`); checked by the API. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(16)
+  @IsArray({ each: true })
+  blocked?: number[][];
 }
 
 /** Text or a logo added to a product's model (see @forgea/text3d DesignSlot). */
@@ -454,6 +461,27 @@ export class DesignSlotDto {
   @IsOptional()
   @IsIn(SLOT_RELIEFS)
   relief?: SlotRelief;
+
+  /** How far inside the edge of the place it sits on it keeps (inside a border line). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, mm)
+  @Min(0, mm)
+  @Max(30, mm)
+  edgeMm?: number;
+
+  /** Centred across the free part of its row on the face. */
+  @IsOptional()
+  @IsBoolean()
+  centred?: boolean;
+
+  /** The gap it keeps from the slots before it and from what stands in front of it. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, mm)
+  @Min(0, mm)
+  @Max(30, mm)
+  gapMm?: number;
 
   /** Logo: the studio's logos customers may pick from. */
   @IsOptional()
