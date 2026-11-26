@@ -15,4 +15,6 @@ export default defineConfig({
     include: ["@forgea/text3d > clipper2-ts"],
   },
   build: { target: "es2022" },
+  // Workers (the design slots' fitting) are ES modules: they load HarfBuzz and three.js lazily.
+  worker: { format: "es" },
 });

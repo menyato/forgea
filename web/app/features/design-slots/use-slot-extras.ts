@@ -2,10 +2,12 @@ import type { SlotChoice } from '@forgea/text3d/design';
 import type { ProductSlotsOffer } from '@forgea/types';
 import { useEffect, useState } from 'react';
 import type { ModelExtra } from '~/features/model-viewer/model-viewer';
+import { geometryOf, text3d } from '~/features/text3d-worker/text3d.client';
 
 /**
- * A product's text and logos, as chosen, ready to show on its model: made in the browser a
- * moment after the last change (three.js and the fonts load only then, only in the browser).
+ * A product's text and logos, as chosen, ready to show on its model: made a moment after the
+ * last change, in the text studio's worker (fitting them to their faces can take a second on
+ * a phone, and typing must not wait for it), only in the browser.
  */
 export function useSlotExtras(
   offer: ProductSlotsOffer | null,
@@ -23,28 +25,27 @@ export function useSlotExtras(
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      import('./slot-geometry.client')
-        .then(({ buildOfferSlots }) =>
-          buildOfferSlots(
-            offer,
-            JSON.parse(key)[1] as Record<string, SlotChoice>,
-          ),
-        )
-        .then(({ problem, built }) => {
+      text3d({
+        kind: 'slots',
+        offer,
+        choices: JSON.parse(key)[1] as Record<string, SlotChoice>,
+      })
+        .then(async ({ problem, solids }) => {
+          if (cancelled) return;
+          const hex = new Map(offer.colours.map((c) => [c.id, c.swatchHex]));
+          const extras = await Promise.all(
+            solids.map(async (s) => ({
+              geometry: await geometryOf(s),
+              color: hex.get(s.colour) ?? '#888888',
+            })),
+          );
           if (cancelled) {
-            for (const b of built) b.geometry.dispose();
+            for (const e of extras) e.geometry.dispose();
             return;
           }
-          const hex = new Map(offer.colours.map((c) => [c.id, c.swatchHex]));
           setState((old) => {
             for (const e of old.extras) e.geometry.dispose();
-            return {
-              problem,
-              extras: built.map((b) => ({
-                geometry: b.geometry,
-                color: hex.get(b.colour) ?? '#888888',
-              })),
-            };
+            return { problem, extras };
           });
         })
         .catch((error: unknown) => {

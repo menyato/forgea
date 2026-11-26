@@ -1,4 +1,3 @@
-import { boardLayout, boardShapes, designProblem } from '@forgea/text3d';
 import {
   type BoardItem,
   boardReachMm,
@@ -6,7 +5,7 @@ import {
 } from '@forgea/text3d/design';
 import type { ProductTextOffer, TextDesignInput } from '@forgea/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fontsFor } from './font-set.client';
+import { text3d } from '~/features/text3d-worker/text3d.client';
 import { settingsOf } from './text-settings';
 
 /** Within this many mm of the middle, an item snaps to it (and a guide shows). */
@@ -56,44 +55,21 @@ export default function BoardCanvas({
   const reach = boardReachMm(settings);
   const key = JSON.stringify(design);
   const [drawn, setDrawn] = useState<Drawn | null>(null);
-  const logos = useMemo(
-    () => new Map(offer.logos.map((l) => [l.id, l])),
-    [offer.logos],
-  );
 
   useEffect(() => {
     let cancelled = false;
     const d = JSON.parse(key) as TextDesignInput;
+    // A moment after the last change, in the text studio's worker (typing never waits).
     const timer = setTimeout(() => {
-      const ids = [
-        d.fontId,
-        ...(d.accentFontId ? [d.accentFontId] : []),
-        ...(d.items ?? []).flatMap((i) => i.fontId ?? []),
-      ];
-      fontsFor(offer.fonts, ids)
-        .then((set) => {
+      text3d({ kind: 'board', offer, design: d })
+        .then(({ problem, base, items }) => {
           if (cancelled) return;
-          const problem = designProblem(set, d, settings);
           onProblem(problem);
           if (problem) return;
-          const layout = boardLayout(set, d, settings, logos);
-          const base = layout.parts
-            .filter((p) => p.colour === d.textColour && p.z0 <= 0)
-            .flatMap((p) => p.regions);
-          // Each item at the middle: the screen moves it, so a drag reshapes nothing.
-          const still = boardShapes(
-            set,
-            {
-              ...d,
-              items: (d.items ?? []).map((i) => ({ ...i, x: 0, y: 0 })),
-            },
-            settings,
-            logos,
-          );
           const shapes = new Map(
-            still.items.map((i) => [
-              i.id,
-              { regions: i.regions, box: boxOf(i.regions) },
+            items.map(([id, regions]) => [
+              id,
+              { regions, box: boxOf(regions) },
             ]),
           );
           // The piece and everything on it, square, with room around to drag into.
@@ -139,7 +115,7 @@ export default function BoardCanvas({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [key, offer.fonts, settings, logos, onProblem]);
+  }, [key, offer, onProblem]);
 
   const hex = useMemo(
     () => new Map(offer.colours.map((c) => [c.id, c.swatchHex ?? '#888888'])),

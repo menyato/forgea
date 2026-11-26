@@ -53,3 +53,26 @@ export const grown = (regions: readonly Region[], by: number): Region[] =>
   fromPaths(
     inflatePathsD(toPaths(regions), by, JoinType.Round, EndType.Polygon),
   );
+
+/** Regions ready for Clipper, oriented once: to test many moves of the same outline. */
+export const clipperPaths = (regions: readonly Region[]): PathsD =>
+  toPaths(regions);
+
+/**
+ * The area of `from` left outside `cut`, both already Clipper paths (`clipperPaths`): the same
+ * figure `difference` and an area sum give, without turning the result back into regions.
+ */
+export function areaOutside(from: PathsD, cut: PathsD): number {
+  let area = 0;
+  for (const p of differenceD(from, cut, FillRule.NonZero)) {
+    if (p.length < 3) continue;
+    // As `signedArea` works it out.
+    let a = 0;
+    for (let i = 0; i < p.length; i++) {
+      const q = p[(i + 1) % p.length]!;
+      a += p[i]!.x * q.y - q.x * p[i]!.y;
+    }
+    area += a / 2;
+  }
+  return Math.abs(area);
+}

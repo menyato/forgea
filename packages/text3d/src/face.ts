@@ -218,25 +218,9 @@ export function faceRegions(
   return inside.length ? inside : null;
 }
 
-/** Whether `regions` lie inside `face` (nothing more than a speck sticks out). */
-export function fitsInside(
-  regions: readonly Region[],
-  face: readonly Region[],
-): boolean {
-  return areaOf(difference(regions, face)) < 0.05;
-}
+/** What may stick out of a face and still count as inside it: a speck (mm², `slots.ts`). */
+export const FITS_WITHIN_MM2 = 0.05;
 
-function areaOf(regions: readonly Region[]): number {
-  return regions.reduce(
-    (s, g) =>
-      s +
-      Math.abs(signedArea(g.outer)) -
-      g.holes.reduce((h, k) => h + Math.abs(signedArea(k)), 0),
-    0,
-  );
-}
-
-/** Points closer than `min` to the last one kept are dropped. */
 function thinned(k: Contour, min: number): Contour {
   const out: Point[] = [];
   for (const p of k) {

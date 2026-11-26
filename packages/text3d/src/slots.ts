@@ -7,8 +7,15 @@ import {
   slotState,
   slotTextProblem,
 } from './design.js';
-import { difference, grown, intersection, union } from './clip.js';
-import { faceRegions, fitsInside, slotFrame } from './face.js';
+import {
+  areaOutside,
+  clipperPaths,
+  difference,
+  grown,
+  intersection,
+  union,
+} from './clip.js';
+import { faceRegions, FITS_WITHIN_MM2, slotFrame } from './face.js';
 import { partGeometry, volumeMm3 } from './geometry.js';
 import {
   boundsOf,
@@ -210,13 +217,34 @@ function slotRegions(
     return (span.minX + span.maxX) / 2;
   };
   if (face && slot.centred) dx = across(0, k, 0);
-  if (face && !fitsInside(at(regions, k), face)) {
+  // Whether the outline, at this size where it is now (dx, dy), fits on the face: the test the
+  // search below repeats hundreds of times, so both outlines are Clipper paths once, each move
+  // maps the points as `at` does, and a test already made is remembered.
+  const facePaths = face && clipperPaths(face);
+  const unitPaths = face && clipperPaths(regions);
+  const tested = new Map<string, boolean>();
+  const fits = (s: number): boolean => {
+    const key = `${s} ${dx} ${dy}`;
+    let ok = tested.get(key);
+    if (ok === undefined) {
+      const moved = unitPaths!.map((path) =>
+        path.map(({ x, y }) => ({
+          x: (x - cx) * s + dx,
+          y: (y - cy) * s + dy,
+        })),
+      );
+      ok = areaOutside(moved, facePaths!) < FITS_WITHIN_MM2;
+      tested.set(key, ok);
+    }
+    return ok;
+  };
+  if (face && !fits(k)) {
     const largest = (ox: number, oy: number, steps: number) => {
       [dx, dy] = [ox, oy];
       let [lo, hi] = [0, k];
       for (let i = 0; i < steps; i++) {
         const mid = (lo + hi) / 2;
-        if (fitsInside(at(regions, mid), face)) lo = mid;
+        if (fits(mid)) lo = mid;
         else hi = mid;
       }
       return lo;
@@ -237,6 +265,12 @@ function slotRegions(
             ? across(y, best.s, fb.minX + ((i + 0.5) / n) * (fb.maxX - fb.minX))
             : fb.minX + ((i + 0.5) / n) * (fb.maxX - fb.minX);
           if (!face.some((g) => pointInPolygon([x, y], g.outer))) continue;
+          // Only a spot where it fits clearly bigger can win: one test at that size rules the
+          // others out (the search stays under k, so past k none can).
+          const clearly = best.s * 1.08;
+          if (clearly >= k) continue;
+          [dx, dy] = [x, y];
+          if (!fits(clearly)) continue;
           const s = largest(x, y, 10);
           // A clearly better spot only: the owner's click wins a near tie.
           if (s > best.s * 1.08) best = { s, x, y };

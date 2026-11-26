@@ -1,5 +1,5 @@
 import { renderer } from '~/features/model-viewer/three-console.client';
-import { buildDesign, type BuiltDesign, designProblem } from '@forgea/text3d';
+import type { BuiltDesign } from '@forgea/text3d';
 import type {
   DesignMeasurement,
   ProductTextOffer,
@@ -10,8 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box3, Color, PerspectiveCamera, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Plate, StudioLight } from '~/features/model-viewer/model-scene.client';
-import { fontsFor } from './font-set.client';
-import { settingsOf } from './text-settings';
+import { geometryOf, text3d } from '~/features/text3d-worker/text3d.client';
 import { useSceneColors } from '~/features/model-viewer/theme-colors';
 
 /**
@@ -41,27 +40,27 @@ export default function TextPreview({
   useEffect(() => {
     let cancelled = false;
     const d = JSON.parse(key) as TextDesignInput;
-    // A moment after the last keystroke.
+    // A moment after the last keystroke, in the text studio's worker (typing never waits).
     const timer = setTimeout(() => {
-      const ids = [
-        d.fontId,
-        ...(d.accentFontId ? [d.accentFontId] : []),
-        ...(d.letters ?? []).flatMap((l) => l.fontId ?? []),
-        ...(d.items ?? []).flatMap((i) => i.fontId ?? []),
-      ];
-      fontsFor(offer.fonts, ids)
-        .then((set) => {
+      text3d({ kind: 'design', offer, design: d })
+        .then(async ({ problem, solids, size }) => {
           if (cancelled) return;
-          const settings = settingsOf(offer, d.heightMm);
-          const problem = designProblem(set, d, settings);
           onProblem(problem);
-          if (problem) return;
-          const next = buildDesign(
-            set,
-            d,
-            settings,
-            new Map(offer.logos.map((l) => [l.id, l])),
-          );
+          if (problem || !size) return;
+          const next: BuiltDesign = {
+            parts: await Promise.all(
+              solids.map(async (s) => ({
+                colour: s.colour,
+                geometry: await geometryOf(s),
+                volumeMm3: s.volumeMm3 ?? 0,
+              })),
+            ),
+            size,
+          };
+          if (cancelled) {
+            for (const p of next.parts) p.geometry.dispose();
+            return;
+          }
           setBuilt((old) => {
             for (const p of old?.parts ?? []) p.geometry.dispose();
             return next;
@@ -71,7 +70,7 @@ export default function TextPreview({
               colour: p.colour,
               volumeMm3: p.volumeMm3,
             })),
-            size: { x: next.size.x, y: next.size.y, z: next.size.z },
+            size: { x: size.x, y: size.y, z: size.z },
           });
         })
         .catch((error: unknown) => {

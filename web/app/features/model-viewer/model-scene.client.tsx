@@ -6,7 +6,13 @@ import {
   useLoader,
   useThree,
 } from '@react-three/fiber';
-import { type MutableRefObject, useEffect, useMemo, useRef } from 'react';
+import {
+  type MutableRefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box3,
   BufferGeometry,
@@ -107,6 +113,30 @@ function Stl({
   );
 }
 
+/**
+ * Whether the model's shaders are ready: compiled in the background (`compileAsync`) before it
+ * joins the scene, so its first frame never stops the page while the GPU compiles them (a
+ * second or more for a big assembled piece). Where that can't be done, at once.
+ */
+function useCompiled(model: Object3D): boolean {
+  const { gl, camera, scene, invalidate } = useThree();
+  const [ready, setReady] = useState<Object3D | null>(null);
+  useEffect(() => {
+    let off = false;
+    gl.compileAsync(model, camera, scene)
+      .catch(() => undefined)
+      .finally(() => {
+        if (off) return;
+        setReady(model);
+        invalidate();
+      });
+    return () => {
+      off = true;
+    };
+  }, [gl, camera, scene, model, invalidate]);
+  return ready === model;
+}
+
 function Glb({
   src,
   paintable,
@@ -147,9 +177,12 @@ function Glb({
     // glTF is in metres; printing (and the estimate) works in millimetres.
     onMeasured?.(measure(model, 1000));
   }, [model, onMeasured]);
+  const compiled = useCompiled(model);
   return (
     <Framed object={model} spin={spin} controlsRef={controls}>
-      <primitive object={model} onClick={picker(onPick, 1000)} {...drag} />
+      {compiled && (
+        <primitive object={model} onClick={picker(onPick, 1000)} {...drag} />
+      )}
       {/* glTF is in metres: the extras, in millimetres, shrink to match. */}
       <Extras extras={extras} scale={0.001} />
     </Framed>
