@@ -295,12 +295,22 @@ export default function QuotationPage({ loaderData }: Route.ComponentProps) {
               : 'For anyone with an email address: sending it emails the full quotation with a link to accept it online. Prices in USD, taxes included, like the shop.'
         }
         action={
-          <Link
-            to="/admin/quotations"
-            className="text-sm underline underline-offset-4"
-          >
-            All quotations
-          </Link>
+          <span className="flex flex-wrap gap-4">
+            {q && (
+              <Link
+                to={`/admin/quotations/${q.id}/preview`}
+                className="text-sm underline underline-offset-4"
+              >
+                See it as the customer
+              </Link>
+            )}
+            <Link
+              to="/admin/quotations"
+              className="text-sm underline underline-offset-4"
+            >
+              All quotations
+            </Link>
+          </span>
         }
       />
       {q && prefill.notOrdered && (

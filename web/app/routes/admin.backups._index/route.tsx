@@ -1,4 +1,5 @@
 import type { BackupItem, BackupsView } from '@forgea/types';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import { BackupKeepDto, RestoreBackupDto } from '@forgea/validation';
 import { useEffect, useState } from 'react';
 import { useFetcher, useRevalidator } from 'react-router';
@@ -286,26 +287,16 @@ function BackupRow({
         {newest ? (
           <span className="text-xs text-text-muted">Newest: always kept</span>
         ) : (
-          <fetcher.Form
-            method="post"
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  `Delete the backup of ${when(item.createdAt)}? It can't be undone.`,
-                )
-              )
-                e.preventDefault();
-            }}
-          >
+          <fetcher.Form method="post">
             <input type="hidden" name="intent" value="delete" />
             <input type="hidden" name="file" value={item.file} />
-            <Button
-              type="submit"
-              variant="quiet"
+            <ConfirmButton
               disabled={disabled || fetcher.state !== 'idle'}
+              question={`Delete the backup of ${when(item.createdAt)}? It can't be undone.`}
+              yes="Yes, delete it"
             >
               Delete
-            </Button>
+            </ConfirmButton>
           </fetcher.Form>
         )}
       </div>

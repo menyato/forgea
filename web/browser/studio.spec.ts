@@ -13,10 +13,6 @@ test.skip(({ isMobile }) => isMobile, 'Studio journeys: one run is enough');
 const tag = () =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-/** Answers the next confirm() dialog. */
-const answer = (page: Page, accept: boolean) =>
-  page.once('dialog', (d) => void (accept ? d.accept() : d.dismiss()));
-
 test('a lead from first contact to a confirmed order, for someone without an account', async ({
   page,
   context,
@@ -110,6 +106,13 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await expect(page.getByRole('button', { name: 'Send it again' })).toBeVisible(
     { timeout: 15_000 },
   );
+  // The studio sees it as the customer does: the lines, without their buttons.
+  await page.getByRole('link', { name: 'See it as the customer' }).click();
+  await expect(page.getByText('Twist vase in sand').first()).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Accept and place the order' }),
+  ).toHaveCount(0);
+  await page.getByRole('link', { name: 'Back to the quotation' }).click();
   const mail = await lastEmailTo(email);
   expect(mail).toContain('Twist vase in sand');
   expect(mail).toContain('9 × 9 × 18 cm');
@@ -149,13 +152,14 @@ test('a lead from first contact to a confirmed order, for someone without an acc
   await page.getByLabel('Unit price').fill('18');
   await page.getByRole('button', { name: 'Create the quotation' }).click();
   await expect(page).toHaveURL(/\/admin\/quotations\/[0-9a-f-]{36}$/);
-  answer(page, false);
+  // Cancelling asks on the page first: "No" keeps it, "Yes" cancels.
   await page.getByRole('button', { name: 'Cancel the quotation' }).click();
+  await page.getByRole('button', { name: 'No, keep it' }).click();
   await expect(
     page.getByRole('button', { name: 'Cancel the quotation' }),
   ).toBeVisible();
-  answer(page, true);
   await page.getByRole('button', { name: 'Cancel the quotation' }).click();
+  await page.getByRole('button', { name: 'Yes, cancel it' }).click();
   await expect(
     page.getByRole('region', { name: 'Next' }).getByText('Cancelled.'),
   ).toBeVisible();
@@ -250,13 +254,13 @@ test('a custom piece: deposit, production, pickup, then a credit note; the custo
   ).toBeVisible();
 
   // The piece came back broken: the final invoice is credited, after "are you sure".
-  answer(page, true);
   // Oldest first: the last one is the final invoice.
   const creditFor = page.getByLabel('Credit note for');
   await creditFor.selectOption({
     index: (await creditFor.locator('option').count()) - 1,
   });
   await page.getByRole('button', { name: 'Issue a credit note' }).click();
+  await page.getByRole('button', { name: 'Yes, issue it' }).click();
   await expect(
     invoices.getByRole('row', { name: /Credit note/ }),
   ).toBeVisible();

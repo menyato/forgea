@@ -28,6 +28,7 @@ export function QuotationDocument({
   result,
   error,
   signInNote,
+  preview = false,
 }: {
   quotation: QuotationDetail;
   deliveryFee: string | null;
@@ -36,6 +37,8 @@ export function QuotationDocument({
   error: string | null | undefined;
   /** Shown under the button when accepting needs an account first. */
   signInNote?: string | undefined;
+  /** The dashboard's "See it as the customer": the same page without their buttons. */
+  preview?: boolean;
 }) {
   const store = useRouteLoaderData<typeof rootLoader>('root')?.store ?? null;
   const accepting = useNavigation().state === 'submitting';
@@ -48,7 +51,7 @@ export function QuotationDocument({
       />
     );
   }
-  const open = q.status === QuotationStatus.SENT && !q.expired;
+  const open = !preview && q.status === QuotationStatus.SENT && !q.expired;
   const toPay = (Number(q.total) + Number(deliveryFee ?? 0)).toFixed(2);
   const shown = q.lines.filter(
     (l): l is typeof l & { model: string } => l.model !== null,

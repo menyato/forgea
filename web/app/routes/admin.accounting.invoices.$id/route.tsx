@@ -1,4 +1,5 @@
 import type { InvoiceListItem, JournalEntryView } from '@forgea/types';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import { InvoiceDatesDto } from '@forgea/validation';
 import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -208,18 +209,14 @@ function DraftActions({ invoice: i }: { invoice: InvoiceListItem }) {
         <Button type="submit" name="intent" value="post">
           Post it
         </Button>
-        <Button
-          type="submit"
+        <ConfirmButton
           name="intent"
           value="discard"
-          variant="quiet"
-          onClick={(e) => {
-            if (!window.confirm('Discard this draft invoice?'))
-              e.preventDefault();
-          }}
+          question="Discard this draft invoice?"
+          yes="Yes, discard it"
         >
           Discard the draft
-        </Button>
+        </ConfirmButton>
       </fetcher.Form>
       <SaveStatus state={fetcher.state} result={fetcher.data} />
     </Panel>

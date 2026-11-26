@@ -5,6 +5,7 @@ import {
   type RequestPrice,
   type StaffCustomRequest,
 } from '@forgea/types';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import {
   CloseCustomRequestDto,
   QuoteCustomRequestDto,
@@ -130,12 +131,20 @@ export default function RequestAdmin({ loaderData }: Route.ComponentProps) {
         title={r.title}
         intro={`${r.requestNumber} · ${r.expired ? 'Quote expired' : CUSTOM_REQUEST_STATUS_LABELS[r.status].title} · ${new Date(r.createdAt).toLocaleString('en-GB')}`}
         action={
-          <Link
-            to="/admin/requests"
-            className="text-sm underline underline-offset-4"
-          >
-            All requests
-          </Link>
+          <span className="flex flex-wrap gap-4">
+            <Link
+              to={`/admin/requests/${r.id}/preview`}
+              className="text-sm underline underline-offset-4"
+            >
+              See it as the customer
+            </Link>
+            <Link
+              to="/admin/requests"
+              className="text-sm underline underline-offset-4"
+            >
+              All requests
+            </Link>
+          </span>
         }
       />
       <StatusBar
@@ -327,28 +336,22 @@ function CancelForm() {
   const fetcher = useFetcher<SaveResult>();
   return (
     <Panel title="Can't make it?">
-      <fetcher.Form
-        method="post"
-        className="grid gap-3"
-        onSubmit={(e) => {
-          // Final: the customer is told and can no longer accept a quote.
-          if (!window.confirm('Cancel this request? The customer is told.'))
-            e.preventDefault();
-        }}
-      >
+      <fetcher.Form method="post" className="grid gap-3">
         <input type="hidden" name="intent" value="cancel" />
         <TextAreaField
           label="Why (the customer sees this)"
           name="note"
           rows={2}
         />
-        <Button
-          type="submit"
+        {/* Final: the customer is told and can no longer accept a quote. */}
+        <ConfirmButton
           variant="secondary"
           disabled={fetcher.state !== 'idle'}
+          question="Cancel this request? The customer is told."
+          yes="Yes, cancel it"
         >
           Cancel the request
-        </Button>
+        </ConfirmButton>
         <SaveStatus state={fetcher.state} result={fetcher.data} />
       </fetcher.Form>
     </Panel>

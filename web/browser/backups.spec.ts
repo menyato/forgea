@@ -88,12 +88,11 @@ test('how many to keep is saved; delete and back up now are asked for', async ({
     JSON.parse(await readFile(join(ROOT, 'requests', 'settings.json'), 'utf8')),
   ).toEqual({ keep: 7 });
 
-  page.once('dialog', (d) => void d.accept());
-  await page
+  const made = page
     .getByRole('listitem')
-    .filter({ hasText: 'Made with "Back up now"' })
-    .getByRole('button', { name: 'Delete' })
-    .click();
+    .filter({ hasText: 'Made with "Back up now"' });
+  await made.getByRole('button', { name: 'Delete' }).click();
+  await made.getByRole('button', { name: 'Yes, delete it' }).click();
   await expect(
     page.getByText('The server is about to start what you asked for…'),
   ).toBeVisible();

@@ -4,6 +4,7 @@ import {
   type PrintJobListItem,
   PrintJobStatus,
 } from '@forgea/types';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import { UpdatePrintJobDto } from '@forgea/validation';
 import { Link, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -449,18 +450,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
         )}
         {mayWork && canFail && (
           <Panel title="It failed">
-            <failed.Form
-              method="post"
-              className="grid gap-3 sm:grid-cols-2"
-              onSubmit={(e) => {
-                if (
-                  !window.confirm(
-                    'Mark this print as failed? Its filament leaves stock.',
-                  )
-                )
-                  e.preventDefault();
-              }}
-            >
+            <failed.Form method="post" className="grid gap-3 sm:grid-cols-2">
               <input type="hidden" name="intent" value="fail" />
               <Field
                 label="Grams lost (empty: the estimate)"
@@ -488,13 +478,13 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 />
               </div>
               <div className="flex items-center gap-3 sm:col-span-2">
-                <Button
-                  type="submit"
-                  variant="quiet"
+                <ConfirmButton
                   disabled={failed.state !== 'idle'}
+                  question="Mark this print as failed? Its filament leaves stock."
+                  yes="Yes, it failed"
                 >
                   Mark as failed
-                </Button>
+                </ConfirmButton>
                 <SaveStatus state={failed.state} result={failed.data} />
               </div>
             </failed.Form>

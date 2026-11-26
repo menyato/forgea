@@ -56,6 +56,16 @@ test('a customer asks for something custom, the studio quotes it, the customer o
     .fill('Printed in PETG for strength.');
   await admin.getByRole('button', { name: 'Send the quote' }).click();
   await expect(saved(admin)).toBeVisible();
+  // The studio sees the page as the customer will: the quote, without their buttons.
+  await admin.getByRole('link', { name: 'See it as the customer' }).click();
+  await expect(
+    admin.getByText('Printed in PETG for strength.').first(),
+  ).toBeVisible();
+  await expect(admin.getByText('$30.00').first()).toBeVisible();
+  await expect(
+    admin.getByRole('button', { name: 'Decline the quote' }),
+  ).toHaveCount(0);
+  await admin.getByRole('link', { name: 'Back to the request' }).click();
 
   // 3. The customer sees it and accepts: an order awaiting the 50% deposit.
   await page.goto(requestUrl);

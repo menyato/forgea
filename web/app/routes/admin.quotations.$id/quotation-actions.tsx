@@ -2,6 +2,7 @@ import { type QuotationDetail, QuotationStatus } from '@forgea/types';
 import { useEffect } from 'react';
 import { data, Link, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import { Field, SelectField } from '~/components/ui/field';
 import { Panel, SaveStatus } from '~/features/admin/admin-ui';
 import type { QuotationLookup } from '../admin.quotations.lookup/route';
@@ -69,20 +70,16 @@ export function QuotationActions({
           >
             Confirm: create the order
           </Button>
-          <Button
-            type="submit"
+          {/* Cancelled is final (the customer's link stops working): ask first. */}
+          <ConfirmButton
             name="intent"
             value="cancel"
-            variant="quiet"
             disabled={fetcher.state !== 'idle'}
-            onClick={(e) => {
-              // Cancelled is final (the customer's link stops working): ask first.
-              if (!window.confirm(`Cancel quotation ${q.number}?`))
-                e.preventDefault();
-            }}
+            question={`Cancel quotation ${q.number}?`}
+            yes="Yes, cancel it"
           >
             Cancel the quotation
-          </Button>
+          </ConfirmButton>
         </fetcher.Form>
       ) : q.status === QuotationStatus.CONFIRMED && q.orderId ? (
         <div className="grid gap-3">
@@ -98,23 +95,15 @@ export function QuotationActions({
           </p>
           {mayManage && (
             <fetcher.Form method="post">
-              <Button
-                type="submit"
+              <ConfirmButton
                 name="intent"
                 value="cancel"
-                variant="quiet"
                 disabled={fetcher.state !== 'idle'}
-                onClick={(e) => {
-                  if (
-                    !window.confirm(
-                      `Cancel quotation ${q.number} and its order ${q.orderNumber}? The customer is told.`,
-                    )
-                  )
-                    e.preventDefault();
-                }}
+                question={`Cancel quotation ${q.number} and its order ${q.orderNumber}? The customer is told.`}
+                yes="Yes, cancel both"
               >
                 Cancel the quotation and its order
-              </Button>
+              </ConfirmButton>
             </fetcher.Form>
           )}
         </div>

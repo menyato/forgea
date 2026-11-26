@@ -1,4 +1,5 @@
 import type { StaffOrder } from '@forgea/types';
+import { ConfirmButton } from '~/components/ui/confirm-button';
 import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
@@ -198,14 +199,6 @@ export function InvoicesPanel({
         <fetcher.Form
           method="post"
           className="flex flex-wrap items-end gap-3 border-t border-border pt-4"
-          onSubmit={(e) => {
-            if (
-              !window.confirm(
-                'Issue a credit note? It cancels the whole invoice in the books and cannot be undone.',
-              )
-            )
-              e.preventDefault();
-          }}
         >
           <input type="hidden" name="intent" value="credit-note" />
           <SelectField label="Credit note for" name="invoiceId">
@@ -215,9 +208,13 @@ export function InvoicesPanel({
               </option>
             ))}
           </SelectField>
-          <Button type="submit" variant="secondary">
+          <ConfirmButton
+            variant="secondary"
+            question="Issue a credit note? It cancels the whole invoice in the books and cannot be undone."
+            yes="Yes, issue it"
+          >
             Issue a credit note
-          </Button>
+          </ConfirmButton>
         </fetcher.Form>
       )}
       <SaveStatus state={fetcher.state} result={fetcher.data} />
