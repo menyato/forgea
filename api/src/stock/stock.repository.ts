@@ -66,6 +66,18 @@ export interface NewMovement {
   createdById?: string | null;
 }
 
+/** A movement on a reel the team picked (`recordOnReels`). */
+export interface ReelMovement {
+  stockItemId: string;
+  kind: StockMovementKind;
+  /** Signed: + in, − out. */
+  grams: number;
+  orderItemId?: string | null;
+  costPerGram?: Prisma.Decimal | string | null;
+  note?: string | null;
+  createdById?: string | null;
+}
+
 export interface StockRow {
   id: string;
   materialId: string;
@@ -112,6 +124,19 @@ export class StockRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The stock line for a material and colour, created on first use with the material's limit. */
+  /** The stock line of this material and colour, if the shelf has one (never adds it). */
+  async existingItem(
+    db: Prisma.TransactionClient | PrismaService,
+    materialId: string,
+    colour: string,
+  ): Promise<string | null> {
+    const found = await db.stockItem.findUnique({
+      where: { materialId_colour: { materialId, colour } },
+      select: { id: true },
+    });
+    return found?.id ?? null;
+  }
+
   async itemFor(
     tx: Prisma.TransactionClient,
     materialId: string,
@@ -167,6 +192,27 @@ export class StockRepository {
     }
     if (data.length)
       await tx.stockMovement.createMany({ data, skipDuplicates: true });
+  }
+
+  /** Movements on reels already known (picked by the team), not found by material and colour. */
+  async recordOnReels(
+    tx: Prisma.TransactionClient,
+    movements: readonly ReelMovement[],
+  ): Promise<void> {
+    if (movements.length === 0) return;
+    await tx.stockMovement.createMany({
+      data: movements.map((m) => ({
+        stockItemId: m.stockItemId,
+        kind: m.kind,
+        grams: m.grams,
+        orderItemId: m.orderItemId ?? null,
+        costPerGram: m.costPerGram ?? null,
+        note: m.note ?? null,
+        createdById: m.createdById ?? null,
+      })),
+      // An order line already taken from a reel is not taken again (running twice is safe).
+      skipDuplicates: true,
+    });
   }
 
   /** Every stock line with what is on the shelf and what went out in the last 30 and 90 days. */

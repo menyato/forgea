@@ -19,6 +19,9 @@ class FakeSettingsRepository extends PricingSettingsRepository {
       rushFeePercent: '30',
       deliveryFee: '25',
       depositPercent: '50',
+      depositEnabled: true,
+      depositAboveTotal: '30',
+      depositOnCustom: false,
       bulkDiscountTiers: [{ minQuantity: 10, percent: '5' }],
     },
     printer: null,
@@ -60,6 +63,9 @@ describe('PricingService', () => {
     expect(Object.keys(pub).sort()).toEqual([
       'bulkDiscountTiers',
       'deliveryFee',
+      'depositAboveTotal',
+      'depositEnabled',
+      'depositOnCustom',
       'depositPercent',
       'rushFeePercent',
     ]);

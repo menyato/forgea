@@ -69,6 +69,9 @@ export class PricingService {
         rushFeePercent: dto.rushFeePercent,
         deliveryFee: dto.deliveryFee,
         depositPercent: dto.depositPercent,
+        depositEnabled: dto.depositEnabled,
+        depositAboveTotal: dto.depositAboveTotal ?? null,
+        depositOnCustom: dto.depositOnCustom,
         bulkDiscountTiers: tiers.map((t) => ({
           minQuantity: t.minQuantity,
           percent: t.percent,

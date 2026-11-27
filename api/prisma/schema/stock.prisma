@@ -31,6 +31,7 @@ model StockItem {
   /// The shop's colours printed from this filament.
   optionValues   OptionValue[]
   printJobs      PrintJob[]
+  lineFilaments  OrderItemFilament[]
 
   @@unique([materialId, colour])
   @@map("stock_items")

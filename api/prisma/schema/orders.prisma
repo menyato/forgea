@@ -108,6 +108,9 @@ model OrderItem {
   stockMovements StockMovement[]
   printJobs      PrintJob[]
   piece          Piece?
+  /// The reels each colour of its 3MF prints from, picked by the team before it goes into
+  /// production (required then); its stock is taken from them.
+  filaments      OrderItemFilament[]
 
   /// Claimed free under this offer (its unit price is 0); counts toward the offer's claims.
   freeOfferId String?    @db.Uuid
@@ -142,4 +145,21 @@ model OrderSequence {
   last Int @default(0)
 
   @@map("order_sequences")
+}
+
+/// A 3MF order line's colour and the reel from stock it prints from. Picked on the order page
+/// before production (the order can't go into production without one per colour); stock is
+/// taken from it, and a later change moves what was taken (recorded as stock movements).
+model OrderItemFilament {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  orderItemId String    @db.Uuid
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  /// The colour as the line's file names it (PrintFile colours[].colour).
+  colour      String
+  stockItemId String    @db.Uuid
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+
+  @@unique([orderItemId, colour])
+  @@index([stockItemId])
+  @@map("order_item_filaments")
 }

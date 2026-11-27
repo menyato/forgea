@@ -1,5 +1,6 @@
 import type {
   CustomRequestView,
+  OrderFilaments,
   PrintFile,
   RequestPrice,
   StaffCustomRequest,
@@ -20,7 +21,7 @@ import {
   signedInCustomer,
 } from './commerce-helpers.js';
 import { createApp } from './create-app.js';
-import { createStudio, moveOrder } from './studio-helpers.js';
+import { createStudio, moveOrder, pickReels } from './studio-helpers.js';
 import { bambuThreeMf } from './three-mf-file.js';
 
 const checkoutForm = () => ({
@@ -197,14 +198,50 @@ describe('3MF quotations and custom requests (e2e)', () => {
     });
     const item = order.items[0]!;
     expect(item.printFile).toEqual(read.printFile);
-    await moveOrder(app, staff.cookie, order.id, [
-      'CONFIRMED',
-      'IN_PRODUCTION',
-    ]);
+    await moveOrder(app, staff.cookie, order.id, ['CONFIRMED']);
+    // Not into production before each colour of the file has its reel.
+    const refused = await http()
+      .patch(`/orders/${order.id}/status`)
+      .set(CSRF)
+      .set('Cookie', staff.cookie)
+      .send({ status: 'IN_PRODUCTION' })
+      .expect(400);
+    expect(refused.body.message).toMatch(/Pick the reel for .+ first/);
+    await pickReels(app, staff.cookie, order.id);
+    await moveOrder(app, staff.cookie, order.id, ['IN_PRODUCTION']);
     expect(await taken(item.id)).toEqual({
       [line.colours[0]!.colour]: -31,
       [line.colours[1]!.colour]: -7,
     });
+
+    // Printed from other reels after all: each colour's take moves to its new reel (the same
+    // two movements, re-pointed), and no filament is ever added by the site.
+    const reels = await prisma.stockItem.count();
+    const picks = (
+      await as(staff.cookie).get(`/orders/${order.id}/filaments`).expect(200)
+    ).body as OrderFilaments;
+    const [first, second] = picks.lines[0]!.colours;
+    await as(staff.cookie)
+      .put(`/orders/${order.id}/filaments`, {
+        lines: [
+          {
+            orderItemId: item.id,
+            colours: [
+              { colour: first!.colour, stockItemId: second!.stockItemId },
+              { colour: second!.colour, stockItemId: first!.stockItemId },
+            ],
+          },
+        ],
+      })
+      .expect(200);
+    expect(await taken(item.id)).toEqual({
+      [line.colours[0]!.colour]: -7,
+      [line.colours[1]!.colour]: -31,
+    });
+    expect(
+      await prisma.stockMovement.count({ where: { orderItemId: item.id } }),
+    ).toBe(2);
+    expect(await prisma.stockItem.count()).toBe(reels);
 
     const view = (await s.get(`/orders/${order.id}`).expect(200))
       .body as StaffOrder;
@@ -349,10 +386,9 @@ describe('3MF quotations and custom requests (e2e)', () => {
     // One line for the whole request: the file's grams for both pieces.
     expect(item.printFile).toMatchObject({ fileKey: key, grams: '25.00' });
     const staff = await signedInAs(app, Role.STAFF);
-    await moveOrder(app, staff.cookie, order.id, [
-      'CONFIRMED',
-      'IN_PRODUCTION',
-    ]);
+    await moveOrder(app, staff.cookie, order.id, ['CONFIRMED']);
+    await pickReels(app, staff.cookie, order.id);
+    await moveOrder(app, staff.cookie, order.id, ['IN_PRODUCTION']);
     expect(Object.values(await taken(item.id)).sort()).toEqual([-21, -5]);
   });
 

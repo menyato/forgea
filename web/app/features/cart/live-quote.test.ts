@@ -6,6 +6,9 @@ const settings = {
   rushFeePercent: '30',
   deliveryFee: '5',
   depositPercent: '50',
+  depositEnabled: true,
+  depositAboveTotal: null,
+  depositOnCustom: true,
   bulkDiscountTiers: [{ minQuantity: 10, percent: '5' }],
 };
 const currencies: CurrencyQuote[] = [

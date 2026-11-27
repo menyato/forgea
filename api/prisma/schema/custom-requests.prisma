@@ -36,11 +36,11 @@ model CustomRequest {
   designPreviewKey String?
 
   /// Instant estimate (USD, all units) computed by the API from an attached STL. A snapshot.
-  estimateLow  Decimal? @db.Decimal(12, 2)
-  estimateHigh Decimal? @db.Decimal(12, 2)
+  estimateLow     Decimal? @db.Decimal(12, 2)
+  estimateHigh    Decimal? @db.Decimal(12, 2)
   /// An attached 3MF: what one piece takes, per colour (PrintFile in @forgea/types), read by
   /// the API from the file. The order made from the request gets it, for the stock.
-  printFile    Json?
+  printFile       Json?
   /// The studio's design as a 3MF (its own file, e.g. sliced for the studio's printer): what one
   /// piece takes, read by the API from that file. It prices the quote and, once accepted, the
   /// order prints from it instead of the customer's file.

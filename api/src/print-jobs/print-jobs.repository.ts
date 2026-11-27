@@ -614,7 +614,10 @@ export class PrintJobsRepository {
         productId: true,
         options: true,
         design: true,
+        // A 3MF line's estimate comes from its file; its reels from the team's picks.
+        printFile: true,
         quantity: true,
+        filaments: { select: { colour: true, stockItemId: true } },
       },
     });
   }
@@ -629,16 +632,13 @@ export class PrintJobsRepository {
     return printers.length === 1 ? printers[0]!.id : null;
   }
 
+  /** The shelf's stock line of this material and colour, or null (a run never adds one). */
   reelFor(
-    tx: Prisma.TransactionClient | PrismaService,
+    db: Prisma.TransactionClient | PrismaService,
     materialId: string,
     colour: string,
   ) {
-    return this.stock.itemFor(
-      tx as Prisma.TransactionClient,
-      materialId,
-      colour,
-    );
+    return this.stock.existingItem(db, materialId, colour);
   }
 
   /**

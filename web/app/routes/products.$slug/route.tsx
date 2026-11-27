@@ -33,6 +33,7 @@ import {
   slotChoicesJson,
 } from '~/features/design-slots/slot-inputs';
 import { useSlotExtras } from '~/features/design-slots/use-slot-extras';
+import { depositRule } from '~/features/orders/deposit-rule';
 
 export function meta({ loaderData: d, matches }: Route.MetaArgs) {
   if (!d) return [{ title: 'Product not found — Forgea' }];
@@ -64,7 +65,7 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     lbp: currencies.ok
       ? (currencies.data.find((c) => c.code === 'LBP') ?? null)
       : null,
-    depositPercent: settings.ok ? settings.data.depositPercent : null,
+    deposit: settings.ok ? depositRule(settings.data) : null,
   };
 }
 
@@ -144,7 +145,7 @@ export default function ProductPage({ loaderData }: Route.ComponentProps) {
 function CatalogProduct({
   product,
   lbp,
-  depositPercent,
+  deposit,
 }: Route.ComponentProps['loaderData']) {
   const root = useRouteLoaderData<typeof rootLoader>('root');
   const store = root?.store ?? null;
@@ -338,12 +339,7 @@ function CatalogProduct({
               ≈ <Money amount={lbpPrice} currency={lbp} /> each
             </p>
           )}
-          {product.isCustom && depositPercent && (
-            <p className="text-sm">
-              Made to order: a {Number(depositPercent)}% deposit starts
-              production.
-            </p>
-          )}
+          {deposit && <p className="text-sm">{deposit}</p>}
           {priceError && <p className="text-sm text-danger">{priceError}</p>}
         </div>
 

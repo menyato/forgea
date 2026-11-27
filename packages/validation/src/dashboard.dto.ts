@@ -118,6 +118,22 @@ export class UpdatePricingSettingsDto {
   @Matches(PERCENT_PATTERN, percent)
   depositPercent!: string;
 
+  /** Off: no order pays a deposit. */
+  @Type(() => Boolean)
+  @IsBoolean()
+  depositEnabled: boolean = true;
+
+  /** Orders above this (USD) pay the deposit on their items; none: no amount rule. */
+  @IsOptional()
+  @Matches(MONEY_PATTERN, money)
+  @Matches(/[1-9]/, { message: 'Enter an amount above 0, or leave it empty' })
+  depositAboveTotal?: string;
+
+  /** Made-to-order lines always pay the deposit on themselves. */
+  @Type(() => Boolean)
+  @IsBoolean()
+  depositOnCustom: boolean = false;
+
   @IsArray()
   @ArrayMaxSize(10)
   @ValidateNested({ each: true })

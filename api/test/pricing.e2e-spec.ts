@@ -23,6 +23,9 @@ describe('Pricing (e2e)', () => {
     expect(Object.keys(res.body as object).sort()).toEqual([
       'bulkDiscountTiers',
       'deliveryFee',
+      'depositAboveTotal',
+      'depositEnabled',
+      'depositOnCustom',
       'depositPercent',
       'rushFeePercent',
     ]);

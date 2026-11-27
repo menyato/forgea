@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -16,6 +17,7 @@ import type {
   CheckoutResult,
   CustomerOrder,
   ReorderResult,
+  OrderFilaments,
   OrderListItem,
   OrderRemovalPreview,
   Page,
@@ -28,6 +30,7 @@ import {
   MyOrdersQuery,
   OrderListQuery,
   RemoveTestOrderDto,
+  SaveOrderFilamentsDto,
 } from '@forgea/validation';
 import type { Request, Response } from 'express';
 import type { OrderStatus } from '../generated/prisma/enums.js';
@@ -39,6 +42,7 @@ import {
   CurrentUser,
   RequirePermission,
 } from '../authorization/decorators.js';
+import { OrderFilamentsService } from './order-filaments.service.js';
 import { OrderRemoval } from './order-removal.service.js';
 import { CartCookie } from '../cart/cart-cookie.js';
 import { THROTTLE } from '../security/throttle-policies.js';
@@ -69,6 +73,7 @@ export class OrdersController {
     private readonly cartCookie: CartCookie,
     private readonly reorders: ReorderService,
     private readonly removal: OrderRemoval,
+    private readonly filaments: OrderFilamentsService,
   ) {}
 
   /** The order pipeline for staff and admins. */
@@ -144,6 +149,28 @@ export class OrdersController {
     @CallerPermissions() permissions: Permission[],
   ): Promise<StaffOrder> {
     return this.orders.detail(id, permissions.includes('invoices.view'));
+  }
+
+  /** Its 3MF lines' colours and the reels they print from (null: not picked yet). */
+  @RequirePermission('orders.manage')
+  @Get(':id/filaments')
+  filamentsOf(@Param('id', ParseUUIDPipe) id: string): Promise<OrderFilaments> {
+    return this.filaments.get(id);
+  }
+
+  /**
+   * Picks the reels its 3MF lines' colours print from (each the filament the file was sliced
+   * for); after its stock was taken, the difference moves to them. Audit-logged.
+   */
+  @RequirePermission('orders.manage')
+  @Audit({ action: 'order.filaments', targetType: 'Order' })
+  @Put(':id/filaments')
+  saveFilaments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveOrderFilamentsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<OrderFilaments> {
+    return this.filaments.save(id, dto, user.id);
   }
 
   /** Staff move an order along its status flow. Audit-logged; history written by the database. */

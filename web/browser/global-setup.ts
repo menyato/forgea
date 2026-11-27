@@ -27,7 +27,8 @@ export default function globalSetup(): void {
     {
       cwd: api,
       env,
-      input: 'UPDATE "pricing_settings" SET "priceStep" = 0.01 WHERE "id" = 1;',
+      input:
+        'UPDATE "pricing_settings" SET "priceStep" = 0.01, "depositOnCustom" = true, "depositAboveTotal" = NULL WHERE "id" = 1;',
       stdio: ['pipe', 'inherit', 'inherit'],
     },
   );

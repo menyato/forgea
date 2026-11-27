@@ -209,8 +209,40 @@ export interface PrintFile {
   sliced: boolean;
   grams: string;
   printHours: string;
-  /** Each colour as the shop names it (its stock line), the file's #rrggbb and its grams. */
-  colours: { colour: string; hex: string; grams: string }[];
+  /**
+   * Each colour as the shop names it (its stock line), the file's #rrggbb and its grams, and
+   * the filament it was sliced for (PLA, PETG…) when the file says (files read since
+   * 2026-11-27).
+   */
+  colours: { colour: string; hex: string; grams: string; type?: string }[];
+}
+
+/**
+ * GET /orders/:id/filaments: an order's lines made from a 3MF, each colour of the file and the
+ * reel the team picked to print it from (null: not picked yet; the order can't go into
+ * production until every colour has one).
+ */
+export interface OrderFilaments {
+  /** The reels may still change (until the order is ready). */
+  editable: boolean;
+  /** Every colour has its reel: the order may go into production. */
+  complete: boolean;
+  lines: {
+    orderItemId: string;
+    name: string;
+    quantity: number;
+    colours: {
+      colour: string;
+      hex: string;
+      /** All the line's pieces take this much of it. */
+      grams: string;
+      /** The filament the file was sliced for, when it says. */
+      type: string | null;
+      stockItemId: string | null;
+      /** A reel that matches by material and name, offered first. */
+      suggestedId: string | null;
+    }[];
+  }[];
 }
 
 /**

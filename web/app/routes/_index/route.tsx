@@ -11,6 +11,7 @@ import { PAGE_WIDTH } from '~/components/layout/page-width';
 import { buttonClass } from '~/components/ui/button';
 import { ProductCard } from '~/features/catalog/product-card';
 import { apiContext } from '~/lib/request.server';
+import { depositRule } from '~/features/orders/deposit-rule';
 import type { Route } from './+types/route';
 import { BuildPlate } from '~/features/build-plate/build-plate';
 import { seoMeta, siteOrigin } from '~/features/seo/seo';
@@ -54,12 +55,12 @@ export async function loader({ context }: Route.LoaderArgs) {
     lbp: currencies.ok
       ? (currencies.data.find((c) => c.code === 'LBP') ?? null)
       : null,
-    depositPercent: settings.ok ? settings.data.depositPercent : null,
+    deposit: settings.ok ? depositRule(settings.data) : null,
   };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { products, plate, lbp, depositPercent } = loaderData;
+  const { products, plate, lbp, deposit } = loaderData;
   const navigate = useNavigate();
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -147,9 +148,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               transfer to our number.
             </Step>
             <Step n={3} title="We print it">
-              Ready-made designs start right away. Made-to-order pieces start
-              once the{depositPercent ? ` ${Number(depositPercent)}%` : ''}{' '}
-              deposit arrives.
+              We start once your order is confirmed.
+              {deposit ? ` ${deposit}` : ''}
             </Step>
             <Step n={4} title="Delivered">
               Follow every step in My orders, or ask us on WhatsApp at any time.

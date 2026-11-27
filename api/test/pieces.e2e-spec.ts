@@ -314,6 +314,14 @@ describe('Where it is: pieces, extra costs, the shelf, test orders (e2e)', () =>
   });
 
   it('an order says when a colour it needs has no reel on the shelf', async () => {
+    // This shelf has no copper silk.
+    await prisma.stockItem.deleteMany({
+      where: {
+        materialId: studio.material.id,
+        colour: 'Copper silk',
+        movements: { none: {} },
+      },
+    });
     const customer = await signedInCustomer(app);
     const order = await placeOrder(
       app,

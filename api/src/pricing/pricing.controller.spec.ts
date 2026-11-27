@@ -8,6 +8,9 @@ describe('PricingController', () => {
       rushFeePercent: '30',
       deliveryFee: '25',
       depositPercent: '50',
+      depositEnabled: true,
+      depositAboveTotal: '30',
+      depositOnCustom: false,
       bulkDiscountTiers: [],
     };
     const module: TestingModule = await Test.createTestingModule({

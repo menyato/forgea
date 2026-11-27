@@ -17,6 +17,7 @@ for the studio, Failed print, Spools received, Vendor bill, New product.
 | Which printer prices come from, and the electricity price | Settings → **Pricing** → Printer time | Every price counts that printer's wear (price ÷ hours) and power; change the printer and prices follow. |
 | Default profit (a % of cost or a fixed amount) | Settings → **Pricing** | What the shop adds on top of the cost. |
 | What prices round to ($1.00: whole dollars) | Settings → **Pricing** → Your profit | $4.70 sells at $5, $4.40 at $4. Set 0.01 to keep cents. |
+| Deposit | Settings → **Pricing** → Deposit | **Ask for a deposit** (untick to turn it off), its %, **On orders above** (USD, empty: no amount rule; 30 by default) and **Made-to-order pieces always pay it** (off by default). By default: 50% on orders above $30. |
 | Filaments as bought (PLA Red, PETG Black…) | Catalog → Filament stock → **New filament** | Its colour (RGB) and its own price; spools come in later. |
 | Materials (PLA, PETG…) | Catalog → Configuration → **Materials** | Density and print speed; a reel's own price wins over the material's. |
 | Colours customers may choose | Catalog → Configuration → **Options** | Each colour: its swatch, its add-on price, and **Printed from filament** (the reel orders take it from). |
@@ -135,7 +136,12 @@ pieces and products with a name or logo place they may change.
 **Shop orders** arrive in Orders → **Orders**. Open one: the figures at the top show its
 filament, print time, cost to make and profit; the buttons under "Next step" move it on
 (Confirm → Start production → Ready → Delivered). **Start production** takes each colour's
-grams from its reel. The order page has a download for every sliced file. Before production,
+grams from its reel. An order made from a 3MF (a request, a quotation line) shows
+**Filaments**: pick the reel each colour of its file prints from (one of yours, of the filament
+the file was sliced for: PLA for a PLA file) and **Save the reels**; it can't go into production
+before every colour has one, and the site never adds a filament by itself. Changed after
+production started, the order's take moves to the new reels (the old one gets its grams back).
+The order page has a download for every sliced file. Before production,
 "What it takes to make" checks each filament against the shelf: **⚠** marks a colour with no
 reel (buy it, or link the shop colour to a reel you have) or with too little left.
 

@@ -24,6 +24,9 @@ export const ROUND_PRICING = {
   rushFeePercent: '20',
   deliveryFee: '4.00',
   depositPercent: '50',
+  depositEnabled: true,
+  depositAboveTotal: null,
+  depositOnCustom: true,
   bulkDiscountTiers: [],
 };
 
@@ -91,6 +94,14 @@ export async function createStudio(app: NestExpressApplication) {
       pricePerGram: '0.05',
       lowStockThresholdGrams: 500,
     },
+  });
+  // Its shelf: a stock line for each colour it sells (orders take only from lines that exist).
+  await prisma.stockItem.createMany({
+    data: ['Red', 'Copper silk'].map((colour) => ({
+      materialId: material.id,
+      colour,
+      lowStockGrams: material.lowStockThresholdGrams,
+    })),
   });
   const category = await prisma.category.create({
     data: { slug: `cat-${tag}`, name: `Vases ${tag}` },
@@ -246,6 +257,40 @@ export async function moveOrder(
       .send({ status })
       .expect(200);
   }
+}
+
+/** Picks the suggested reel for each colour of an order's 3MF lines (before production). */
+export async function pickReels(
+  app: NestExpressApplication,
+  staffCookie: string,
+  orderId: string,
+): Promise<void> {
+  const res = await request(app.getHttpServer())
+    .get(`/orders/${orderId}/filaments`)
+    .set('Cookie', staffCookie)
+    .expect(200);
+  const lines = (
+    res.body as {
+      lines: {
+        orderItemId: string;
+        colours: { colour: string; suggestedId: string | null }[];
+      }[];
+    }
+  ).lines;
+  await request(app.getHttpServer())
+    .put(`/orders/${orderId}/filaments`)
+    .set(CSRF)
+    .set('Cookie', staffCookie)
+    .send({
+      lines: lines.map((l) => ({
+        orderItemId: l.orderItemId,
+        colours: l.colours.map((c) => ({
+          colour: c.colour,
+          stockItemId: c.suggestedId,
+        })),
+      })),
+    })
+    .expect(200);
 }
 
 /** The steps to delivery: pickup orders skip "out for delivery". */

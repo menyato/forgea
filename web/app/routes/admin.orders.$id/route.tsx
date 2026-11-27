@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ORDER_STATUS_LABELS,
+  type OrderFilaments,
   type OrderProduction,
   type OrderRemovalPreview,
   OrderStatus,
@@ -15,6 +16,7 @@ import {
   ChangeOrderStatusDto,
   RecordPaymentDto,
   RemoveTestOrderDto,
+  SaveOrderFilamentsDto,
 } from '@forgea/validation';
 import { data, Link, redirect, useFetcher } from 'react-router';
 import { Money } from '~/components/money';
@@ -34,28 +36,37 @@ import type { Route } from './+types/route';
 import { InvoicesPanel } from './invoices-panel';
 import { OrderFigures } from './order-figures';
 import { ProductionPanel } from './production-panel';
+import { FilamentsPanel } from './filaments-panel';
+import { productionChoices } from '~/features/production/choices.server';
+import { validateForm } from '~/lib/forms.server';
 
 export async function loader({ params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [r, related, jobs, production, removal, pieces] = await Promise.all([
-    api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
-    relatedOf(api, 'order', params.id),
-    // Only for staff who run production (others get a 403 and no panel).
-    api.get<Page<PrintJobListItem>>(
-      `/print-jobs?limit=100&orderId=${encodeURIComponent(params.id)}`,
-    ),
-    api.get<OrderProduction>(
-      `/orders/${encodeURIComponent(params.id)}/production`,
-    ),
-    // Admins only (others get 403): what removing it as a test order would take away.
-    api.get<OrderRemovalPreview>(
-      `/orders/${encodeURIComponent(params.id)}/removal`,
-    ),
-    // Where its pieces are now (the "Where it is" board), for whoever sees the stock.
-    api.get<Page<PieceView>>(
-      `/pieces?limit=50&orderId=${encodeURIComponent(params.id)}`,
-    ),
-  ]);
+  const [r, related, jobs, production, removal, pieces, filaments] =
+    await Promise.all([
+      api.get<StaffOrder>(`/orders/${encodeURIComponent(params.id)}`),
+      relatedOf(api, 'order', params.id),
+      // Only for staff who run production (others get a 403 and no panel).
+      api.get<Page<PrintJobListItem>>(
+        `/print-jobs?limit=100&orderId=${encodeURIComponent(params.id)}`,
+      ),
+      api.get<OrderProduction>(
+        `/orders/${encodeURIComponent(params.id)}/production`,
+      ),
+      // Admins only (others get 403): what removing it as a test order would take away.
+      api.get<OrderRemovalPreview>(
+        `/orders/${encodeURIComponent(params.id)}/removal`,
+      ),
+      // Where its pieces are now (the "Where it is" board), for whoever sees the stock.
+      api.get<Page<PieceView>>(
+        `/pieces?limit=50&orderId=${encodeURIComponent(params.id)}`,
+      ),
+      // Its 3MF lines' colours and their reels (orders.manage).
+      api.get<OrderFilaments>(
+        `/orders/${encodeURIComponent(params.id)}/filaments`,
+      ),
+    ]);
+  const withFiles = filaments.ok && filaments.data.lines.length > 0;
   if (!r.ok) throw new Response(r.message, { status: r.status });
   return {
     order: r.data,
@@ -64,6 +75,8 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     production: production.ok ? production.data : null,
     removal: removal.ok ? removal.data : null,
     pieces: pieces.ok ? pieces.data.items : null,
+    filaments: withFiles ? filaments.data : null,
+    reels: withFiles ? (await productionChoices(api)).reels : [],
     // A fresh one-time key per load (after a save too): a payment sent twice counts once.
     requestKey: randomUUID(),
   };
@@ -85,6 +98,35 @@ export async function action({ request, params, context }: Route.ActionArgs) {
     if (result.data && 'ok' in result.data && result.data.ok)
       throw redirect('/admin/orders?filter=');
     return result;
+  }
+  // The reel each colour of a 3MF line prints from: fields named reel:<line>:<colour>.
+  if (intent === 'filaments') {
+    const lines = new Map<string, { colour: string; stockItemId: string }[]>();
+    for (const [name, value] of form) {
+      const m = /^reel:([^:]+):(.+)$/.exec(name);
+      if (!m || typeof value !== 'string' || value === '') continue;
+      const list = lines.get(m[1]!) ?? [];
+      list.push({ colour: m[2]!, stockItemId: value });
+      lines.set(m[1]!, list);
+    }
+    const parsed = validateForm(SaveOrderFilamentsDto, {
+      lines: [...lines].map(([orderItemId, colours]) => ({
+        orderItemId,
+        colours,
+      })),
+    });
+    if (!parsed.ok)
+      return data<SaveResult>(
+        { error: 'Pick a reel for each colour' },
+        { status: 400 },
+      );
+    const r = await api.put(
+      `/orders/${encodeURIComponent(params.id)}/filaments`,
+      parsed.value,
+    );
+    return r.ok
+      ? data<SaveResult>({ ok: true })
+      : data<SaveResult>({ error: r.message }, { status: r.status });
   }
   if (intent === 'post-invoice') {
     const invoiceId = text(form, 'invoiceId') ?? '';
@@ -507,6 +549,12 @@ export default function OrderPage({ loaderData }: Route.ComponentProps) {
 
         {/* On a phone the next step comes first, before the items; beside them on a wide screen. */}
         <div className="contents xl:grid xl:content-start xl:gap-6">
+          {loaderData.filaments && (
+            <FilamentsPanel
+              filaments={loaderData.filaments}
+              reels={loaderData.reels}
+            />
+          )}
           <Panel title="Next step" className="order-first xl:order-none">
             {o.nextStatuses.length === 0 ? (
               <p className="text-text-muted">This order is closed.</p>

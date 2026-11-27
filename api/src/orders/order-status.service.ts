@@ -14,6 +14,7 @@ import { Invoicing } from '../accounting/invoicing.service.js';
 import { Notifications } from '../mail/notifications.service.js';
 import { PrintJobsService } from '../print-jobs/print-jobs.service.js';
 import { OrderStock } from '../stock/order-stock.service.js';
+import { OrderFilamentsService } from './order-filaments.service.js';
 import { OrdersRepository } from './orders.repository.js';
 
 export interface StatusChange {
@@ -34,6 +35,7 @@ export class OrderStatusService {
     private readonly invoicing: Invoicing,
     private readonly stock: OrderStock,
     private readonly printJobs: PrintJobsService,
+    private readonly filaments: OrderFilamentsService,
   ) {}
 
   async change(
@@ -69,6 +71,9 @@ export class OrderStatusService {
         ? { depositPaid: true }
         : {};
 
+    // A 3MF line goes into production only once each colour of its file has its reel.
+    if (to === OrderStatus.IN_PRODUCTION)
+      await this.filaments.requireComplete(orderId);
     // Going into production takes the order's filament out of stock, with the status change.
     const stock =
       to === OrderStatus.IN_PRODUCTION

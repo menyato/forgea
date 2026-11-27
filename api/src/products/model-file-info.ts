@@ -64,6 +64,8 @@ export class ModelFileInfoService {
         colour: c.suggested ?? c.hex,
         hex: c.hex,
         grams: c.grams,
+        // The filament the file was sliced for (PLA, PETG…): the reel picked must match it.
+        ...(c.type ? { type: c.type } : {}),
       })),
     };
   }

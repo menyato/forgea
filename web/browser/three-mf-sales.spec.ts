@@ -66,6 +66,27 @@ test('a customer sends a sliced Bambu Studio file, gets its exact price as a quo
     .getByRole('link', { name: 'Download print project (3MF)' })
     .click();
   expect((await download).suggestedFilename()).toBe(`${orderNumber}-print.3mf`);
+
+  // Into production only once each colour of the file has its reel from the shelf.
+  await admin
+    .getByRole('button', { name: 'Deposit received, confirm' })
+    .click();
+  await admin.getByRole('button', { name: 'Start production' }).click();
+  await expect(admin.getByText(/Pick the reel for .+ first/)).toBeVisible();
+  const filaments = admin.getByRole('region', { name: 'Filaments' });
+  const reels = filaments.getByRole('combobox');
+  for (let i = 0; i < (await reels.count()); i++) {
+    if (!(await reels.nth(i).inputValue()))
+      await reels.nth(i).selectOption({ index: 1 });
+  }
+  await filaments.getByRole('button', { name: 'Save the reels' }).click();
+  await expect(
+    filaments.getByText(/Each colour of the print file has its reel/),
+  ).toBeVisible();
+  await admin.getByRole('button', { name: 'Start production' }).click();
+  await expect(
+    admin.getByRole('button', { name: 'Mark as ready' }),
+  ).toBeVisible();
   await studio.close();
 });
 

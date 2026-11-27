@@ -12,6 +12,7 @@ import {
   type PrintJobListItem,
   type DateRange,
   type ProductionResults,
+  type PrintFile,
   type ProductRealCost,
 } from '@forgea/types';
 import type {
@@ -272,13 +273,23 @@ export class PrintJobsService {
       const jobs: NewPrintJob[] = [];
       for (const item of items) {
         const e = estimate(item);
-        const reel = e
-          ? await this.jobs.reelFor(
-              this.prisma,
-              e.materialId,
-              (e.colours?.[0]?.colour ?? e.colour).trim(),
-            )
-          : null;
+        // A 3MF line prints from the reel picked for its biggest colour.
+        const file = item.printFile as PrintFile | null;
+        const biggest = file?.colours.reduce<
+          PrintFile['colours'][number] | null
+        >((a, c) => (a && Number(a.grams) >= Number(c.grams) ? a : c), null);
+        const picked = biggest
+          ? item.filaments.find((f) => f.colour === biggest.colour)
+          : undefined;
+        const reel = picked
+          ? picked.stockItemId
+          : e
+            ? await this.jobs.reelFor(
+                this.prisma,
+                e.materialId,
+                (e.colours?.[0]?.colour ?? e.colour).trim(),
+              )
+            : null;
         jobs.push({
           orderId,
           orderItemId: item.id,
@@ -382,11 +393,8 @@ export class PrintJobsService {
   ): Promise<PrintJobChange> {
     const reelId = data.stockItemId ?? job.stockItemId!;
     const printerId = data.printerId ?? job.printerId!;
-    const [reel, printer, rate] = await Promise.all([
-      this.prisma.stockItem.findUniqueOrThrow({
-        where: { id: reelId },
-        select: { material: { select: { pricePerGram: true } } },
-      }),
+    const [pricePerGram, printer, rate] = await Promise.all([
+      this.pricePerGram(reelId, job.orderItemId),
       this.prisma.printer.findUniqueOrThrow({ where: { id: printerId } }),
       this.jobs.electricityPerKwh(),
     ]);
@@ -404,11 +412,61 @@ export class PrintJobsService {
       actualGrams,
       actualHours,
       finishedAt: new Date(),
-      materialCost: grams.times(reel.material.pricePerGram).toFixed(2),
+      materialCost: grams.times(pricePerGram).toFixed(2),
       electricityKwh: kwh.toFixed(3),
       electricityCost: kwh.times(rate ?? 0).toFixed(2),
       wearCost: hours.times(wearPerHour).toFixed(2),
     };
+  }
+
+  /**
+   * What a gram of this run costs: a 3MF line's colours each at its picked reel's price,
+   * averaged by the file's grams; otherwise the reel's own price (its spools), else its
+   * material's.
+   */
+  private async pricePerGram(
+    reelId: string,
+    orderItemId: string | null,
+  ): Promise<Prisma.Decimal> {
+    const own = (r: {
+      pricePerGram: Prisma.Decimal | null;
+      material: { pricePerGram: Prisma.Decimal };
+    }) => r.pricePerGram ?? r.material.pricePerGram;
+    const price = {
+      pricePerGram: true,
+      material: { select: { pricePerGram: true } },
+    } as const;
+    const line = orderItemId
+      ? await this.prisma.orderItem.findUnique({
+          where: { id: orderItemId },
+          select: {
+            printFile: true,
+            filaments: {
+              select: { colour: true, stockItem: { select: price } },
+            },
+          },
+        })
+      : null;
+    const file = line?.printFile as PrintFile | null | undefined;
+    if (file && line && line.filaments.length > 0) {
+      let grams = new Prisma.Decimal(0);
+      let cost = new Prisma.Decimal(0);
+      for (const c of file.colours) {
+        const reel = line.filaments.find((f) => f.colour === c.colour);
+        if (!reel) continue;
+        grams = grams.plus(c.grams);
+        cost = cost.plus(
+          new Prisma.Decimal(c.grams).times(own(reel.stockItem)),
+        );
+      }
+      if (grams.gt(0)) return cost.div(grams);
+    }
+    return own(
+      await this.prisma.stockItem.findUniqueOrThrow({
+        where: { id: reelId },
+        select: price,
+      }),
+    );
   }
 
   /** On the calendar while scheduled or printing with a date; off once finished or cancelled. */

@@ -9,13 +9,18 @@ import { UpdatePricingSettingsDto } from '@forgea/validation';
 import { useState } from 'react';
 import { Link, useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
-import { Field, SelectField } from '~/components/ui/field';
+import { CheckboxField, Field, SelectField } from '~/components/ui/field';
 import { AdminHeader, Panel, SaveStatus } from '~/features/admin/admin-ui';
 import {
   ProfitRuleField,
   type ProfitValue,
 } from '~/features/admin/profit-rule-field';
-import { type SaveResult, save, text } from '~/features/admin/staff.server';
+import {
+  checked,
+  type SaveResult,
+  save,
+  text,
+} from '~/features/admin/staff.server';
 import { jsonField } from '~/lib/forms.server';
 import { apiContext } from '~/lib/request.server';
 import type { Route } from './+types/route';
@@ -55,6 +60,7 @@ const FIELDS = [
   'rushFeePercent',
   'deliveryFee',
   'depositPercent',
+  'depositAboveTotal',
 ] as const;
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -63,6 +69,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     UpdatePricingSettingsDto,
     {
       ...Object.fromEntries(FIELDS.map((f) => [f, text(form, f)])),
+      depositEnabled: checked(form, 'depositEnabled'),
+      depositOnCustom: checked(form, 'depositOnCustom'),
       bulkDiscountTiers: jsonField(form, 'bulkDiscountTiers') ?? [],
     },
     (dto) => context.get(apiContext).put('/pricing/settings', dto),
@@ -256,15 +264,35 @@ export default function Pricing({ loaderData }: Route.ComponentProps) {
           </div>
         </Panel>
         <Panel title="What customers pay on top">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             {number('rushFeePercent', 'Rush fee (%)', order.rushFeePercent)}
             {number('deliveryFee', 'Delivery fee (USD)', order.deliveryFee)}
-            {number(
-              'depositPercent',
-              'Deposit on made-to-order (%)',
-              order.depositPercent,
-            )}
           </div>
+        </Panel>
+        <Panel title="Deposit">
+          <CheckboxField
+            label="Ask for a deposit"
+            name="depositEnabled"
+            defaultChecked={order.depositEnabled}
+            hint="Untick to stop asking any order for one"
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {number('depositPercent', 'Deposit (%)', order.depositPercent)}
+            <Field
+              label="On orders above (USD)"
+              name="depositAboveTotal"
+              inputMode="decimal"
+              defaultValue={order.depositAboveTotal ?? ''}
+              error={errors['depositAboveTotal']}
+              hint="Their items, before delivery; empty: no amount rule"
+            />
+          </div>
+          <CheckboxField
+            label="Made-to-order pieces always pay it"
+            name="depositOnCustom"
+            defaultChecked={order.depositOnCustom}
+            hint="On their own price, whatever the order's total"
+          />
         </Panel>
         <Panel title="Bulk discounts">
           <p className="text-sm text-text-muted">

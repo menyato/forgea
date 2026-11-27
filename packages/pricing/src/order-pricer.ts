@@ -19,8 +19,14 @@ export interface BulkDiscountTier {
 export interface OrderSettings {
   rushFeePercent: DecimalInput;
   deliveryFee: DecimalInput;
-  /** Share of custom/quote items paid upfront (50 by default). */
+  /** The deposit's share (50 by default) of what it is taken on (the rules below). */
   depositPercent: DecimalInput;
+  /** Off: no order pays a deposit. */
+  depositEnabled: boolean;
+  /** Orders whose items come to more than this (USD) pay the deposit on all of them; null: never. */
+  depositAboveTotal: DecimalInput | null;
+  /** Made-to-order lines pay the deposit on themselves, whatever the order's total. */
+  depositOnCustom: boolean;
   bulkDiscountTiers: readonly BulkDiscountTier[];
 }
 
@@ -89,7 +95,7 @@ export interface OrderQuote {
   lines: QuotedLine[];
   summary: SummaryLine[];
   total: string;
-  /** depositPercent of the custom lines' discounted totals; "0.00" when there are none. */
+  /** depositPercent of what the deposit rules take it on (`depositBase`); "0.00" when none applies. */
   depositRequired: string;
 }
 
@@ -102,6 +108,11 @@ export class OrderPricer {
   private readonly rushFee: Big;
   private readonly deliveryFee: Big;
   private readonly deposit: Big;
+  private readonly depositOn: {
+    enabled: boolean;
+    above: Big | null;
+    custom: boolean;
+  };
   /** Highest threshold first, so the first match is the best tier. */
   private readonly tiers: readonly { minQuantity: number; percent: Big }[];
 
@@ -118,6 +129,17 @@ export class OrderPricer {
       toBig(settings.depositPercent, 'depositPercent'),
       'depositPercent',
     );
+    this.depositOn = {
+      enabled: settings.depositEnabled,
+      above:
+        settings.depositAboveTotal === null
+          ? null
+          : requireNonNegative(
+              toBig(settings.depositAboveTotal, 'depositAboveTotal'),
+              'depositAboveTotal',
+            ),
+      custom: settings.depositOnCustom,
+    };
 
     const seen = new Set<number>();
     this.tiers = settings.bulkDiscountTiers
@@ -147,6 +169,17 @@ export class OrderPricer {
     return (
       this.tiers.find((t) => quantity >= t.minQuantity)?.percent ?? new Big(0)
     );
+  }
+
+  /**
+   * What the deposit is taken on: nothing when it is off; all the items when they come to more
+   * than the amount set; else the made-to-order lines when those always pay one.
+   */
+  private depositBase(items: Big, custom: Big): Big {
+    const { enabled, above, custom: onCustom } = this.depositOn;
+    if (!enabled) return new Big(0);
+    if (above !== null && items.gt(above)) return items;
+    return onCustom ? custom : new Big(0);
   }
 
   quote(lines: readonly OrderLineInput[], options: OrderOptions): OrderQuote {
@@ -226,7 +259,9 @@ export class OrderPricer {
       lines: quoted,
       summary,
       total: money(total),
-      depositRequired: money(percentOf(customTotal, this.deposit)),
+      depositRequired: money(
+        percentOf(this.depositBase(discounted, customTotal), this.deposit),
+      ),
     };
   }
 }

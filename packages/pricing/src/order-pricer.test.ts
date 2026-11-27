@@ -11,6 +11,10 @@ const settings: OrderSettings = {
   rushFeePercent: '30',
   deliveryFee: '25',
   depositPercent: '50',
+  // The rule before amounts: made-to-order lines pay it.
+  depositEnabled: true,
+  depositAboveTotal: null,
+  depositOnCustom: true,
   bulkDiscountTiers: [
     { minQuantity: 25, percent: '10' },
     { minQuantity: 10, percent: '5' },
@@ -226,5 +230,67 @@ describe('orderLinesFromCart', () => {
         isCustom: true,
       },
     ]);
+  });
+
+  describe('deposit rules', () => {
+    const shop = (over: Partial<OrderSettings>) =>
+      new OrderPricer({
+        ...settings,
+        depositOnCustom: false,
+        depositAboveTotal: '30',
+        ...over,
+      });
+    const line = (unitPrice: string, isCustom = false): OrderLineInput => ({
+      id: unitPrice,
+      name: 'Piece',
+      unitPrice,
+      quantity: 1,
+      isCustom,
+    });
+
+    it('by default only an order above $30 pays half of its items upfront', () => {
+      expect(
+        shop({}).quote([line('30')], { delivery: true, rush: false })
+          .depositRequired,
+      ).toBe('0.00');
+      expect(
+        shop({}).quote([line('30.01')], { delivery: true, rush: false })
+          .depositRequired,
+      ).toBe('15.01');
+      // A custom piece under the amount pays none, unless custom pieces always do.
+      expect(
+        shop({}).quote([line('4', true)], { delivery: false, rush: false })
+          .depositRequired,
+      ).toBe('0.00');
+      expect(
+        shop({ depositOnCustom: true }).quote([line('4', true)], {
+          delivery: false,
+          rush: false,
+        }).depositRequired,
+      ).toBe('2.00');
+    });
+
+    it('takes it on all the items above the amount, delivery and rush aside', () => {
+      const q = shop({}).quote([line('20'), line('20', true)], {
+        delivery: true,
+        rush: true,
+      });
+      expect(q.depositRequired).toBe('20.00');
+    });
+
+    it('asks none when switched off, and none by amount without one', () => {
+      expect(
+        shop({ depositEnabled: false }).quote([line('500', true)], {
+          delivery: false,
+          rush: false,
+        }).depositRequired,
+      ).toBe('0.00');
+      expect(
+        shop({ depositAboveTotal: null }).quote([line('500')], {
+          delivery: false,
+          rush: false,
+        }).depositRequired,
+      ).toBe('0.00');
+    });
   });
 });

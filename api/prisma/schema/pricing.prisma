@@ -26,9 +26,16 @@ model PricingSettings {
   pricingPrinter    Printer? @relation(fields: [pricingPrinterId], references: [id], onDelete: SetNull)
 
   // Order level (OrderPricer) — customer-facing.
-  rushFeePercent Decimal @db.Decimal(5, 2)
-  deliveryFee    Decimal @db.Decimal(10, 2)
-  depositPercent Decimal @db.Decimal(5, 2)
+  rushFeePercent    Decimal  @db.Decimal(5, 2)
+  deliveryFee       Decimal  @db.Decimal(10, 2)
+  depositPercent    Decimal  @db.Decimal(5, 2)
+  /// Whether checkout asks for a deposit at all (one switch to turn it off).
+  depositEnabled    Boolean  @default(true)
+  /// Orders whose items come to more than this (USD) pay `depositPercent` of them upfront;
+  /// null: no amount rule. Above 0 (CHECK).
+  depositAboveTotal Decimal? @default(30) @db.Decimal(10, 2)
+  /// Made-to-order lines always pay the deposit on themselves, whatever the order's total.
+  depositOnCustom   Boolean  @default(false)
 
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   updatedByUserId String?  @db.Uuid

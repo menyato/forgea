@@ -32,6 +32,7 @@ export {
 } from './checkout.dto.js';
 export {
   ChangeOrderStatusDto,
+  SaveOrderFilamentsDto,
   MyOrdersQuery,
   RemoveTestOrderDto,
 } from './orders.dto.js';

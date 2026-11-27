@@ -105,6 +105,9 @@ export class PrismaPricingSettingsRepository extends PricingSettingsRepository {
         rushFeePercent: s.rushFeePercent.toString(),
         deliveryFee: s.deliveryFee.toString(),
         depositPercent: s.depositPercent.toString(),
+        depositEnabled: s.depositEnabled,
+        depositAboveTotal: s.depositAboveTotal?.toString() ?? null,
+        depositOnCustom: s.depositOnCustom,
         bulkDiscountTiers: tiers.map((t) => ({
           minQuantity: t.minQuantity,
           percent: t.percent.toString(),
