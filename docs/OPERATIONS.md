@@ -39,6 +39,21 @@ worth as the price and choose **Not booked**: it counts in costs, not in your sp
 **Counting the shelf:** Filament stock → **Weigh the spools**: type what the scale says; the
 difference is recorded with your note.
 
+**The whole shelf at once:** Filament stock → **Weigh every filament**. Type what an empty
+spool weighs once, then for each filament the sealed spools and what the open one weighs: the
+page shows what is on the shelf and the difference as you type. **Save the sweep** records
+every difference as a correction (filaments you skip, or that match, record nothing).
+
+**What took a filament:** open a filament: each movement says what it was for, and each part
+opens its record (the product, the order, the print run, the piece on Where it is, the
+booking). Click its date for the movement's own page.
+
+**Taken from the wrong filament** (the bin printed in PETG but recorded on PLA): open that
+movement → **Printed from another filament?** → choose the one it really was → **Move to that
+filament**. Its grams go back on the first filament and come off the right one; what it was
+for stays, and the page says where it was first. A count can't move (weigh again instead);
+an order printed from reels picked per colour changes on its Filaments panel.
+
 **A reel you no longer sell:** open it and untick **Track this filament**.
 
 ## 3. A product for the shop

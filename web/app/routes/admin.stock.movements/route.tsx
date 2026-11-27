@@ -23,7 +23,8 @@ import {
   grams,
   lineFilter,
   SignedGrams,
-  movementFor,
+  MovementFor,
+  movementHref,
   STOCK_TIME,
 } from '~/features/stock/stock-ui';
 import { apiContext } from '~/lib/request.server';
@@ -139,11 +140,11 @@ const COLUMNS: ListColumn<Row>[] = [
     align: 'right',
     cell: (m) => (m.cost !== null ? <Money amount={m.cost} /> : '—'),
   },
-  { key: 'for', label: 'For', cell: movementFor },
+  { key: 'for', label: 'For', cell: (m) => <MovementFor m={m} /> },
   { key: 'by', label: 'By', cell: (m) => m.by ?? 'Automatic' },
 ];
 
-const href = (m: Row) => `/admin/stock/${m.stockItemId}`;
+const href = movementHref;
 
 export default function StockMovements({ loaderData }: Route.ComponentProps) {
   const { state, movements, line, counts, usage, costs, today, error } =

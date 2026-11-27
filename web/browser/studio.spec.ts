@@ -513,7 +513,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await expect(
     moves
       .getByRole('row', {
-        name: /Printed for the studio PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Display/,
+        name: /Printed for the studio PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Where it is · Display/,
       })
       // Newest first; earlier runs on the same test database left theirs below.
       .first(),
@@ -534,7 +534,7 @@ test('filament: a delivery comes in, an order going into production takes its gr
   await expect(
     moves
       .getByRole('row', {
-        name: /Failed print PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Failed at 50%/,
+        name: /Failed print PLA Forest green −\d+ g \$\d+\.\d{2} 1 × Phone stand · Where it is · Failed at 50%/,
       })
       // Newest first; earlier runs on the same test database left theirs below.
       .first(),

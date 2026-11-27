@@ -43,19 +43,91 @@ export const STOCK_ACTIONS = [
   { path: '/admin/stock/print', label: 'Printed for the studio' },
   { path: '/admin/stock/failed', label: 'Failed print' },
   { path: '/admin/stock/weigh', label: 'Weigh the spools' },
+  { path: '/admin/stock/sweep', label: 'Weigh every filament' },
 ] as const;
 
-/** What a movement was for: the product, the order, the note, the booking. */
-export const movementFor = (m: StockMovementView) =>
-  [
-    m.product && `${m.quantity ?? 1} × ${m.product}`,
-    // An order's note already names it.
-    m.orderNumber && !m.note?.includes(m.orderNumber) ? m.orderNumber : null,
-    m.note,
-    m.entryNumber && `Booked ${m.entryNumber}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+/** A movement's own page (what it was for, and the fix when it went on the wrong filament). */
+export const movementHref = (m: Pick<StockMovementView, 'id'>) =>
+  `/admin/stock/movements/${m.id}`;
+
+/**
+ * What a movement was for, each part opening its record: the product, the order, the print run,
+ * the piece on the board, the booking; then its note, and where it was moved from. Links sit
+ * above a list row's own link (`relative z-10`), so they open their record, not the movement.
+ */
+export function MovementFor({ m }: { m: StockMovementView }) {
+  const l = m.links;
+  const link = 'relative z-10 underline underline-offset-2 hover:text-accent';
+  const parts: ReactNode[] = [];
+  if (m.product)
+    parts.push(
+      l.productId ? (
+        <Link
+          key="product"
+          to={`/admin/products/${l.productId}`}
+          className={link}
+        >
+          {m.quantity ?? 1} × {m.product}
+        </Link>
+      ) : (
+        `${m.quantity ?? 1} × ${m.product}`
+      ),
+    );
+  if (m.orderNumber && l.orderId)
+    parts.push(
+      <Link key="order" to={`/admin/orders/${l.orderId}`} className={link}>
+        Order {m.orderNumber}
+      </Link>,
+    );
+  if (l.printJobId)
+    parts.push(
+      <Link key="run" to={`/admin/production/${l.printJobId}`} className={link}>
+        Print run
+      </Link>,
+    );
+  if (l.pieceId)
+    parts.push(
+      <Link key="piece" to={`/admin/pieces/${l.pieceId}`} className={link}>
+        Where it is
+      </Link>,
+    );
+  // An order's note only names it again.
+  if (m.note && !(m.orderNumber && m.note === `Order ${m.orderNumber}`))
+    parts.push(
+      <span key="note" className="text-text-muted">
+        {m.note}
+      </span>,
+    );
+  if (m.entryNumber && l.entryId)
+    parts.push(
+      <Link
+        key="entry"
+        to={`/admin/accounting/books/entries/${l.entryId}`}
+        className={link}
+      >
+        Booked {m.entryNumber}
+      </Link>,
+    );
+  return (
+    <span className="grid gap-0.5">
+      <span>
+        {parts.length > 0
+          ? parts.map((p, i) => (
+              <span key={i}>
+                {i > 0 && ' · '}
+                {p}
+              </span>
+            ))
+          : '—'}
+      </span>
+      {m.moved && (
+        <span className="text-xs text-warning">
+          Moved here from {m.moved.from}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /** "+3,000 g" in green, "−120 g" in red. */
 export function SignedGrams({ value }: { value: number }) {

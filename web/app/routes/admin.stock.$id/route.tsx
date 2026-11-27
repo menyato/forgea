@@ -28,7 +28,8 @@ import {
   filament,
   grams,
   lineFilter,
-  movementFor,
+  MovementFor,
+  movementHref,
   ColourLook,
   SignedGrams,
   STOCK_ACTIONS,
@@ -273,7 +274,12 @@ function MovementTable({
           {movements.map((m) => (
             <tr key={m.id} className="border-t border-border">
               <td className="py-2 pr-4 whitespace-nowrap">
-                {STOCK_TIME.format(new Date(m.createdAt))}
+                <Link
+                  to={movementHref(m)}
+                  className="underline underline-offset-2"
+                >
+                  {STOCK_TIME.format(new Date(m.createdAt))}
+                </Link>
               </td>
               <td className="py-2 pr-4 whitespace-nowrap">
                 {STOCK_MOVEMENT_LABELS[m.kind]}
@@ -284,7 +290,9 @@ function MovementTable({
               <td className="py-2 pr-4 text-right whitespace-nowrap tabular-nums">
                 {m.cost !== null ? <Money amount={m.cost} /> : '—'}
               </td>
-              <td className="py-2 pr-4">{movementFor(m)}</td>
+              <td className="py-2 pr-4">
+                <MovementFor m={m} />
+              </td>
               <td className="py-2">{m.by ?? 'Automatic'}</td>
             </tr>
           ))}

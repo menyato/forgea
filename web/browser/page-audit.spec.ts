@@ -132,6 +132,7 @@ const DASHBOARD = [
   '/admin/stock/print',
   '/admin/stock/failed',
   '/admin/stock/weigh',
+  '/admin/stock/sweep',
   '/admin/production?view=list',
   '/admin/production/new',
   '/admin/production/calendar',

@@ -5,7 +5,7 @@ import { keysetPage } from '../common/pagination/keyset.js';
 import { studioDayPlus, studioDayStart } from '../common/studio-day.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import type { StockMovementKind } from '../generated/prisma/enums.js';
+import { StockMovementKind } from '../generated/prisma/enums.js';
 
 const movementInclude = {
   stockItem: {
@@ -14,10 +14,20 @@ const movementInclude = {
       material: { select: { code: true, pricePerGram: true } },
     },
   },
-  orderItem: { select: { order: { select: { orderNumber: true } } } },
+  orderItem: {
+    select: {
+      order: { select: { id: true, orderNumber: true } },
+      // Picked reels: such a line's takes move on its order page, not one by one.
+      _count: { select: { filaments: true } },
+    },
+  },
   product: { select: { name: true } },
   journalEntry: { select: { number: true } },
   createdBy: { select: { email: true, name: true } },
+  movedFrom: {
+    select: { colour: true, material: { select: { code: true } } },
+  },
+  movedBy: { select: { email: true, name: true } },
 } as const satisfies Prisma.StockMovementInclude;
 export type MovementRow = Prisma.StockMovementGetPayload<{
   include: typeof movementInclude;
@@ -393,6 +403,84 @@ export class StockRepository {
    * What is on the shelf for a material and colour, read under the material's stock lock (the
    * one each movement takes), so a count's difference is exact.
    */
+  /** One movement, as the lists show it. */
+  movement(id: string): Promise<MovementRow | null> {
+    return this.prisma.stockMovement.findUnique({
+      where: { id },
+      include: movementInclude,
+    });
+  }
+
+  /**
+   * A take or delivery recorded on the wrong filament, put on the one it really was (inside a
+   * transaction the database lets make only this change): its grams leave the first filament and
+   * count on the new one, at the new one's cost per gram; what it was for stays as recorded.
+   */
+  async moveTo(
+    id: string,
+    reel: { id: string; pricePerGram: Prisma.Decimal },
+    actorId: string,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('forgea.repointing', 'wrong-reel', true)`;
+      const current = await tx.stockMovement.findUnique({
+        where: { id },
+        select: { stockItemId: true },
+      });
+      if (!current || current.stockItemId === reel.id) return false;
+      await tx.stockMovement.update({
+        where: { id },
+        data: {
+          stockItemId: reel.id,
+          costPerGram: reel.pricePerGram,
+          movedFromId: current.stockItemId,
+          movedAt: new Date(),
+          movedById: actorId,
+        },
+      });
+      return true;
+    });
+  }
+
+  /** A filament line and the cost per gram a take from it is valued at (its own, else its material's). */
+  async reel(id: string): Promise<{
+    id: string;
+    materialId: string;
+    colour: string;
+    pricePerGram: Prisma.Decimal;
+  } | null> {
+    const r = await this.prisma.stockItem.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        materialId: true,
+        colour: true,
+        pricePerGram: true,
+        material: { select: { pricePerGram: true } },
+      },
+    });
+    return r
+      ? {
+          id: r.id,
+          materialId: r.materialId,
+          colour: r.colour,
+          pricePerGram: r.pricePerGram ?? r.material.pricePerGram,
+        }
+      : null;
+  }
+
+  /** Whether an order line already took from this filament (one take per line and reel). */
+  async lineTookFrom(
+    orderItemId: string,
+    stockItemId: string,
+  ): Promise<boolean> {
+    return (
+      (await this.prisma.stockMovement.count({
+        where: { orderItemId, stockItemId, kind: StockMovementKind.ORDER },
+      })) > 0
+    );
+  }
+
   async onShelf(
     tx: Prisma.TransactionClient,
     materialId: string,

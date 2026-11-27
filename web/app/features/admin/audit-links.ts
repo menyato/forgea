@@ -24,6 +24,7 @@ const PAGES: Record<string, string> = {
   Invoice: '/admin/accounting/invoices',
   JournalEntry: '/admin/accounting/books/entries',
   StockItem: '/admin/stock',
+  StockMovement: '/admin/stock/movements',
 };
 
 /** The page of the record an entry is about, when it has one ("new" and settings don't). */

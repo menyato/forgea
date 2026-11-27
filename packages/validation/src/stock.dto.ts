@@ -504,3 +504,37 @@ export class CountReadyPiecesDto {
   @MaxLength(500)
   note?: string;
 }
+
+/** A take or delivery recorded on the wrong filament, moved to the one it really was. */
+export class MoveStockMovementDto {
+  @IsUUID('all', { message: 'Choose the filament it really was' })
+  stockItemId!: string;
+}
+
+/** One filament weighed in a sweep: what is on its shelf now. */
+export class StockSweepLineDto {
+  @IsUUID('all', { message: 'Choose a filament' })
+  stockItemId!: string;
+
+  @Type(() => Number)
+  @IsInt(grams)
+  @Min(0, grams)
+  @Max(STOCK_GRAMS_MAX, grams)
+  gramsOnShelf!: number;
+}
+
+/** Every filament weighed at once: each difference is recorded as a correction. */
+export class StockSweepDto {
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Weigh at least one filament' })
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => StockSweepLineDto)
+  lines!: StockSweepLineDto[];
+
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(200, note)
+  note?: string;
+}

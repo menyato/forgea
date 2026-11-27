@@ -29,6 +29,7 @@ import type {
   StockCountDto,
   VendorPurchaseDto,
   StockMovementListQuery,
+  StockSweepDto,
   StudioPrintDto,
 } from '@forgea/validation';
 import { shownColours, startingChoice } from '@forgea/types';
@@ -103,6 +104,95 @@ export class StockService {
     query: StockMovementListQuery,
   ): Promise<Page<StockMovementView>> {
     return toPage(await this.stock.movements(query), toMovementView);
+  }
+
+  async movement(id: string): Promise<StockMovementView> {
+    const m = await this.stock.movement(id);
+    if (!m) throw new NotFoundException('Movement not found');
+    return toMovementView(m);
+  }
+
+  /**
+   * "Printed from another filament": a take (or delivery) recorded on the wrong filament goes on
+   * the one it really was. Its grams, kind and what it was for stay; the first filament gets the
+   * grams back and the new one gives them, at its own cost per gram. An order line printed from
+   * reels picked per colour changes on its order page (Filaments) instead.
+   */
+  async move(
+    id: string,
+    stockItemId: string,
+    actorId: string,
+  ): Promise<StockMovementView> {
+    const m = await this.stock.movement(id);
+    if (!m) throw new NotFoundException('Movement not found');
+    const view = toMovementView(m);
+    if (!view.movable)
+      throw new BadRequestException(
+        m.orderItem?._count.filaments
+          ? "This order's reels are picked per colour: change them on the order's Filaments panel"
+          : 'Only filament taken or received can move to another filament; a count stays where it was weighed',
+      );
+    if (m.stockItemId === stockItemId)
+      throw new BadRequestException('It is already on that filament');
+    const reel = await this.stock.reel(stockItemId);
+    if (!reel) throw new NotFoundException('Filament not found');
+    if (
+      m.orderItemId &&
+      (await this.stock.lineTookFrom(m.orderItemId, reel.id))
+    )
+      throw new ConflictException(
+        'This order line already took from that filament: weigh both instead',
+      );
+    if (!(await this.stock.moveTo(id, reel, actorId)))
+      throw new ConflictException(
+        'It changed meanwhile. Reload and try again.',
+      );
+    return this.movement(id);
+  }
+
+  /**
+   * A sweep of the shelf: every filament weighed at once, each difference from what it should
+   * hold recorded as a correction (one transaction; filaments that match record nothing).
+   */
+  async sweep(
+    dto: StockSweepDto,
+    actorId: string,
+  ): Promise<{ corrected: number; difference: number }> {
+    const ids = dto.lines.map((l) => l.stockItemId);
+    if (new Set(ids).size !== ids.length)
+      throw new BadRequestException('Each filament once');
+    const reels = await Promise.all(ids.map((id) => this.stock.reel(id)));
+    if (reels.some((r) => !r))
+      throw new NotFoundException('Filament not found');
+    return this.stock.transaction(async (tx) => {
+      let corrected = 0;
+      let difference = 0;
+      for (const [i, line] of dto.lines.entries()) {
+        const reel = reels[i]!;
+        const before = await this.stock.onShelf(
+          tx,
+          reel.materialId,
+          reel.colour,
+        );
+        const change = line.gramsOnShelf - before;
+        if (change === 0) continue;
+        await this.stock.record(tx, [
+          {
+            materialId: reel.materialId,
+            colour: reel.colour,
+            kind: StockMovementKind.CORRECTION,
+            grams: change,
+            note:
+              dto.note ||
+              `Weighed in a sweep: ${line.gramsOnShelf} g on the shelf`,
+            createdById: actorId,
+          },
+        ]);
+        corrected += 1;
+        difference += change;
+      }
+      return { corrected, difference };
+    });
   }
 
   movementCounts(stockItemId?: string): Promise<StockMovementCounts> {
@@ -738,6 +828,16 @@ function partsOf(p: {
   });
 }
 
+/** Takes and deliveries may be moved to the right filament; counts and openings may not. */
+const MOVABLE: readonly StockMovementKind[] = [
+  StockMovementKind.RECEIVED,
+  StockMovementKind.ORDER,
+  StockMovementKind.USED,
+  StockMovementKind.FAILED_PRINT,
+  StockMovementKind.PRINTED,
+  StockMovementKind.RETURNED,
+];
+
 function toMovementView(m: MovementRow): StockMovementView {
   return {
     id: m.id,
@@ -749,6 +849,22 @@ function toMovementView(m: MovementRow): StockMovementView {
     colour: m.stockItem.colour,
     note: m.note,
     orderNumber: m.orderItem?.order.orderNumber ?? null,
+    links: {
+      productId: m.productId,
+      orderId: m.orderItem?.order.id ?? null,
+      printJobId: m.printJobId,
+      pieceId: m.pieceId,
+      entryId: m.journalEntryId,
+    },
+    moved:
+      m.movedFrom && m.movedAt
+        ? {
+            from: `${m.movedFrom.material.code} · ${m.movedFrom.colour || 'no colour'}`,
+            at: m.movedAt.toISOString(),
+            by: m.movedBy ? (m.movedBy.name ?? m.movedBy.email) : null,
+          }
+        : null,
+    movable: MOVABLE.includes(m.kind) && !(m.orderItem?._count.filaments ?? 0),
     product: m.product?.name ?? null,
     quantity: m.quantity,
     // Orders' filament at its cost per gram when it went out (or today's).

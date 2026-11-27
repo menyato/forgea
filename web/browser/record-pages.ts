@@ -19,6 +19,7 @@ const LISTS = [
   '/admin/currencies',
   '/admin/team',
   '/admin/stock?filter=',
+  '/admin/stock/movements',
   '/admin/production?view=list&filter=',
   '/admin/pieces?view=list',
   '/admin/accounting?filter=',

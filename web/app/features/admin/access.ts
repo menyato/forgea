@@ -219,6 +219,7 @@ export const PAGES: readonly {
   { path: '/admin/stock/print', access: 'stock.manage' },
   { path: '/admin/stock/failed', access: 'stock.manage' },
   { path: '/admin/stock/weigh', access: 'stock.manage' },
+  { path: '/admin/stock/sweep', access: 'stock.manage' },
   {
     path: '/admin/home-plate',
     access: 'homebed.manage',

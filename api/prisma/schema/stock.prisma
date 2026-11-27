@@ -26,6 +26,8 @@ model StockItem {
   updatedAt     DateTime @updatedAt @db.Timestamptz(3)
 
   movements      StockMovement[]
+  /// Movements once recorded on this filament by mistake and moved to the right one.
+  movedAway      StockMovement[]   @relation("StockMovementMovedFrom")
   /// Product colours printed from this filament.
   productColours ProductColour[]
   /// The shop's colours printed from this filament.
@@ -89,6 +91,13 @@ model StockMovement {
   createdById    String?           @db.Uuid
   createdBy      User?             @relation(fields: [createdById], references: [id], onDelete: Restrict)
   createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  /// Recorded on the wrong filament and moved to this one (`StockService.move`, under
+  /// `forgea.repointing = 'wrong-reel'`): the filament it was first on, when and by whom.
+  movedFromId    String?           @db.Uuid
+  movedFrom      StockItem?        @relation("StockMovementMovedFrom", fields: [movedFromId], references: [id], onDelete: Restrict)
+  movedAt        DateTime?         @db.Timestamptz(3)
+  movedById      String?           @db.Uuid
+  movedBy        User?             @relation("StockMovementMover", fields: [movedById], references: [id], onDelete: Restrict)
 
   @@index([stockItemId, createdAt])
   @@index([createdAt])

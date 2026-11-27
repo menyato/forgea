@@ -96,6 +96,21 @@ export interface StockMovementView {
   /** A delivery booked in the accounts: its entry number. */
   entryNumber: string | null;
   by: string | null;
+  /** What it was for, each to open: its product, order, print run, piece and booking. */
+  links: {
+    productId: string | null;
+    orderId: string | null;
+    printJobId: string | null;
+    pieceId: string | null;
+    entryId: string | null;
+  };
+  /** Recorded on another filament by mistake and moved here: that filament, when, by whom. */
+  moved: { from: string; at: string; by: string | null } | null;
+  /**
+   * Whether it may be moved to the right filament ("Printed from another filament"): a take or
+   * a delivery, not a count; an order line printed from picked reels moves on its order page.
+   */
+  movable: boolean;
 }
 
 /** Grams and their cost, USD. */

@@ -19,6 +19,8 @@ import type {
 } from '@forgea/types';
 import {
   CreateStockItemDto,
+  MoveStockMovementDto,
+  StockSweepDto,
   PeriodQuery,
   ReceiveSpoolsDto,
   RecordStockMovementDto,
@@ -78,6 +80,38 @@ export class StockController {
     stockItemId?: string,
   ): Promise<StockMovementCounts> {
     return this.stock.movementCounts(stockItemId);
+  }
+
+  /** One movement: what it was for (each to open) and where it was moved from. */
+  @RequirePermission('materials.view')
+  @Get('movements/:id')
+  movement(@Param('id', ParseUUIDPipe) id: string): Promise<StockMovementView> {
+    return this.stock.movement(id);
+  }
+
+  /** Recorded on the wrong filament: put on the one it really was. */
+  @RequirePermission('stock.manage')
+  @Audit({ action: 'stock.movement.move', targetType: 'StockMovement' })
+  @HttpCode(200)
+  @Post('movements/:id/move')
+  move(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MoveStockMovementDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<StockMovementView> {
+    return this.stock.move(id, dto.stockItemId, user.id);
+  }
+
+  /** Every filament weighed at once: each difference recorded as a correction. */
+  @RequirePermission('stock.manage')
+  @Audit({ action: 'stock.sweep', targetType: 'Material', targetId: 'stock' })
+  @HttpCode(200)
+  @Post('sweeps')
+  sweep(
+    @Body() dto: StockSweepDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ corrected: number; difference: number }> {
+    return this.stock.sweep(dto, user.id);
   }
 
   @RequirePermission('stock.manage')
