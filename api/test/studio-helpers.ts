@@ -89,8 +89,9 @@ export async function createStudio(app: NestExpressApplication) {
   const tag = randomUUID().slice(0, 8);
   const material = await prisma.material.create({
     data: {
-      code: `T${tag.toUpperCase()}`,
-      name: `Test filament ${tag}`,
+      // A PLA (the test 3MF files are sliced for PLA, so their colours fit its reels).
+      code: `PLA${tag.toUpperCase()}`,
+      name: `PLA test ${tag}`,
       pricePerGram: '0.05',
       lowStockThresholdGrams: 500,
     },

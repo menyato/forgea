@@ -104,6 +104,15 @@ describe('Text studio (e2e)', () => {
       where: { code: 'PLA' },
     });
     materialId = material.id;
+    // The shelf has these colours in PLA (orders take only from lines that exist).
+    await prisma.stockItem.createMany({
+      data: ['Red', 'White', 'Gold'].map((colour) => ({
+        materialId,
+        colour,
+        lowStockGrams: material.lowStockThresholdGrams,
+      })),
+      skipDuplicates: true,
+    });
     slug = `keychain-${tag}`;
     productId = (
       await as(admin.cookie)

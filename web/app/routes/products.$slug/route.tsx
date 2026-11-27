@@ -339,7 +339,7 @@ function CatalogProduct({
               ≈ <Money amount={lbpPrice} currency={lbp} /> each
             </p>
           )}
-          {deposit && <p className="text-sm">{deposit}</p>}
+          {product.isCustom && deposit && <p className="text-sm">{deposit}</p>}
           {priceError && <p className="text-sm text-danger">{priceError}</p>}
         </div>
 
