@@ -10,6 +10,7 @@ import type {
   PieceDetail,
   PieceHolderAccount,
   PieceView,
+  PrintFile,
 } from '@forgea/types';
 import type {
   FinishPieceDto,
@@ -21,6 +22,7 @@ import { toPage } from '../common/pagination/keyset.js';
 import { studioDayStart } from '../common/studio-day.js';
 import { PieceStage } from '../generated/prisma/enums.js';
 import { StockService } from '../stock/stock.service.js';
+import { isModelKey } from '../uploads/model-variants.js';
 import {
   type PieceChange,
   type PieceDetailRow,
@@ -33,12 +35,32 @@ const accountOf = (
 ): PieceHolderAccount | null =>
   u ? { id: u.id, name: u.name, email: u.email } : null;
 
+/**
+ * The 3D model a piece shows: its product's, else what its order line sold (the line's product,
+ * the 3MF it was printed from, its request's design or the customer's file). Null for pieces
+ * made from free text with no file.
+ */
+function modelOf(p: PieceRow): string | null {
+  const line = p.orderItem;
+  const request = line?.order.customRequest;
+  const file = line?.printFile as PrintFile | null | undefined;
+  return (
+    [
+      p.product?.modelFileKey,
+      line?.product?.modelFileKey,
+      file?.fileKey,
+      request?.designPreviewKey,
+      request?.fileKey,
+    ].find((k): k is string => !!k && isModelKey(k)) ?? null
+  );
+}
+
 function toView(p: PieceRow): PieceView {
   return {
     id: p.id,
     name: p.name,
     productId: p.productId,
-    modelKey: p.product?.modelFileKey ?? null,
+    modelKey: modelOf(p),
     orderNumber: p.orderItem?.order.orderNumber ?? null,
     quantity: p.quantity,
     stage: p.stage,

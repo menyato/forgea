@@ -389,6 +389,19 @@ export class StockService {
       (failed && dto.progressPercent !== undefined
         ? `Failed at ${dto.progressPercent}%`
         : null);
+    // Only from filaments on the shelf: a colour no reel prints is linked first ("Printed
+    // from" on the product), never added as a new filament by the print.
+    const missing = await this.stock.notOnShelf(
+      parts.map((part) => ({
+        materialId:
+          ('materialId' in part ? part.materialId : undefined) ?? e.materialId,
+        colour: part.colour,
+      })),
+    );
+    if (missing.length > 0)
+      throw new BadRequestException(
+        `No ${missing.join(', ')} on the shelf. Link the colour to one of your reels ("Printed from" on the product) or add that filament first.`,
+      );
     const details = pieceDetails(options, null);
     const pieceName = details ? `${product.name} (${details})` : product.name;
     const printedAt = dto.printedOn

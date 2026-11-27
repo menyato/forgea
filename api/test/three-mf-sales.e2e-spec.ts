@@ -1,4 +1,7 @@
 import type {
+  Page,
+  PieceView,
+  PrintJobListItem,
   CustomRequestView,
   OrderFilaments,
   PrintFile,
@@ -242,6 +245,47 @@ describe('3MF quotations and custom requests (e2e)', () => {
       await prisma.stockMovement.count({ where: { orderItemId: item.id } }),
     ).toBe(2);
     expect(await prisma.stockItem.count()).toBe(reels);
+
+    // Its one run prints from both picked reels: it says so, and what it used beyond the
+    // 38 g taken moves on each reel as the file shares the colours (11 g: 9 + 2).
+    const run = await prisma.printJob.findFirstOrThrow({
+      where: { orderItemId: item.id },
+    });
+    const listed = (await s.get(`/print-jobs?orderId=${order.id}`).expect(200))
+      .body as Page<PrintJobListItem>;
+    expect(listed.items[0]!.picked.map((r) => r.colour).sort()).toEqual(
+      [line.colours[0]!.colour, line.colours[1]!.colour].sort(),
+    );
+    const printerId = (
+      await s
+        .post('/printers', {
+          name: `3MF ${randomUUID().slice(0, 8)}`,
+          watts: 200,
+          active: true,
+        })
+        .expect(201)
+    ).body.id as string;
+    const patchRun = (body: object) =>
+      http()
+        .patch(`/print-jobs/${run.id}`)
+        .set(CSRF)
+        .set('Cookie', staff.cookie)
+        .send(body)
+        .expect(200);
+    await patchRun({ printerId, status: 'PRINTING' });
+    await patchRun({ status: 'DONE', actualGrams: '49', actualHours: '4.5' });
+    const printed = await prisma.stockMovement.findMany({
+      where: { printJobId: run.id, kind: 'PRINTED' },
+      include: { stockItem: true },
+    });
+    expect(
+      Object.fromEntries(printed.map((m) => [m.stockItem.id, m.grams])),
+    ).toEqual({ [second!.stockItemId!]: -9, [first!.stockItemId!]: -2 });
+    expect(await prisma.stockItem.count()).toBe(reels);
+    // On the board, the piece shows the model that was sold (it has no product of its own).
+    const board = (await s.get(`/pieces?orderId=${order.id}`).expect(200))
+      .body as Page<PieceView>;
+    expect(board.items.map((p) => p.modelKey)).toEqual([key]);
 
     const view = (await s.get(`/orders/${order.id}`).expect(200))
       .body as StaffOrder;

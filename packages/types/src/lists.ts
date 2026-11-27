@@ -67,6 +67,11 @@ export interface PrintJobListItem {
   printer: { id: string; name: string } | null;
   /** The reel (material and colour from stock); null until chosen, like the printer. */
   reel: { id: string; material: string; colour: string } | null;
+  /**
+   * A 3MF line's reels picked on the order, one per file colour (empty otherwise): the run
+   * prints from all of them, and its grams move on each as the file shares them.
+   */
+  picked: { material: string; colour: string }[];
   quantity: number;
   /** The estimate. */
   grams: string;

@@ -595,6 +595,14 @@ function toItem(j: PrintJobRow): PrintJobListItem {
           colour: j.stockItem.colour,
         }
       : null,
+    picked: [
+      ...new Map(
+        (j.orderItem?.filaments ?? []).map((f) => [
+          f.stockItem.id,
+          { material: f.stockItem.material.code, colour: f.stockItem.colour },
+        ]),
+      ).values(),
+    ],
     quantity: j.quantity,
     grams: j.grams.toString(),
     hours: j.hours.toString(),

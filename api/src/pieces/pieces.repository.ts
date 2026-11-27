@@ -10,7 +10,20 @@ const account = { select: { id: true, name: true, email: true } } as const;
 
 const pieceInclude = {
   product: { select: { modelFileKey: true } },
-  orderItem: { select: { order: { select: { orderNumber: true } } } },
+  orderItem: {
+    select: {
+      // What was sold, to show it when the piece has no product of its own: the line's
+      // product, its 3MF, or its request's design or the customer's own file.
+      product: { select: { modelFileKey: true } },
+      printFile: true,
+      order: {
+        select: {
+          orderNumber: true,
+          customRequest: { select: { designPreviewKey: true, fileKey: true } },
+        },
+      },
+    },
+  },
   holderUser: account,
 } as const satisfies Prisma.PieceInclude;
 export type PieceRow = Prisma.PieceGetPayload<{ include: typeof pieceInclude }>;

@@ -46,6 +46,45 @@ export function sameFilament(
 }
 
 /**
+ * Grams of a whole 3MF line (a run that printed all its colours) shared over the reels picked
+ * for its colours, as the file splits them; whole grams that add up to `grams` (largest
+ * remainders), one entry per reel. Empty when the line has no file or no picks.
+ */
+export function overPicks<R>(
+  file: PrintFile | null | undefined,
+  picks: readonly { colour: string; reel: R; id: string }[],
+  grams: number,
+): { reel: R; grams: number }[] {
+  if (!file || picks.length === 0 || grams === 0) return [];
+  const byReel = new Map<string, { reel: R; weight: number }>();
+  for (const c of file.colours) {
+    const pick = picks.find((p) => p.colour === c.colour);
+    if (!pick) continue;
+    const entry = byReel.get(pick.id) ?? { reel: pick.reel, weight: 0 };
+    entry.weight += Number(c.grams);
+    byReel.set(pick.id, entry);
+  }
+  const all = [...byReel.values()];
+  const total = all.reduce((n, e) => n + e.weight, 0);
+  if (total <= 0) return [];
+  const sign = Math.sign(grams);
+  const whole = Math.abs(grams);
+  const shares = all.map((e) => {
+    const exact = (whole * e.weight) / total;
+    return { reel: e.reel, grams: Math.floor(exact), rest: exact % 1 };
+  });
+  let left = whole - shares.reduce((n, s) => n + s.grams, 0);
+  for (const s of [...shares].sort((a, b) => b.rest - a.rest)) {
+    if (left <= 0) break;
+    s.grams += 1;
+    left -= 1;
+  }
+  return shares
+    .filter((s) => s.grams > 0)
+    .map((s) => ({ reel: s.reel, grams: sign * s.grams }));
+}
+
+/**
  * The reels an order's 3MF lines print from: each colour of the file, picked by the team from
  * the shelf before the order goes into production (it can't without one per colour). Picked
  * after the stock was taken, the difference moves to the new reels as stock movements (what

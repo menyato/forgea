@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { OrderProduction } from '@forgea/types';
+import type { OrderProduction, PrintFile } from '@forgea/types';
 import { splitTaxIncluded } from '../accounting/ledger-math.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -9,6 +9,7 @@ import {
 } from '../generated/prisma/enums.js';
 import { ProductionEstimator } from '../stock/production-estimator.js';
 import { InsightsRepository } from './insights.repository.js';
+import { overPicks } from '../orders/order-filaments.service.js';
 
 const D = (v: Prisma.Decimal | string | number) => new Prisma.Decimal(v);
 
@@ -54,6 +55,12 @@ export class OrderProductionService {
             options: true,
             design: true,
             printFile: true,
+            filaments: {
+              select: {
+                colour: true,
+                stockItem: { select: { id: true, colour: true } },
+              },
+            },
           },
         },
       },
@@ -178,16 +185,33 @@ export class OrderProductionService {
       grams = grams.plus(lineGrams);
       hours = hours.plus(lineHours);
       cost = cost?.plus(lineCost) ?? null;
+      // A 3MF line printed from reels picked per colour: its grams by those reels, as the
+      // file shares them (in tenths of a gram), not all under the run's one reel.
+      const tenths = overPicks(
+        item.printFile as PrintFile | null,
+        item.filaments.map((f) => ({
+          colour: f.colour,
+          id: f.stockItem.id,
+          reel: f.stockItem.colour,
+        })),
+        lineGrams.times(10).round().toNumber(),
+      );
       return {
         itemId: item.id,
         name: item.name,
         quantity: item.quantity,
         grams: lineGrams.toFixed(1),
         printHours: lineHours.toFixed(2),
-        colours: [...byReel].map(([colour, g]) => ({
-          colour,
-          grams: g.toFixed(1),
-        })),
+        colours:
+          tenths.length > 0
+            ? tenths.map((t) => ({
+                colour: t.reel,
+                grams: D(t.grams).div(10).toFixed(1),
+              }))
+            : [...byReel].map(([colour, g]) => ({
+                colour,
+                grams: g.toFixed(1),
+              })),
         cost: withMoney ? lineCost.toFixed(2) : null,
         measured: true,
       };

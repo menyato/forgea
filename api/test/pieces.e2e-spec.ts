@@ -344,6 +344,13 @@ describe('Where it is: pieces, extra costs, the shelf, test orders (e2e)', () =>
     ]);
   });
 
+  it('a studio print never adds a filament: a colour with no reel is refused', async () => {
+    const reels = await prisma.stockItem.count();
+    const { body } = await studioPrint({ colour: 'Copper silk' }).expect(400);
+    expect(body.message).toMatch(/No .+Copper silk on the shelf/);
+    expect(await prisma.stockItem.count()).toBe(reels);
+  });
+
   it("a product's extra costs add to its cost, and so to its price", async () => {
     const product = (
       await as(admin.cookie)

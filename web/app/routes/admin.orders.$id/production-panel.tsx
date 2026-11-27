@@ -7,6 +7,7 @@ import {
 import { Link } from 'react-router';
 import { Money } from '~/components/money';
 import { Panel } from '~/features/admin/admin-ui';
+import { reelsOf } from '~/features/production/reels';
 
 const cents = (v: string) => Math.round(Number(v) * 100);
 
@@ -54,8 +55,7 @@ export function ProductionPanel({
               </Link>
               <span className="text-text-muted">
                 {PRINT_JOB_STATUS_LABELS[j.status]} ·{' '}
-                {j.printer?.name ?? 'no printer'} ·{' '}
-                {j.reel ? `${j.reel.material} ${j.reel.colour}` : 'no reel'} ·{' '}
+                {j.printer?.name ?? 'no printer'} · {reelsOf(j) ?? 'no reel'} ·{' '}
                 {j.actualGrams ?? j.grams} g
                 {j.cost ? (
                   <>

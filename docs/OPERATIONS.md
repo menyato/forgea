@@ -141,6 +141,9 @@ grams from its reel. An order made from a 3MF (a request, a quotation line) show
 the file was sliced for: PLA for a PLA file) and **Save the reels**; it can't go into production
 before every colour has one, and the site never adds a filament by itself. Changed after
 production started, the order's take moves to the new reels (the old one gets its grams back).
+Its print run prints from all those reels: when it is **Done** (or fails), what it used beyond the
+estimate comes off each reel as the file shares the colours, and the order's figures show the
+grams by reel (White 9 g, Magenta 2 g), not all on one.
 The order page has a download for every sliced file. Before production,
 "What it takes to make" checks each filament against the shelf: **⚠** marks a colour with no
 reel (buy it, or link the shop colour to a reel you have) or with too little left.
@@ -183,7 +186,9 @@ if they choose it, is paid as usual.
 ## 5. Printing for the studio (tests, gifts, display pieces)
 
 - **A product:** Filament stock → **Printed for the studio**. Grams and cost come from it; a
-  piece whose parts customers recolour gets a colour per part (each from its own reel). Tick
+  piece whose parts customers recolour gets a colour per part (each from its own reel). Each
+  colour must print from a filament on your shelf: one with no reel is refused (link it with
+  **Printed from** on the product, or add the filament), never added by the site. Tick
   **Keep them on the shelf to sell** and they land in **Ready pieces** at what they cost.
   The same from Ready pieces → **Printed to sell**: the product shows with its model and the
   colours it starts in; choose each part's colour and the filament comes off those reels.

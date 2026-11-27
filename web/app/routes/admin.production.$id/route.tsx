@@ -24,6 +24,7 @@ import { apiContext } from '~/lib/request.server';
 import { fromStudioInput, studioFormat, studioInput } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 import { formatHours } from '~/lib/duration';
+import { reelsOf } from '~/features/production/reels';
 
 export async function loader({ url, params, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
@@ -134,7 +135,7 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
         title={`${job.quantity} × ${job.item?.name ?? 'Print run'}`}
         intro={`Order ${job.orderNumber} · about ${job.grams} g, ${formatHours(job.hours)}${
           job.printer ? ` on ${job.printer.name}` : ''
-        }${job.reel ? `, ${job.reel.material} ${job.reel.colour}` : ''}.`}
+        }${reelsOf(job) ? `, ${reelsOf(job)}` : ''}.`}
       />
       <StatusBar
         steps={PRINT_JOB_STEPS.map((s) => ({
@@ -192,11 +193,16 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
             <dd>{job.quantity}</dd>
             <dt className="text-text-muted">Printer</dt>
             <dd>{job.printer?.name ?? 'Not chosen'}</dd>
-            <dt className="text-text-muted">Reel</dt>
+            <dt className="text-text-muted">
+              {job.picked.length > 1 ? 'Reels' : 'Reel'}
+            </dt>
             <dd>
-              {job.reel
-                ? `${job.reel.material} · ${job.reel.colour || 'no colour'}`
-                : 'Not chosen'}
+              {reelsOf(job) ?? 'Not chosen'}
+              {job.picked.length > 0 && (
+                <span className="block text-text-muted">
+                  Picked per colour on the order (Filaments)
+                </span>
+              )}
             </dd>
             <dt className="text-text-muted">Estimate</dt>
             <dd>
@@ -302,11 +308,13 @@ export default function PrintJobPage({ loaderData }: Route.ComponentProps) {
                 value={job.printer?.id}
                 error={errors['printerId']}
               />
-              <ReelField
-                reels={reels}
-                value={job.reel?.id}
-                error={errors['stockItemId']}
-              />
+              {job.picked.length === 0 && (
+                <ReelField
+                  reels={reels}
+                  value={job.reel?.id}
+                  error={errors['stockItemId']}
+                />
+              )}
               <Field
                 label="Pieces"
                 name="quantity"

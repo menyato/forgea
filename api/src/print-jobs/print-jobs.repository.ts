@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { PrintJobCounts } from '@forgea/types';
+import type { PrintFile, PrintJobCounts } from '@forgea/types';
 import type { PrintJobListQuery } from '@forgea/validation';
 import { dateRange } from '../common/pagination/date-range.js';
 import { keysetPage } from '../common/pagination/keyset.js';
@@ -17,6 +17,7 @@ import {
 } from '../stock/ready-pieces.repository.js';
 import { StockRepository } from '../stock/stock.repository.js';
 import { onceForKey } from '../common/request-key.js';
+import { overPicks } from '../orders/order-filaments.service.js';
 
 const withRefs = {
   order: { select: { orderNumber: true, status: true } },
@@ -27,6 +28,22 @@ const withRefs = {
       productId: true,
       options: true,
       design: true,
+      printFile: true,
+      // A 3MF line's reels, picked per file colour on the order.
+      filaments: {
+        orderBy: { colour: 'asc' },
+        select: {
+          colour: true,
+          stockItem: {
+            select: {
+              id: true,
+              colour: true,
+              pricePerGram: true,
+              material: { select: { code: true, pricePerGram: true } },
+            },
+          },
+        },
+      },
     },
   },
   reprints: { select: { id: true } },
@@ -223,19 +240,53 @@ export class PrintJobsRepository {
         include: withRefs,
       });
       const reel = job.stockItem;
+      // A 3MF line printed at once (its only run) used every picked reel: what it used moves
+      // on each of them, as its file shares the colours, not all on the run's own reel.
+      const alone =
+        job.orderItemId !== null &&
+        (await this.othersOf(tx, job.orderItemId, job.id)) === 0;
+      const spread = (grams: number) =>
+        alone
+          ? overPicks(
+              job.orderItem?.printFile as PrintFile | null | undefined,
+              (job.orderItem?.filaments ?? []).map((f) => ({
+                colour: f.colour,
+                id: f.stockItem.id,
+                reel: f.stockItem,
+              })),
+              grams,
+            )
+          : [];
       if (reel && data.status === PrintJobStatus.DONE && job.actualGrams) {
         // What the order took when it went into production, for this line (0 for a job that
         // isn't an order's line): only the difference moves now. The line's only run printed
         // all its colours, so it is weighed against all the line took (from every reel); runs
         // split one per reel each against their own reel.
         const taken = job.orderItemId
-          ? await this.takenFor(tx, job.orderItemId, job.id, reel.id)
+          ? await this.takenFor(tx, job.orderItemId, alone, reel.id)
           : 0;
         const used = Math.ceil(Number(job.actualGrams));
         // Several jobs for one line share its estimate: each counts its own share.
         const share = job.orderItemId ? await this.shareOf(tx, job, taken) : 0;
         const difference = used - share;
-        if (difference !== 0) {
+        const note = `Printed for order ${job.order.orderNumber}: ${used} g used${
+          share ? `, ${share} g estimated` : ''
+        }`;
+        const onPicks = spread(difference);
+        if (onPicks.length > 0) {
+          await this.stock.recordOnReels(
+            tx,
+            onPicks.map((p) => ({
+              stockItemId: p.reel.id,
+              kind: StockMovementKind.PRINTED,
+              grams: -p.grams,
+              printJobId: job.id,
+              costPerGram: p.reel.pricePerGram ?? p.reel.material.pricePerGram,
+              note,
+              createdById: actorId,
+            })),
+          );
+        } else if (difference !== 0) {
           await this.stock.record(tx, [
             {
               materialId: reel.materialId,
@@ -244,9 +295,7 @@ export class PrintJobsRepository {
               grams: -difference,
               printJobId: job.id,
               costPerGram: reel.material.pricePerGram,
-              note: `Printed for order ${job.order.orderNumber}: ${used} g used${
-                share ? `, ${share} g estimated` : ''
-              }`,
+              note,
               createdById: actorId,
             },
           ]);
@@ -254,25 +303,42 @@ export class PrintJobsRepository {
       }
       if (data.status === PrintJobStatus.DONE)
         await this.toShelf(tx, job, actorId);
-      if (reprint) await this.reprintMissing(tx, job);
       if (reel && data.status === PrintJobStatus.FAILED) {
         // Rounded up (a started gram is a used gram).
-        await this.stock.record(tx, [
-          {
-            materialId: reel.materialId,
-            colour: reel.colour,
-            kind: StockMovementKind.FAILED_PRINT,
-            grams: -Math.max(
-              1,
-              Math.ceil(Number(job.actualGrams ?? job.grams)),
-            ),
-            printJobId: job.id,
-            costPerGram: reel.material.pricePerGram,
-            note: `Failed print on ${job.printer?.name ?? 'a printer'} (order ${job.order.orderNumber})`,
-            createdById: actorId,
-          },
-        ]);
+        const lost = Math.max(
+          1,
+          Math.ceil(Number(job.actualGrams ?? job.grams)),
+        );
+        const note = `Failed print on ${job.printer?.name ?? 'a printer'} (order ${job.order.orderNumber})`;
+        const onPicks = spread(lost);
+        if (onPicks.length > 0)
+          await this.stock.recordOnReels(
+            tx,
+            onPicks.map((p) => ({
+              stockItemId: p.reel.id,
+              kind: StockMovementKind.FAILED_PRINT,
+              grams: -p.grams,
+              printJobId: job.id,
+              costPerGram: p.reel.pricePerGram ?? p.reel.material.pricePerGram,
+              note,
+              createdById: actorId,
+            })),
+          );
+        else
+          await this.stock.record(tx, [
+            {
+              materialId: reel.materialId,
+              colour: reel.colour,
+              kind: StockMovementKind.FAILED_PRINT,
+              grams: -lost,
+              printJobId: job.id,
+              costPerGram: reel.material.pricePerGram,
+              note,
+              createdById: actorId,
+            },
+          ]);
       }
+      if (reprint) await this.reprintMissing(tx, job);
       // As it is now (with the reprint just planned).
       return tx.printJob.findUniqueOrThrow({
         where: { id },
@@ -354,6 +420,21 @@ export class PrintJobsRepository {
     });
   }
 
+  /** The line's other runs that print (a cancelled one printed nothing, a failed one counts its own loss). */
+  private othersOf(
+    tx: Prisma.TransactionClient,
+    orderItemId: string,
+    jobId: string,
+  ): Promise<number> {
+    return tx.printJob.count({
+      where: {
+        orderItemId,
+        id: { not: jobId },
+        status: { notIn: [PrintJobStatus.CANCELLED, PrintJobStatus.FAILED] },
+      },
+    });
+  }
+
   /**
    * Grams an order line took from stock when it went into production, as a run of it sees
    * them: all of them for the line's only run (a multi-colour piece printed at once), else
@@ -362,22 +443,14 @@ export class PrintJobsRepository {
   private async takenFor(
     tx: Prisma.TransactionClient,
     orderItemId: string,
-    jobId: string,
+    alone: boolean,
     reelId: string,
   ): Promise<number> {
-    const others = await tx.printJob.count({
-      where: {
-        orderItemId,
-        id: { not: jobId },
-        // A cancelled run printed nothing, and a failed one counts its own loss apart.
-        status: { notIn: [PrintJobStatus.CANCELLED, PrintJobStatus.FAILED] },
-      },
-    });
     const sum = await tx.stockMovement.aggregate({
       where: {
         orderItemId,
         kind: StockMovementKind.ORDER,
-        ...(others === 0 ? {} : { stockItemId: reelId }),
+        ...(alone ? {} : { stockItemId: reelId }),
       },
       _sum: { grams: true },
     });

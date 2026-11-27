@@ -25,6 +25,7 @@ import { apiContext } from '~/lib/request.server';
 import { studioDate, studioFormat } from '~/lib/studio-time';
 import type { Route } from './+types/route';
 import { formatHours } from '~/lib/duration';
+import { reelsOf } from '~/features/production/reels';
 
 const DEFAULTS = { sorts: ['createdAt'], view: 'kanban' } as const;
 
@@ -49,10 +50,7 @@ const NO_PRINTER = { id: 'none', name: 'No printer yet' };
 /** What a job prints, for its card and row. */
 const what = (j: PrintJobListItem) =>
   `${j.quantity} × ${j.item?.name ?? 'print'}`;
-const reel = (j: PrintJobListItem) =>
-  j.reel
-    ? `${j.reel.material} · ${j.reel.colour || 'no colour'}`
-    : 'Reel not chosen';
+const reel = (j: PrintJobListItem) => reelsOf(j) ?? 'Reel not chosen';
 
 const DAY = studioFormat({
   weekday: 'short',

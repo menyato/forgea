@@ -73,6 +73,7 @@ export interface ReelMovement {
   /** Signed: + in, − out. */
   grams: number;
   orderItemId?: string | null;
+  printJobId?: string | null;
   costPerGram?: Prisma.Decimal | string | null;
   note?: string | null;
   createdById?: string | null;
@@ -123,7 +124,6 @@ export const between = (range: DateRange) => ({
 export class StockRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The stock line for a material and colour, created on first use with the material's limit. */
   /** The stock line of this material and colour, if the shelf has one (never adds it). */
   async existingItem(
     db: Prisma.TransactionClient | PrismaService,
@@ -137,6 +137,29 @@ export class StockRepository {
     return found?.id ?? null;
   }
 
+  /**
+   * The filaments (material and colour) the shelf has no line for, named as the stock page
+   * does ("PLA · Pink"): what a print may not take from, since nothing adds a filament but
+   * the team.
+   */
+  async notOnShelf(
+    wanted: readonly { materialId: string; colour: string }[],
+  ): Promise<string[]> {
+    const missing: string[] = [];
+    for (const w of wanted) {
+      if (await this.existingItem(this.prisma, w.materialId, w.colour))
+        continue;
+      const material = await this.prisma.material.findUnique({
+        where: { id: w.materialId },
+        select: { code: true },
+      });
+      const name = `${material?.code ?? 'Filament'} · ${w.colour || 'no colour'}`;
+      if (!missing.includes(name)) missing.push(name);
+    }
+    return missing;
+  }
+
+  /** The stock line for a material and colour, added on first use (the team's own entries). */
   async itemFor(
     tx: Prisma.TransactionClient,
     materialId: string,
@@ -206,6 +229,7 @@ export class StockRepository {
         kind: m.kind,
         grams: m.grams,
         orderItemId: m.orderItemId ?? null,
+        printJobId: m.printJobId ?? null,
         costPerGram: m.costPerGram ?? null,
         note: m.note ?? null,
         createdById: m.createdById ?? null,
