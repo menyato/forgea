@@ -266,7 +266,13 @@ export class DeletionsService {
       name: `${row.material.name} ${row.colour}`.trim(),
       blockedBy: [
         [await db.stockMovement.count({ where }), 'stock movements'],
+        // Movements moved off it name it as where they were first.
+        [
+          await db.stockMovement.count({ where: { movedFromId: id } }),
+          'stock movements moved off it',
+        ],
         [await db.printJob.count({ where }), 'print runs'],
+        [await db.orderItemFilament.count({ where }), 'order reels picked'],
       ],
       unlinks: [
         [

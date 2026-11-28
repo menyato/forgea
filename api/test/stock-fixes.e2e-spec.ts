@@ -123,6 +123,18 @@ describe('Filament fixes: wrong filament, sweeps (e2e)', () => {
       right.stockGrams - used,
     );
     expect(await materialGrams(studio.material.id)).toBe(plaBefore + used);
+    // The first filament keeps the record of what was moved off it.
+    expect(
+      (
+        await as(admin.cookie)
+          .get(`/stock/items/${wrong.id}/deletion`)
+          .expect(200)
+      ).body,
+    ).toMatchObject({
+      blockedBy: expect.arrayContaining([
+        expect.objectContaining({ what: 'stock movements moved off it' }),
+      ]),
+    });
     expect(await materialGrams(other.material.id)).toBe(petgBefore - used);
     // Its page says so.
     expect(
